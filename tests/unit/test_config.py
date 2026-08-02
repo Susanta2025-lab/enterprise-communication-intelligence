@@ -85,3 +85,10 @@ def test_app_env_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "PRODUCTION")
     settings = Settings(_env_file=None)
     assert settings.app_env == "production"
+
+
+def test_ai_provider_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AI_PROVIDER values should be normalized to lowercase."""
+    monkeypatch.setenv("AI_PROVIDER", "MOCK")
+    settings = Settings(_env_file=None)
+    assert settings.ai_provider == "mock"

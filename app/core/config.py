@@ -49,6 +49,15 @@ class Settings(BaseSettings):
             return value.strip().upper()
         return value
 
+    @field_validator("ai_provider", mode="before")
+    @classmethod
+    def normalize_ai_provider(cls, value: object) -> object:
+        """Normalize provider names to lowercase."""
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
 
 @lru_cache
 def get_settings() -> Settings:
