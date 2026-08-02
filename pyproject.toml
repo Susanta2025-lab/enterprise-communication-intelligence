@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contextmesh"
+version = "0.1.0"
+description = "Enterprise Communication Intelligence Platform with provider-independent AI architecture."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+authors = [
+    { name = "Susanta Hazra" }
+]
+
+keywords = [
+    "AI",
+    "FastAPI",
+    "Azure AI Foundry",
+    "AWS Bedrock",
+    "Enterprise AI",
+    "Solution Architecture",
+    "Communication Intelligence"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+dependencies = [
+    "fastapi>=0.118",
+    "uvicorn[standard]>=0.37",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.10",
+    "python-dotenv>=1.1",
+    "httpx>=0.28",
+    "structlog>=25.4"
+]
+
+[project.optional-dependencies]
+
+dev = [
+    "pytest>=8.4",
+    "pytest-asyncio>=1.1",
+    "pytest-cov>=7.0",
+    "ruff>=0.12"
+]
+
+[tool.setuptools.packages.find]
+
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+
+testpaths = [
+    "tests"
+]
+
+pythonpath = [
+    "."
+]
+
+[tool.ruff]
+
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B"
+]
+
+ignore = []
+
+[tool.ruff.format]
+
+quote-style = "double"
+indent-style = "space"
+
+[tool.coverage.run]
+
+source = [
+    "app"
+]

@@ -1,0 +1,112 @@
+---
+description: ContextMesh architecture and implementation rules
+alwaysApply: true
+---
+
+# ContextMesh Project Rules
+
+## Project Goal
+
+ContextMesh is a production-oriented Enterprise Communication Intelligence Platform.
+
+The current MVP processes business communications and provides:
+
+- summarization
+- priority classification
+- action-item extraction
+- draft reply generation
+
+The architecture must remain extensible to Gmail, Outlook, Teams, Slack, WhatsApp, CRM, ERP, document repositories, calendars, and workflow systems.
+
+## Current Scope
+
+Implement only the current phase requested by the user.
+
+Do not implement Azure AI Foundry or AWS Bedrock integrations unless explicitly requested.
+
+Do not add speculative features, unnecessary abstractions, databases, queues, RAG, agents, authentication systems, or frontend code.
+
+## Architecture Boundaries
+
+Maintain this dependency direction:
+
+API layer
+→ application or domain services
+→ provider interfaces
+→ provider implementations
+
+Rules:
+
+- `app/domain/` must remain independent of FastAPI, Azure SDKs, AWS SDKs, and deployment code.
+- `app/api/` may depend on application services and schemas.
+- `app/providers/` implements interfaces defined by the domain or application layer.
+- Cloud-specific SDK imports must remain inside the corresponding provider implementation.
+- Business logic must not contain provider-specific conditionals.
+- Provider selection must use configuration and a provider factory.
+- Use dependency injection rather than global mutable state.
+
+## Naming
+
+Prefer platform-neutral names:
+
+- `CommunicationMessage`
+- `CommunicationAnalysis`
+- `CommunicationAnalysisService`
+- `AIProvider`
+- `ChannelAdapter`
+- `SourceType`
+
+Avoid embedding email-specific assumptions into shared domain models unless the feature is genuinely email-specific.
+
+## Python Standards
+
+- Python 3.12
+- FastAPI
+- Pydantic v2
+- Pydantic Settings
+- Type hints for public functions and methods
+- Async code only where justified by I/O
+- Small, focused modules
+- Clear docstrings for public interfaces and architectural abstractions
+- No wildcard imports
+- No hard-coded secrets
+- No hidden fallback behavior
+
+## Configuration
+
+- Read configuration through `app/core/config.py`.
+- Use environment variables.
+- Never commit credentials or secrets.
+- Keep `.env.example` synchronized with supported settings.
+- Validate configuration with Pydantic Settings.
+
+## Error Handling
+
+- Define application-specific exceptions.
+- Do not expose provider stack traces or sensitive details through API responses.
+- Translate domain and provider errors into consistent API errors.
+- Log failures with useful context.
+
+## Logging
+
+- Use structured logging.
+- Do not use `print()` in application code.
+- Avoid logging message bodies, credentials, API keys, access tokens, or sensitive business content.
+- Include correlation or request identifiers when available.
+
+## Testing
+
+For every implemented behavior:
+
+- add unit tests
+- add API tests where routes are affected
+- mock provider calls
+- do not require Azure or AWS credentials
+- keep tests deterministic
+- test success, validation failure, and expected error paths
+
+Before completing a task, run:
+
+```bash
+ruff check .
+pytest
