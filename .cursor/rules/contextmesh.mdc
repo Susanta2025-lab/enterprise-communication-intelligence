@@ -26,6 +26,17 @@ Do not implement Azure AI Foundry or AWS Bedrock integrations unless explicitly 
 
 Do not add speculative features, unnecessary abstractions, databases, queues, RAG, agents, authentication systems, or frontend code.
 
+
+## Documentation
+
+At the end of every completed phase:
+
+- Update the corresponding roadmap phase document.
+- Update docs/roadmap/README.md.
+- Do not modify documentation for future phases.
+- Keep implementation and documentation synchronized.
+
+
 ## Architecture Boundaries
 
 Maintain this dependency direction:

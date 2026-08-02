@@ -18,8 +18,8 @@ This directory documents the planned implementation phases for ContextMesh.
 | Phase | Status |
 |---|---|
 | Phase 1 – Foundation | In progress |
-| Phase 2 – Domain Model | Not started |
-| Phase 3 – Provider Abstraction | Not started |
+| Phase 2 – Domain Model | Completed |
+| Phase 3 – Provider Abstraction | Next |
 | Phase 4 – AI Services | Not started |
 | Phase 5 – REST API | Not started |
 | Phase 6 – Cloud Deployment | Not started |
