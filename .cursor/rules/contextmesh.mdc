@@ -5,119 +5,430 @@ alwaysApply: true
 
 # ContextMesh Project Rules
 
-## Project Goal
+## Human Authority
+
+The user is the Solution Architect.
+
+Cursor is responsible for implementation assistance only.
+
+Do not make architectural decisions unless explicitly requested.
+
+If a better architecture is identified:
+
+- Explain the recommendation.
+- Describe the trade-offs.
+- Do not implement it without approval.
+
+---
+
+# Project Goal
 
 ContextMesh is a production-oriented Enterprise Communication Intelligence Platform.
 
-The current MVP processes business communications and provides:
+The MVP currently processes business communications and provides:
 
-- summarization
-- priority classification
-- action-item extraction
-- draft reply generation
+- Communication summarization
+- Priority classification
+- Action-item extraction
+- Draft reply generation
 
-The architecture must remain extensible to Gmail, Outlook, Teams, Slack, WhatsApp, CRM, ERP, document repositories, calendars, and workflow systems.
+The long-term architecture must support additional communication channels including:
 
-## Current Scope
+- Gmail
+- Outlook
+- Microsoft Teams
+- Slack
+- WhatsApp
+- CRM systems
+- ERP systems
+- Document repositories
+- Calendar systems
+- Workflow automation
 
-Implement only the current phase requested by the user.
+---
 
-Do not implement Azure AI Foundry or AWS Bedrock integrations unless explicitly requested.
+# Current Scope
 
-Do not add speculative features, unnecessary abstractions, databases, queues, RAG, agents, authentication systems, or frontend code.
+Implement **only the currently requested phase**.
 
+Do not implement future phases unless explicitly instructed.
 
-## Documentation
+Do not introduce speculative features.
 
-At the end of every completed phase:
+Do not introduce unnecessary abstractions.
 
-- Update the corresponding roadmap phase document.
-- Update docs/roadmap/README.md.
-- Do not modify documentation for future phases.
-- Keep implementation and documentation synchronized.
+---
 
+# Phase Isolation
 
-## Architecture Boundaries
+Only modify files required for the current phase.
+
+Unless explicitly instructed:
+
+- Do not modify completed phases.
+- Do not refactor unrelated modules.
+- Do not rename packages.
+- Do not move files.
+- Do not restructure the repository.
+- Do not introduce architecture for future phases.
+
+---
+
+# Repository Structure
+
+Respect the existing project structure.
+
+Always:
+
+- Reuse existing packages.
+- Extend existing modules.
+- Keep a single source of truth.
+
+Never:
+
+- Create duplicate packages.
+- Create parallel implementations.
+- Introduce alternative folder structures.
+- Create a new package before verifying an equivalent one does not already exist.
+
+---
+
+# Architecture
 
 Maintain this dependency direction:
 
-API layer
-→ application or domain services
-→ provider interfaces
-→ provider implementations
+API
+
+↓
+
+Application
+
+↓
+
+Domain
+
+↓
+
+Interfaces
+
+↓
+
+Providers
 
 Rules:
 
-- `app/domain/` must remain independent of FastAPI, Azure SDKs, AWS SDKs, and deployment code.
-- `app/api/` may depend on application services and schemas.
-- `app/providers/` implements interfaces defined by the domain or application layer.
-- Cloud-specific SDK imports must remain inside the corresponding provider implementation.
-- Business logic must not contain provider-specific conditionals.
-- Provider selection must use configuration and a provider factory.
-- Use dependency injection rather than global mutable state.
+- Domain must not depend on FastAPI.
+- Domain must not depend on Azure SDK.
+- Domain must not depend on AWS SDK.
+- Domain must not depend on HTTP.
+- Domain must remain provider independent.
 
-## Naming
+Application:
 
-Prefer platform-neutral names:
+- orchestrates business logic.
+- coordinates providers.
+- contains use-case orchestration.
 
-- `CommunicationMessage`
-- `CommunicationAnalysis`
-- `CommunicationAnalysisService`
-- `AIProvider`
-- `ChannelAdapter`
-- `SourceType`
+Providers:
 
-Avoid embedding email-specific assumptions into shared domain models unless the feature is genuinely email-specific.
+- implement domain interfaces.
+- contain cloud-specific code.
+- isolate Azure and AWS SDKs.
 
-## Python Standards
+API:
+
+- depends on Application.
+- never imports provider implementations directly.
+
+---
+
+# Naming
+
+Prefer platform-neutral terminology.
+
+Use names such as:
+
+- CommunicationMessage
+- CommunicationAnalysis
+- CommunicationAnalysisService
+- AIProvider
+- ChannelAdapter
+- SourceType
+
+Avoid email-specific naming inside shared business logic.
+
+---
+
+# Python Standards
+
+Use:
 
 - Python 3.12
 - FastAPI
 - Pydantic v2
 - Pydantic Settings
-- Type hints for public functions and methods
-- Async code only where justified by I/O
-- Small, focused modules
-- Clear docstrings for public interfaces and architectural abstractions
-- No wildcard imports
-- No hard-coded secrets
-- No hidden fallback behavior
+- Type hints
+- Small focused modules
+- Explicit imports
+- Concise public docstrings
 
-## Configuration
+Avoid:
 
-- Read configuration through `app/core/config.py`.
-- Use environment variables.
-- Never commit credentials or secrets.
-- Keep `.env.example` synchronized with supported settings.
-- Validate configuration with Pydantic Settings.
+- wildcard imports
+- print()
+- hidden fallbacks
+- duplicated logic
+- oversized modules
 
-## Error Handling
+---
 
-- Define application-specific exceptions.
-- Do not expose provider stack traces or sensitive details through API responses.
-- Translate domain and provider errors into consistent API errors.
-- Log failures with useful context.
+# Configuration
 
-## Logging
+Configuration belongs only in:
 
-- Use structured logging.
-- Do not use `print()` in application code.
-- Avoid logging message bodies, credentials, API keys, access tokens, or sensitive business content.
-- Include correlation or request identifiers when available.
+```
+app/core/config.py
+```
 
-## Testing
+Rules:
 
-For every implemented behavior:
+- Use Pydantic Settings.
+- Read environment variables only through Settings.
+- Never hardcode secrets.
+- Keep `.env.example` synchronized.
 
-- add unit tests
-- add API tests where routes are affected
-- mock provider calls
-- do not require Azure or AWS credentials
-- keep tests deterministic
-- test success, validation failure, and expected error paths
+---
 
-Before completing a task, run:
+# Error Handling
+
+Create application-specific exceptions.
+
+Do not expose:
+
+- stack traces
+- secrets
+- provider details
+
+Translate provider failures into application exceptions.
+
+---
+
+# Logging
+
+Use structured logging.
+
+Never:
+
+- use print()
+- log credentials
+- log API keys
+- log tokens
+- log secrets
+- log sensitive message bodies
+
+Include request identifiers when appropriate.
+
+---
+
+# Testing
+
+Every implemented feature must include tests.
+
+Tests must be:
+
+- deterministic
+- offline
+- repeatable
+
+Never require:
+
+- Azure credentials
+- AWS credentials
+- Internet access
+
+Run before completion:
 
 ```bash
-ruff check .
-pytest
+python -m pip check
+python -m ruff check .
+python -m pytest
+```
+
+---
+
+# Dependency Management
+
+Use:
+
+```
+pyproject.toml
+```
+
+as the single source of truth.
+
+Only add dependencies required by the current phase.
+
+Do not add:
+
+- Azure SDK
+- boto3
+- LangChain
+- databases
+- authentication libraries
+
+until explicitly requested.
+
+---
+
+# Docker
+
+Docker is part of the project.
+
+However:
+
+Do not implement Docker until the corresponding project phase.
+
+Future containers should:
+
+- use small images
+- run as non-root
+- expose health checks
+- avoid embedded secrets
+
+---
+
+# Azure & AWS
+
+Do not implement Azure or AWS until explicitly requested.
+
+When requested:
+
+Azure:
+
+- Azure AI Foundry
+- Managed Identity
+- Azure Key Vault
+- Azure Monitor
+
+AWS:
+
+- Amazon Bedrock
+- IAM Roles
+- Secrets Manager
+- CloudWatch
+
+Keep cloud SDKs isolated inside provider implementations.
+
+Never let business logic depend on Azure or AWS.
+
+---
+
+# Documentation
+
+Documentation is part of every completed phase.
+
+Update only:
+
+- current phase roadmap
+- docs/roadmap/README.md
+
+Do not modify future roadmap documents.
+
+---
+
+# README Protection
+
+README.md is curated by the project owner.
+
+Unless explicitly instructed:
+
+Do not modify:
+
+- README.md
+- badges
+- project description
+- roadmap table
+
+Recommend improvements instead.
+
+---
+
+# Roadmap Rules
+
+Never change completed phases.
+
+If Phase N is completed:
+
+- Phase N → Completed
+- Phase N+1 → Next
+
+Leave all other phases unchanged.
+
+Never revert:
+
+Completed
+
+↓
+
+In progress
+
+or
+
+Completed
+
+↓
+
+Not started
+
+---
+
+# File Scope
+
+Before implementation:
+
+1. Identify files to modify.
+2. Modify only those files.
+3. Report any additional recommendations separately.
+
+Never change unrelated files.
+
+---
+
+# Architectural Rationale
+
+Whenever introducing a new component:
+
+Explain:
+
+- why it belongs in its layer
+- benefits
+- trade-offs
+
+Prefer:
+
+simple architecture
+
+over
+
+premature abstraction.
+
+---
+
+# Completion Report
+
+At the end of every phase report:
+
+1. Files created
+2. Files modified
+3. Architectural decisions
+4. Verification commands
+5. Ruff results
+6. pytest results
+7. Remaining limitations
+8. Roadmap files updated
+
+Do not create Git commits.
+
+Do not modify unrelated documentation.
+
+Do not modify README unless explicitly instructed.
