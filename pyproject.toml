@@ -83,6 +83,13 @@ select = [
 
 ignore = []
 
+[tool.ruff.lint.flake8-bugbear]
+
+# FastAPI's dependency-injection pattern requires calling Depends() (and similar
+# parameter functions) as an argument default; this is the documented Ruff
+# configuration for recognizing that pattern as safe, rather than a mutable default.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
+
 [tool.ruff.format]
 
 quote-style = "double"

@@ -49,3 +49,11 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/health" in schema["paths"]
     assert "/api/v1/health" in schema["paths"]
     assert "/api/v1/readiness" in schema["paths"]
+    assert "/api/v1/communications/analyze" in schema["paths"]
+
+    analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
+    assert analyze_operation["summary"] == "Analyze a business communication"
+    assert "requestBody" in analyze_operation
+    assert "200" in analyze_operation["responses"]
+    assert "500" in analyze_operation["responses"]
+    assert "503" in analyze_operation["responses"]
