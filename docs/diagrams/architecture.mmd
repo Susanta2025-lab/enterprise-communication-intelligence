@@ -1,0 +1,31 @@
+graph TB
+    Client[Client]
+
+    subgraph Implemented["Implemented (Phase 1-5)"]
+        API["FastAPI REST API<br/>app/api"]
+        App["CommunicationAnalysisService<br/>app/application"]
+        Iface["AIProvider interface<br/>app/domain/interfaces"]
+        Mock["MockAIProvider<br/>app/providers/mock"]
+        Core["Core: Config, Logging, Exceptions<br/>app/core"]
+    end
+
+    subgraph Future["Future - Not Implemented"]
+        Azure["AzureAIProvider<br/>app/providers/azure"]
+        AWS["AWSBedrockProvider<br/>app/providers/aws"]
+    end
+
+    Client --> API
+    API --> App
+    App --> Iface
+    Iface --> Mock
+    Iface -.-> Azure
+    Iface -.-> AWS
+    API --> Core
+    App --> Core
+    Mock --> Core
+
+    classDef implemented fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:1px
+    classDef future fill:#ffffff,color:#718096,stroke:#a0aec0,stroke-width:1px,stroke-dasharray: 5 5
+
+    class API,App,Iface,Mock,Core implemented
+    class Azure,AWS future

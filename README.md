@@ -2,72 +2,108 @@
 
 **Enterprise Communication Intelligence Platform**
 
-ContextMesh is a production-oriented AI platform that transforms business communications into structured, actionable intelligence. The project is designed to demonstrate modern AI Solution Architecture principles through a provider-independent architecture capable of supporting multiple cloud AI providers.
+ContextMesh is a production-oriented AI platform that transforms business communications into structured, actionable intelligence. Rather than being limited to email automation, it is designed as a modular enterprise platform capable of supporting multiple communication channels, AI providers, and cloud environments through a provider-independent architecture.
 
-Rather than being limited to email automation, ContextMesh is designed as a modular enterprise platform that can evolve to support a wide range of communication channels and business workflows.
+The project is being developed as a practical demonstration of **AI Solution Architecture**, combining modern software engineering, enterprise architecture, and cloud-native AI integration.
 
 ---
 
-## Current Status
-
-ContextMesh is currently in active development.
-
-Completed:
-
-- Foundation
-- Provider-independent domain model
-- Provider abstraction
-- Communication analysis service
-
-Next:
-
-- REST API
-- Azure AI Foundry integration
-- Amazon Bedrock integration
-- Cloud deployment
-
-
 ## Project Goals
 
-* Build a production-oriented AI application using clean architecture principles.
+* Build a production-oriented AI application using Clean Architecture principles.
 * Learn and compare **Microsoft Azure AI Foundry** and **Amazon Bedrock** using the same codebase.
-* Design a provider-independent architecture where business logic remains unchanged regardless of the underlying AI provider.
-* Demonstrate enterprise software engineering practices suitable for AI Solution Architect and AI Engineer roles.
+* Design a provider-independent architecture where business logic remains independent of AI providers and cloud platforms.
+* Demonstrate enterprise software engineering practices suitable for AI Engineer and AI Solution Architect roles.
+* Build a maintainable platform that can evolve beyond email into enterprise communication intelligence.
 
 ---
 
 ## Current Features
 
+### Application Foundation
+
 * FastAPI application foundation
-* Provider-independent communication domain
-* Mock AI provider for offline development
-* Provider factory with dependency injection
-* Configuration management using Pydantic Settings
+* Centralized configuration management (Pydantic Settings)
 * Structured logging
-* Centralized exception handling
+* Framework-independent exception hierarchy
+* OpenAPI / Swagger documentation
 * Health and readiness endpoints
-* Comprehensive automated test suite
+
+### Domain Layer
+
+* Provider-independent communication domain
+* Communication request and analysis models
+* Strong validation using Pydantic v2
+* Domain interfaces separated from infrastructure
+
+### AI Architecture
+
+* Provider abstraction through the `AIProvider` interface
+* Configuration-driven provider factory
+* Deterministic `MockAIProvider` for offline development
+* Constructor-based dependency injection
+* Communication analysis service
+* Provider-independent orchestration
+
+### REST API
+
+* Versioned REST API
+* `POST /api/v1/communications/analyze`
+* Request validation
+* Structured error handling
+* Reusable domain schemas
+* OpenAPI documentation
+
+### Engineering
+
+* Clean Architecture
+* Comprehensive automated testing
+* Technical documentation
+* Architecture Decision Records (ADRs)
+* Mermaid architecture diagrams
+
+---
+
+## Current Project Status
+
+### Completed
+
+* ✅ Phase 1 – Foundation
+* ✅ Phase 2 – Provider-independent Communication Domain
+* ✅ Phase 3 – Provider Abstraction
+* ✅ Phase 4 – Communication Analysis Service
+* ✅ Phase 5 – REST API
+
+### Next
+
+* ▶ Phase 6 – Cloud Integration (Azure AI Foundry & Amazon Bedrock)
 
 ---
 
 ## Architecture
 
-```
-                FastAPI API
-                     │
-                     ▼
-      Communication Analysis Service
-                     │
-                     ▼
-              AIProvider Interface
-                     │
-         ┌───────────┴───────────┐
-         │                       │
- MockAIProvider        Future Azure AI Foundry
-                       Future Amazon Bedrock
+```text
+                    Client
+                       │
+                       ▼
+               FastAPI REST API
+                       │
+                       ▼
+      CommunicationAnalysisService
+                       │
+                       ▼
+               AIProvider Interface
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+     MockAIProvider      Future Providers
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+            Azure AI Foundry     Amazon Bedrock
 ```
 
-The business logic is independent of cloud providers. Azure AI Foundry and Amazon Bedrock will become interchangeable implementations of the same provider interface.
+The current implementation uses `MockAIProvider` for deterministic offline development. Azure AI Foundry and Amazon Bedrock integrations are planned and will be introduced without changing the application or business layers.
 
 ---
 
@@ -81,93 +117,66 @@ app/
 ├── domain/
 ├── infrastructure/
 ├── providers/
-└── utils/
+└── schemas/
 
 docs/
-deployment/
+├── api/
+├── architecture/
+├── cloud/
+├── decisions/
+├── diagrams/
+└── roadmap/
+
 tests/
+├── integration/
+├── providers/
+└── unit/
+
+deployment/
+├── azure/
+├── aws/
+└── docker/
 ```
 
 ---
 
 ## Technology Stack
 
+### Backend
+
 * Python 3.12
 * FastAPI
 * Pydantic v2
-* Pydantic Settings
-* Structlog
+* Uvicorn
+
+### Quality & Testing
+
 * Pytest
 * Ruff
-* Docker (planned)
 
-Future integrations:
+### AI Architecture
 
-* Microsoft Azure AI Foundry
-* Amazon Bedrock
+* Provider Abstraction
+* Dependency Injection
+* Clean Architecture
+
+### Cloud (Planned)
+
+* Azure AI Foundry
+
 * Azure App Service
+
+* Azure Key Vault
+
+* Azure Monitor
+
+* Amazon Bedrock
+
 * AWS App Runner
 
----
+* AWS Secrets Manager
 
-## Development Roadmap
-
-| Phase                                    | Status        |
-| ---------------------------------------- | ------------- |
-| Phase 1 – Foundation                     | ✅ Completed   |
-| Phase 2 – Domain Model                   | ✅ Completed   |
-| Phase 3 – Provider Abstraction           | ✅ Completed   |
-| Phase 4 – Communication Analysis Service | ▶ In Progress |
-| Phase 5 – REST API                       | ⏳ Not Started |
-| Phase 6 – Azure & AWS Integration        | ⏳ Not Started |
-| Phase 7 – Observability                  | ⏳ Not Started |
-| Phase 8 – Future Roadmap                 | ⏳ Not Started |
-
----
-
-## Running Locally
-
-Clone the repository:
-
-```bash
-git clone https://github.com/Susanta2025-lab/contextmesh.git
-cd contextmesh
-```
-
-Install dependencies:
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
-Run the application:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Open:
-
-* API Documentation: `http://localhost:8000/docs`
-* OpenAPI Schema: `http://localhost:8000/openapi.json`
-* Health Check: `http://localhost:8000/health`
-
----
-
-## Engineering Principles
-
-ContextMesh follows enterprise-oriented software engineering practices:
-
-* Clean Architecture
-* Separation of Concerns
-* Dependency Injection
-* Provider Abstraction
-* Configuration Management
-* Structured Logging
-* Comprehensive Testing
-* Cloud Portability
-* Extensibility
-* Maintainability
+* Amazon CloudWatch
 
 ---
 
@@ -186,10 +195,54 @@ The platform is designed to integrate with a broad ecosystem of enterprise and c
 * **Calendar and scheduling systems**
 * **Workflow automation platforms**
 
-Beyond communication channels, ContextMesh is designed to support multiple AI providers, cloud platforms, and enterprise integrations through a modular, provider-independent architecture. This enables communication channels, AI providers, and deployment environments to evolve independently while preserving the core business logic, improving maintainability, scalability, and long-term extensibility.
+Beyond communication channels, ContextMesh is designed to support multiple AI providers, cloud platforms, and enterprise integrations through a modular, provider-independent architecture. This enables communication channels, AI providers, and deployment environments to evolve independently while preserving the core business logic.
+
+---
+
+## Development Roadmap
+
+| Phase                                    | Status        |
+| ---------------------------------------- | ------------- |
+| Phase 1 – Foundation                     | ✅ Completed   |
+| Phase 2 – Domain Model                   | ✅ Completed   |
+| Phase 3 – Provider Abstraction           | ✅ Completed   |
+| Phase 4 – Communication Analysis Service | ✅ Completed   |
+| Phase 5 – REST API                       | ✅ Completed   |
+| Phase 6 – Cloud Integration              | ▶ Next        |
+| Phase 7 – Observability                  | ⏳ Not Started |
+| Phase 8 – Future Roadmap                 | ⏳ Not Started |
+
+---
+
+## Documentation
+
+Technical documentation is available under the `docs/` directory:
+
+* API documentation
+* Architecture documentation
+* Architecture Decision Records (ADRs)
+* Mermaid diagrams
+* Development roadmap
+* Cloud planning documents
+
+---
+
+## Current Limitations
+
+The current implementation intentionally focuses on architecture and application design.
+
+Not yet implemented:
+
+* Azure AI Foundry provider
+* Amazon Bedrock provider
+* Authentication & authorization
+* Persistent storage
+* Workflow automation
+* Enterprise integrations
+* Cloud deployment
 
 ---
 
 ## License
 
-This project is released under the MIT License.
+MIT License

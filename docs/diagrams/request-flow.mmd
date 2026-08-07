@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant Client
+    participant Route as FastAPI Route
+    participant Service as CommunicationAnalysisService
+    participant Provider as AIProvider
+    participant Mock as MockAIProvider
+    participant Handler as Exception Handler
+
+    Client->>Route: POST /api/v1/communications/analyze
+    Route->>Route: Validate CommunicationRequest (Pydantic)
+
+    alt Validation fails
+        Route-->>Client: 422 Unprocessable Entity
+    else Validation succeeds
+        Route->>Service: analyze(request)
+        Service->>Provider: analyze(request)
+        Provider->>Mock: analyze(request)
+
+        alt Provider succeeds
+            Mock-->>Provider: CommunicationAnalysisResult
+            Provider-->>Service: CommunicationAnalysisResult
+            Service-->>Route: CommunicationAnalysisResult
+            Route-->>Client: 200 OK
+        else Provider raises exception
+            Mock--xProvider: Exception
+            Provider--xService: Exception
+            Service->>Service: log communication_analysis_failed
+            Service--xRoute: AnalysisFailedError
+            Route--xHandler: propagate ContextMeshError
+            Handler->>Handler: log application_error
+            Handler-->>Client: 500 with safe detail message
+        end
+    end

@@ -1,0 +1,33 @@
+classDiagram
+    class AIProvider {
+        <<interface>>
+        +analyze(request) CommunicationAnalysisResult
+    }
+
+    class MockAIProvider {
+        +PROVIDER_NAME: str = "mock"
+        +analyze(request) CommunicationAnalysisResult
+    }
+
+    class AzureAIProvider {
+        <<not implemented>>
+    }
+
+    class AWSBedrockProvider {
+        <<not implemented>>
+    }
+
+    class ProviderFactory {
+        +create_ai_provider(settings) AIProvider
+    }
+
+    AIProvider <|.. MockAIProvider : implements
+    AIProvider <|.. AzureAIProvider : future, not implemented
+    AIProvider <|.. AWSBedrockProvider : future, not implemented
+
+    ProviderFactory ..> MockAIProvider : AI_PROVIDER=mock
+    ProviderFactory ..> AzureAIProvider : AI_PROVIDER=azure (future)
+    ProviderFactory ..> AWSBedrockProvider : AI_PROVIDER=aws (future)
+
+    note for AzureAIProvider "Placeholder only.\nNo Azure SDK code exists."
+    note for AWSBedrockProvider "Placeholder only.\nNo AWS SDK code exists."
