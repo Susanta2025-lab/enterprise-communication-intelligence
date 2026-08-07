@@ -45,7 +45,7 @@ If `self._provider.analyze(request)` raises any exception, the service:
 - Logs `communication_analysis_failed` with the provider's class name, the message ID (if present), and `str(exc)` — never the message body.
 - Raises `AnalysisFailedError(f"AI provider '{provider_name}' failed to analyze the communication.")`, using `raise ... from exc` to preserve the original cause internally without exposing it externally.
 
-This keeps the API layer's exception handling simple: it only needs to know about `ContextMeshError` and its subclasses, never about what a specific provider might raise.
+This keeps the API layer's exception handling simple: it only needs to know about `ECIPlatformError` and its subclasses, never about what a specific provider might raise.
 
 ## Structured Logging
 

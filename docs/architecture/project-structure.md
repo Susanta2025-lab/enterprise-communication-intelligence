@@ -17,7 +17,7 @@ app/
 ├── core/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
-│   ├── exceptions.py          # ContextMeshError, ConfigurationError, ServiceUnavailableError
+│   ├── exceptions.py          # ECIPlatformError, ConfigurationError, ServiceUnavailableError
 │   └── security.py           # empty scaffold — no implementation
 ├── domain/
 │   ├── enums.py               # SourceType, PriorityLevel, MessageCategory

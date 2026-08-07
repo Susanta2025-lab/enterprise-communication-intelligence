@@ -1,6 +1,6 @@
-# ContextMesh Project Roadmap
+# ECI Platform Project Roadmap
 
-This directory documents the planned implementation phases for ContextMesh.
+This directory documents the planned implementation phases for ECI Platform.
 
 ## Phases
 

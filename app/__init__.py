@@ -1,1 +1,1 @@
-"""ContextMesh application package."""
+"""Enterprise Communication Intelligence Platform application package."""

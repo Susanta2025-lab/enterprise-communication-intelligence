@@ -21,7 +21,7 @@ _SETTINGS_ENV_VARS = (
 
 @pytest.fixture
 def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Remove ContextMesh settings variables so defaults can be asserted."""
+    """Remove ECI Platform settings variables so defaults can be asserted."""
     for name in _SETTINGS_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     yield
@@ -31,7 +31,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     """Settings should expose sensible development defaults."""
     settings = Settings(_env_file=None)
 
-    assert settings.app_name == "ContextMesh"
+    assert settings.app_name == "Enterprise Communication Intelligence Platform"
     assert settings.app_version == "0.1.0"
     assert settings.app_env == "development"
     assert settings.app_host == "0.0.0.0"

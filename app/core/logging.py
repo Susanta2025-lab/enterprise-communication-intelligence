@@ -1,4 +1,4 @@
-"""Structured logging configuration for ContextMesh."""
+"""Structured logging configuration for ECI Platform."""
 
 from __future__ import annotations
 

@@ -54,7 +54,7 @@ MockAIProvider
 
 - Reused `CommunicationRequest` and `CommunicationAnalysisResult` as both the domain and API transport models; no duplicate schemas were created.
 - Added `get_communication_analysis_service` to the existing `app/api/dependencies.py` rather than creating a new dependencies module, keeping FastAPI-specific typing (`Depends`) confined to the API layer.
-- Did not modify `app/main.py`'s existing exception handlers: `AnalysisFailedError` and `ConfigurationError` are subclasses of the already-handled `ContextMeshError`, so they are automatically translated into `500` responses with `{"detail": ...}` and no stack trace, with no changes required.
+- Did not modify `app/main.py`'s existing exception handlers: `AnalysisFailedError` and `ConfigurationError` are subclasses of the already-handled `ECIPlatformError`, so they are automatically translated into `500` responses with `{"detail": ...}` and no stack trace, with no changes required.
 - Added `app/schemas/errors.py` purely for OpenAPI documentation of error responses (`responses={500: ..., 503: ...}` on the route); it does not change runtime error-handling behavior.
 - Kept the route function to request logging + one delegating call to `service.analyze(request)`; all orchestration, provider invocation, and failure translation remain in the Phase 4 application service.
 
@@ -77,7 +77,7 @@ MockAIProvider
 - `python -m pytest`: passed (`94 passed, 1 warning`), including the new communications integration suite
 - Manual verification against a running `uvicorn` instance:
   - `GET /health` → `{"status":"healthy"}`
-  - `GET /api/v1/health` → `{"status":"healthy","service":"ContextMesh","version":"0.1.0","environment":"development"}`
+  - `GET /api/v1/health` → `{"status":"healthy","service":"Enterprise Communication Intelligence Platform","version":"0.1.0","environment":"development"}`
   - `GET /api/v1/readiness` → `{"status":"ready"}`
   - `POST /api/v1/communications/analyze` → returned a full `CommunicationAnalysisResult` (summary, priority, category, action item, draft reply, `provider: "mock"`)
 - `/openapi.json` confirmed to expose `/api/v1/communications/analyze` with summary, description, request body, and `200`/`500`/`503` responses

@@ -10,7 +10,7 @@ Phase 1 (Foundation)
 
 ## Context
 
-ContextMesh must eventually support multiple communication channels (Gmail, Outlook, Teams, Slack, WhatsApp, CRM/ERP systems, document repositories, calendars) and multiple AI providers (starting with a local mock, later Azure AI Foundry and Amazon Bedrock). A single-layer application would tightly couple business logic to FastAPI and to whichever provider was implemented first, making it expensive to add channels or providers later, and hard to test business logic without spinning up the web framework.
+ECI Platform must eventually support multiple communication channels (Gmail, Outlook, Teams, Slack, WhatsApp, CRM/ERP systems, document repositories, calendars) and multiple AI providers (starting with a local mock, later Azure AI Foundry and Amazon Bedrock). A single-layer application would tightly couple business logic to FastAPI and to whichever provider was implemented first, making it expensive to add channels or providers later, and hard to test business logic without spinning up the web framework.
 
 ## Decision
 
@@ -41,7 +41,7 @@ API  →  Application  →  Domain  ←  Providers
 
 - Business logic (`app/application`, `app/domain`) is testable in isolation (see `tests/unit/domain`, `tests/unit/application` — no HTTP, no credentials).
 - Future channel and provider additions are additive, not invasive.
-- Matches the project's explicit dependency-direction rule in `.cursor/rules/contextmesh.mdc`.
+- Matches the project's explicit dependency-direction rule in `.cursor/rules/enterprise-communication-intelligence.mdc`.
 
 ## Trade-offs
 

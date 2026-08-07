@@ -1,8 +1,8 @@
-# ContextMesh
+# Enterprise Communication Intelligence Platform
 
-**Enterprise Communication Intelligence Platform**
+**ECI Platform**
 
-ContextMesh is a production-oriented AI platform that transforms business communications into structured, actionable intelligence. Rather than being limited to email automation, it is designed as a modular enterprise platform capable of supporting multiple communication channels, AI providers, and cloud environments through a provider-independent architecture.
+ECI Platform is a production-oriented AI platform that transforms business communications into structured, actionable intelligence. Rather than being limited to email automation, it is designed as a modular enterprise platform capable of supporting multiple communication channels, AI providers, and cloud environments through a provider-independent architecture.
 
 The project is being developed as a practical demonstration of **AI Solution Architecture**, combining modern software engineering, enterprise architecture, and cloud-native AI integration.
 
@@ -182,7 +182,7 @@ deployment/
 
 ## Long-Term Vision
 
-Although the initial MVP focuses on business communication analysis, the long-term vision is to evolve **ContextMesh** into a comprehensive **Enterprise Communication Intelligence Platform** that transforms scattered enterprise communications into structured, actionable intelligence.
+Although the initial MVP focuses on business communication analysis, the long-term vision is to evolve **ECI Platform** into a comprehensive **Enterprise Communication Intelligence Platform** that transforms scattered enterprise communications into structured, actionable intelligence.
 
 The platform is designed to integrate with a broad ecosystem of enterprise and consumer communication systems, including:
 
@@ -195,7 +195,7 @@ The platform is designed to integrate with a broad ecosystem of enterprise and c
 * **Calendar and scheduling systems**
 * **Workflow automation platforms**
 
-Beyond communication channels, ContextMesh is designed to support multiple AI providers, cloud platforms, and enterprise integrations through a modular, provider-independent architecture. This enables communication channels, AI providers, and deployment environments to evolve independently while preserving the core business logic.
+Beyond communication channels, ECI Platform is designed to support multiple AI providers, cloud platforms, and enterprise integrations through a modular, provider-independent architecture. This enables communication channels, AI providers, and deployment environments to evolve independently while preserving the core business logic.
 
 ---
 

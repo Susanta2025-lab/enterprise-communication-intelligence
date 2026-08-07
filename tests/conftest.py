@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for ContextMesh tests."""
+"""Shared pytest fixtures for ECI Platform tests."""
 
 from collections.abc import Iterator
 

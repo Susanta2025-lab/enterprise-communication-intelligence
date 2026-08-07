@@ -1,6 +1,6 @@
 # Diagrams
 
-Mermaid diagram sources for ContextMesh.
+Mermaid diagram sources for ECI Platform.
 
 ## Available Diagrams
 

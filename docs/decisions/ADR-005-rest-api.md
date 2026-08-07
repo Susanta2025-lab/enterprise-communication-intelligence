@@ -18,7 +18,7 @@ Expose communication analysis as a single synchronous REST endpoint, `POST /api/
 
 - Accepts and returns the same domain schemas used internally (`CommunicationRequest`, `CommunicationAnalysisResult`) — no separate "API DTO" layer.
 - Resolves `CommunicationAnalysisService` via FastAPI dependency injection (`app/api/dependencies.py`), keeping the route function to request logging plus a single delegating call.
-- Relies on the existing `ContextMeshError`/`ServiceUnavailableError` exception handlers (registered in `app/main.py`) for error translation, rather than adding endpoint-specific error handling.
+- Relies on the existing `ECIPlatformError`/`ServiceUnavailableError` exception handlers (registered in `app/main.py`) for error translation, rather than adding endpoint-specific error handling.
 - Documents `500` and `503` responses via an `ErrorResponse` model (`app/schemas/errors.py`) so OpenAPI reflects real failure modes.
 
 ## Alternatives Considered

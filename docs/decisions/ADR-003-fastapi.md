@@ -10,7 +10,7 @@ Phase 1 (Foundation)
 
 ## Context
 
-ContextMesh needs a Python web framework for its REST API that supports strong request/response validation, automatic API documentation, and async-capable request handling, while keeping route code thin so business logic can live in the application layer per ADR-001.
+ECI Platform needs a Python web framework for its REST API that supports strong request/response validation, automatic API documentation, and async-capable request handling, while keeping route code thin so business logic can live in the application layer per ADR-001.
 
 ## Decision
 

@@ -11,7 +11,7 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
 class Settings(BaseSettings):
-    """Validated runtime settings for ContextMesh.
+    """Validated runtime settings for ECI Platform.
 
     Values are sourced from environment variables and an optional local ``.env``
     file. Secrets must never be hard-coded or logged.
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "ContextMesh"
+    app_name: str = "Enterprise Communication Intelligence Platform"
     app_version: str = "0.1.0"
     app_env: AppEnvironment = "development"
     app_host: str = "0.0.0.0"

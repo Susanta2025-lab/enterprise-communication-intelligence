@@ -1,4 +1,4 @@
-"""Provider-independent communication domain for ContextMesh."""
+"""Provider-independent communication domain for ECI Platform."""
 
 from app.domain.enums import MessageCategory, PriorityLevel, SourceType
 from app.domain.interfaces import AIProvider

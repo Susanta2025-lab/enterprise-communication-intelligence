@@ -3,7 +3,7 @@ requires = ["setuptools>=75.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "contextmesh"
+name = "enterprise-communication-intelligence"
 version = "0.1.0"
 description = "Enterprise Communication Intelligence Platform with provider-independent AI architecture."
 readme = "README.md"

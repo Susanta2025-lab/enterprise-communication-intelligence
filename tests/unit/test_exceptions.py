@@ -2,15 +2,15 @@
 
 from app.core.exceptions import (
     ConfigurationError,
-    ContextMeshError,
+    ECIPlatformError,
     ServiceUnavailableError,
 )
 
 
 def test_exception_hierarchy() -> None:
     """Application exceptions should share a common base type."""
-    assert issubclass(ConfigurationError, ContextMeshError)
-    assert issubclass(ServiceUnavailableError, ContextMeshError)
+    assert issubclass(ConfigurationError, ECIPlatformError)
+    assert issubclass(ServiceUnavailableError, ECIPlatformError)
 
 
 def test_exception_message_is_preserved() -> None:

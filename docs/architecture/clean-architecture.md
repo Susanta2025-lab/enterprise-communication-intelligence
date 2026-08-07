@@ -1,6 +1,6 @@
-# Clean Architecture in ContextMesh
+# Clean Architecture in ECI Platform
 
-ContextMesh applies clean-architecture-style layering: dependency direction points inward, toward stable, framework-independent code, and outward layers own the framework and infrastructure details.
+ECI Platform applies clean-architecture-style layering: dependency direction points inward, toward stable, framework-independent code, and outward layers own the framework and infrastructure details.
 
 ## Dependency Direction
 
@@ -15,7 +15,7 @@ API  →  Application  →  Domain  ←  Providers
 - `app/providers` depends on `app/domain` (implements `AIProvider`, uses domain models/schemas) and `app/core` (config, exceptions).
 - `app/domain` depends on nothing else in the application — it is the innermost, most stable layer.
 
-This matches the direction required by `.cursor/rules/contextmesh.mdc`: domain code must remain independent of FastAPI, Azure SDKs, and AWS SDKs.
+This matches the direction required by `.cursor/rules/enterprise-communication-intelligence.mdc`: domain code must remain independent of FastAPI, Azure SDKs, and AWS SDKs.
 
 ## Stable Inner Layers
 
@@ -41,7 +41,7 @@ Framework and infrastructure concerns live at the outer edges:
 
 ## Trade-offs (Current State)
 
-- **Not full DDD:** ContextMesh borrows clean architecture's *layering and dependency direction*, but does not implement full Domain-Driven Design — there are no aggregates, domain events, repositories, or a ubiquitous-language modeling process. The "domain" layer here is intentionally lightweight: Pydantic models with validation, plus one interface.
+- **Not full DDD:** ECI Platform borrows clean architecture's *layering and dependency direction*, but does not implement full Domain-Driven Design — there are no aggregates, domain events, repositories, or a ubiquitous-language modeling process. The "domain" layer here is intentionally lightweight: Pydantic models with validation, plus one interface.
 - **No application-service abstraction beyond one use case:** `app/application/services` currently contains a single service (`CommunicationAnalysisService`). No generic use-case base class or command/query separation has been introduced, per the project rule to avoid premature abstraction.
 - **Framework coupling still exists at the edges by design:** `app/api` necessarily depends on FastAPI (`Depends`, `APIRouter`), and `app/providers` will necessarily depend on cloud SDKs once Azure/AWS adapters are added. This is intentional — clean architecture pushes volatility to the edges rather than eliminating it.
 - **Core is shared, not layered further:** `app/core` (config, logging, exceptions) is used by every layer. It is deliberately minimal and framework-agnostic (aside from being read by FastAPI's lifespan hook in `app/main.py`), rather than being split into its own strict sub-layers.

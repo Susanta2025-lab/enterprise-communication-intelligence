@@ -26,7 +26,7 @@ sequenceDiagram
             Provider--xService: Exception
             Service->>Service: log communication_analysis_failed
             Service--xRoute: AnalysisFailedError
-            Route--xHandler: propagate ContextMeshError
+            Route--xHandler: propagate ECIPlatformError
             Handler->>Handler: log application_error
             Handler-->>Client: 500 with safe detail message
         end

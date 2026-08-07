@@ -13,7 +13,7 @@ class HealthResponse(BaseModel):
     """Versioned application health metadata."""
 
     status: str = Field(examples=["healthy"])
-    service: str = Field(examples=["ContextMesh"])
+    service: str = Field(examples=["Enterprise Communication Intelligence Platform"])
     version: str = Field(examples=["0.1.0"])
     environment: str = Field(examples=["development"])
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ContextMesh exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)).
+ECI Platform exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)).
 
 ## Base URL
 
@@ -35,7 +35,7 @@ No manual OpenAPI authoring is required or performed; the schema reflects the cu
 
 ## Authentication Status
 
-**No authentication or authorization is implemented.** All endpoints are open. This is explicitly out of scope for the current phase (see `.cursor/rules/contextmesh.mdc` and the Phase 5 roadmap entry) and should not be treated as production-ready without an authentication layer.
+**No authentication or authorization is implemented.** All endpoints are open. This is explicitly out of scope for the current phase (see `.cursor/rules/enterprise-communication-intelligence.mdc` and the Phase 5 roadmap entry) and should not be treated as production-ready without an authentication layer.
 
 ## Provider Status
 

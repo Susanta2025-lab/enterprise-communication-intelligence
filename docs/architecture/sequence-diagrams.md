@@ -40,7 +40,7 @@ sequenceDiagram
     Provider--xService: raises Exception
     Service->>Service: log communication_analysis_failed
     Service--xRoute: raises AnalysisFailedError
-    Route--xHandler: propagates ContextMeshError
+    Route--xHandler: propagates ECIPlatformError
     Handler->>Handler: log application_error
     Handler-->>Client: 500 + {"detail": "..."}
 ```
@@ -60,7 +60,7 @@ sequenceDiagram
     Dep->>Factory: create_ai_provider(settings)
     Factory--xDep: raises ConfigurationError (unsupported AI_PROVIDER)
     Dep--xRoute: propagates ConfigurationError
-    Route--xHandler: propagates ContextMeshError
+    Route--xHandler: propagates ECIPlatformError
     Handler-->>Client: 500 + {"detail": "Unsupported AI provider '...'. Supported providers: mock"}
 ```
 

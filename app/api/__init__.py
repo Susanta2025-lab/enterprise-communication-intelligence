@@ -1,1 +1,1 @@
-"""HTTP API layer for ContextMesh."""
+"""HTTP API layer for ECI Platform."""

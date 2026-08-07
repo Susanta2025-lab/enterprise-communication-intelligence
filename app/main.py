@@ -1,4 +1,4 @@
-"""FastAPI application entrypoint for ContextMesh."""
+"""FastAPI application entrypoint for ECI Platform."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api.router import create_api_router
 from app.api.routes import health
 from app.core.config import get_settings
-from app.core.exceptions import ContextMeshError, ServiceUnavailableError
+from app.core.exceptions import ECIPlatformError, ServiceUnavailableError
 from app.core.logging import configure_logging, get_logger
 
 
@@ -56,10 +56,10 @@ def create_app() -> FastAPI:
         logger.warning("service_unavailable", error=exc.message)
         return JSONResponse(status_code=503, content={"detail": exc.message})
 
-    @application.exception_handler(ContextMeshError)
-    async def contextmesh_error_handler(
+    @application.exception_handler(ECIPlatformError)
+    async def eci_platform_error_handler(
         _request: Request,
-        exc: ContextMeshError,
+        exc: ECIPlatformError,
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.error("application_error", error=exc.message)

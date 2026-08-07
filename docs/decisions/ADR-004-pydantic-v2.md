@@ -10,7 +10,7 @@ Phase 1–2 (Foundation, Domain Model)
 
 ## Context
 
-ContextMesh needs consistent validation for domain models (`CommunicationMessage`, `CommunicationAnalysis`, etc.), for API request/response bodies, and for application configuration loaded from environment variables — ideally using one library so behavior (error format, type coercion) is consistent across all three.
+ECI Platform needs consistent validation for domain models (`CommunicationMessage`, `CommunicationAnalysis`, etc.), for API request/response bodies, and for application configuration loaded from environment variables — ideally using one library so behavior (error format, type coercion) is consistent across all three.
 
 ## Decision
 

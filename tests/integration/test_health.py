@@ -45,7 +45,7 @@ def test_versioned_health_endpoint(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "healthy",
-        "service": "ContextMesh",
+        "service": "Enterprise Communication Intelligence Platform",
         "version": "0.1.0",
         "environment": "development",
     }

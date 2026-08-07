@@ -25,7 +25,7 @@ curl -sS http://localhost:8000/api/v1/health
 ```
 
 ```json
-{"status": "healthy", "service": "ContextMesh", "version": "0.1.0", "environment": "development"}
+{"status": "healthy", "service": "Enterprise Communication Intelligence Platform", "version": "0.1.0", "environment": "development"}
 ```
 
 ## Readiness

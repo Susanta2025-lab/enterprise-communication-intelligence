@@ -1,4 +1,4 @@
-# ContextMesh Architecture Documentation
+# ECI Platform Architecture Documentation
 
 This directory documents the architecture implemented through **Phase 5 – REST API**.
 

@@ -1,9 +1,9 @@
 ---
-description: ContextMesh architecture and implementation rules
+description: Enterprise Communication Intelligence (ECI) Platform architecture and implementation rules
 alwaysApply: true
 ---
 
-# ContextMesh Project Rules
+# ECI Platform Project Rules
 
 ## Human Authority
 
@@ -21,9 +21,10 @@ If a better architecture is identified:
 
 ---
 
+
 # Project Goal
 
-ContextMesh is a production-oriented Enterprise Communication Intelligence Platform.
+ECI is a production-oriented Enterprise Communication Intelligence Platform.
 
 The MVP currently processes business communications and provides:
 
@@ -141,6 +142,8 @@ API:
 - never imports provider implementations directly.
 
 ---
+
+
 
 # Naming
 
@@ -432,3 +435,23 @@ Do not create Git commits.
 Do not modify unrelated documentation.
 
 Do not modify README unless explicitly instructed.
+
+
+## File Formatting and Line Endings
+
+All repository text files must use **Unix LF (`\n`) line endings**.
+
+When creating or modifying files:
+
+- Preserve LF line endings in existing LF files.
+- Never introduce Windows CRLF (`\r\n`) line endings.
+- If a modified text file contains CRLF, normalize that file to LF before completing the task.
+- Only normalize files that are part of the current task; do not perform repository-wide line-ending changes unless explicitly requested.
+- Do not introduce trailing whitespace.
+- Preserve the existing file encoding unless a change is explicitly required.
+- Preserve the existing formatting conventions of the repository.
+
+Before declaring any task complete, run:
+
+```bash
+git diff --check

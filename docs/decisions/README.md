@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ADRs capture significant architectural decisions for ContextMesh, along with the context and alternatives that were considered, so future contributors understand *why* the system is structured the way it is — not just what it currently looks like.
+ADRs capture significant architectural decisions for ECI Platform, along with the context and alternatives that were considered, so future contributors understand *why* the system is structured the way it is — not just what it currently looks like.
 
 ## Status Meanings
 

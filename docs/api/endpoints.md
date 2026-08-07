@@ -32,7 +32,7 @@ All endpoints implemented in the repository as of Phase 5. No other routes exist
   ```json
   {
     "status": "healthy",
-    "service": "ContextMesh",
+    "service": "Enterprise Communication Intelligence Platform",
     "version": "0.1.0",
     "environment": "development"
   }

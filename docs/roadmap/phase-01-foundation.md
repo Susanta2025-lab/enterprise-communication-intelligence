@@ -2,7 +2,7 @@
 
 ## Objective
 
-Establish a production-ready foundation for ContextMesh by implementing the core application infrastructure, configuration management, structured logging, error handling, API versioning, health endpoints, and automated testing.
+Establish a production-ready foundation for ECI Platform by implementing the core application infrastructure, configuration management, structured logging, error handling, API versioning, health endpoints, and automated testing.
 
 ---
 

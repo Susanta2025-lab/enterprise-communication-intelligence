@@ -1,6 +1,6 @@
-# ContextMesh API Documentation
+# ECI Platform API Documentation
 
-This directory documents the REST API implemented through Phase 5 of the ContextMesh roadmap.
+This directory documents the REST API implemented through Phase 5 of the ECI Platform roadmap.
 
 ## Contents
 

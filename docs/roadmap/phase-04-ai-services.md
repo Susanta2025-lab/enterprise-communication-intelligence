@@ -53,7 +53,7 @@ MockAIProvider (providers.mock)
 
 ## Architectural Decisions
 
-- Added `AnalysisFailedError` in `app/application/exceptions.py`, subclassing the existing `ContextMeshError`, since no existing exception represented "provider failed during orchestration."
+- Added `AnalysisFailedError` in `app/application/exceptions.py`, subclassing the existing `ECIPlatformError`, since no existing exception represented "provider failed during orchestration."
 - Kept `app/core/exceptions.py` unchanged; application-layer exceptions live separately from core exceptions per the requested structure.
 - Used a narrow `except Exception` solely to translate provider failures into `AnalysisFailedError` at the orchestration boundary, re-raising with `raise ... from exc` to preserve the original cause without leaking it to callers.
 - Used structured logging (`app.core.logging.get_logger`) with only non-sensitive fields (provider name, message id, source type, priority, category); message bodies and credentials are never logged.

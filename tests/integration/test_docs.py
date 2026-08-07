@@ -44,7 +44,7 @@ def test_openapi_schema_available(client: TestClient) -> None:
 
     assert response.status_code == 200
     schema = response.json()
-    assert schema["info"]["title"] == "ContextMesh"
+    assert schema["info"]["title"] == "Enterprise Communication Intelligence Platform"
     assert schema["info"]["version"] == "0.1.0"
     assert "/health" in schema["paths"]
     assert "/api/v1/health" in schema["paths"]

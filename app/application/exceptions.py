@@ -1,7 +1,7 @@
 """Application-layer exceptions for use-case orchestration."""
 
-from app.core.exceptions import ContextMeshError
+from app.core.exceptions import ECIPlatformError
 
 
-class AnalysisFailedError(ContextMeshError):
+class AnalysisFailedError(ECIPlatformError):
     """Raised when an AI provider fails to analyze a communication."""

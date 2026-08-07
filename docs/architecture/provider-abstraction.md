@@ -89,6 +89,6 @@ Failing explicitly with `ConfigurationError` — which is translated into an HTT
 
 - Implement `AIProvider` in its own module (mirroring `app/providers/mock/provider.py`).
 - Be selected via a new branch in `create_ai_provider`, matching `AI_PROVIDER=azure` / `AI_PROVIDER=aws`.
-- Keep all cloud SDK imports confined to its own package, per `.cursor/rules/contextmesh.mdc`.
+- Keep all cloud SDK imports confined to its own package, per `.cursor/rules/enterprise-communication-intelligence.mdc`.
 
 See [`docs/cloud/`](../cloud/README.md) for the (currently placeholder) planning documents for these future adapters.

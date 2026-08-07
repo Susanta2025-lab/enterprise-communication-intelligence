@@ -16,20 +16,20 @@ This is FastAPI's built-in behavior; no custom validation error handler is regis
 Defined in `app/core/exceptions.py`:
 
 ```python
-class ContextMeshError(Exception):
-    """Base error for all ContextMesh application failures."""
+class ECIPlatformError(Exception):
+    """Base error for all ECI Platform application failures."""
 
-class ConfigurationError(ContextMeshError):
+class ConfigurationError(ECIPlatformError):
     """Raised when application configuration is invalid or incomplete."""
 
-class ServiceUnavailableError(ContextMeshError):
+class ServiceUnavailableError(ECIPlatformError):
     """Raised when a required service dependency is unavailable."""
 ```
 
 `app/application/exceptions.py` adds one application-layer exception:
 
 ```python
-class AnalysisFailedError(ContextMeshError):
+class AnalysisFailedError(ECIPlatformError):
     """Raised when an AI provider fails to analyze a communication."""
 ```
 
@@ -42,9 +42,9 @@ Two handlers are registered on the FastAPI app:
 | Exception type | Status code | Response body | Logged event |
 |---|---|---|---|
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
-| `ContextMeshError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
+| `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
 
-Because Starlette/FastAPI matches exception handlers by most-specific registered type, `ConfigurationError` and `AnalysisFailedError` — which have no dedicated handler — are both caught by the `ContextMeshError` handler and return `500`.
+Because Starlette/FastAPI matches exception handlers by most-specific registered type, `ConfigurationError` and `AnalysisFailedError` — which have no dedicated handler — are both caught by the `ECIPlatformError` handler and return `500`.
 
 ## Configuration Errors
 
@@ -54,7 +54,7 @@ If `AI_PROVIDER` is set to an unsupported value, `app/providers/factory.py` rais
 ConfigurationError("Unsupported AI provider '<value>'. Supported providers: mock")
 ```
 
-This is raised during dependency resolution (`get_ai_provider` in `app/api/dependencies.py`), before the route body executes, and is translated into a `500` response by the `ContextMeshError` handler. There is no silent fallback to another provider.
+This is raised during dependency resolution (`get_ai_provider` in `app/api/dependencies.py`), before the route body executes, and is translated into a `500` response by the `ECIPlatformError` handler. There is no silent fallback to another provider.
 
 ## Provider/Service Failures
 
@@ -63,7 +63,7 @@ If the injected `AIProvider.analyze(...)` call raises any exception, `Communicat
 1. Logs `communication_analysis_failed` with the provider name, message ID, and error message (never the message body).
 2. Raises `AnalysisFailedError("AI provider '<ProviderClassName>' failed to analyze the communication.")`, chained via `raise ... from exc` so the original exception is preserved as the Python `__cause__` internally — it is not exposed in the HTTP response.
 
-This is translated by the `ContextMeshError` handler into a `500` response.
+This is translated by the `ECIPlatformError` handler into a `500` response.
 
 ## Safe Error-Response Behavior
 
@@ -77,7 +77,7 @@ This is translated by the `ContextMeshError` handler into a `500` response.
 |---|---|---|
 | `200` | Successful request | Normal route return |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
-| `500` | Application or configuration error (`ContextMeshError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
+| `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
 | `503` | A required service dependency is unavailable (`ServiceUnavailableError`) | `app/main.py` exception handler; documented on `POST /api/v1/communications/analyze` in OpenAPI, but not currently raised by any implemented code path |
 
 No other status codes are produced by application code in this phase.
