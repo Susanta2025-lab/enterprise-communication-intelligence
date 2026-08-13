@@ -5,6 +5,9 @@ pydantic-settings
 python-dotenv
 httpx
 structlog
+azure-ai-projects
+azure-identity
+openai
 
 pytest
 pytest-asyncio

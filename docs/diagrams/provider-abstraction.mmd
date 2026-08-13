@@ -9,8 +9,9 @@ classDiagram
         +analyze(request) CommunicationAnalysisResult
     }
 
-    class AzureAIProvider {
-        <<not implemented>>
+    class MicrosoftFoundryProvider {
+        +PROVIDER_NAME: str = "microsoft_foundry"
+        +analyze(request) CommunicationAnalysisResult
     }
 
     class AWSBedrockProvider {
@@ -22,12 +23,12 @@ classDiagram
     }
 
     AIProvider <|.. MockAIProvider : implements
-    AIProvider <|.. AzureAIProvider : future, not implemented
+    AIProvider <|.. MicrosoftFoundryProvider : implements
     AIProvider <|.. AWSBedrockProvider : future, not implemented
 
     ProviderFactory ..> MockAIProvider : AI_PROVIDER=mock
-    ProviderFactory ..> AzureAIProvider : AI_PROVIDER=azure (future)
-    ProviderFactory ..> AWSBedrockProvider : AI_PROVIDER=aws (future)
+    ProviderFactory ..> MicrosoftFoundryProvider : AI_PROVIDER=microsoft_foundry
+    ProviderFactory ..> AWSBedrockProvider : future
 
-    note for AzureAIProvider "Placeholder only.\nNo Azure SDK code exists."
+    note for MicrosoftFoundryProvider "DefaultAzureCredential\nAIProjectClient\nResponses API"
     note for AWSBedrockProvider "Placeholder only.\nNo AWS SDK code exists."

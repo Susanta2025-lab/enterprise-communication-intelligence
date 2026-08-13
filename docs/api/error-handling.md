@@ -51,7 +51,7 @@ Because Starlette/FastAPI matches exception handlers by most-specific registered
 If `AI_PROVIDER` is set to an unsupported value, `app/providers/factory.py` raises:
 
 ```text
-ConfigurationError("Unsupported AI provider '<value>'. Supported providers: mock")
+ConfigurationError("Unsupported AI provider '<value>'. Supported providers: mock, microsoft_foundry")
 ```
 
 This is raised during dependency resolution (`get_ai_provider` in `app/api/dependencies.py`), before the route body executes, and is translated into a `500` response by the `ECIPlatformError` handler. There is no silent fallback to another provider.
@@ -69,7 +69,7 @@ This is translated by the `ECIPlatformError` handler into a `500` response.
 
 - Responses only ever contain `{"detail": "<message>"}` for application exceptions — no stack traces, no exception class names, no provider SDK details.
 - The `AnalysisFailedError` message includes only the provider's Python class name (e.g. `MockAIProvider`) and a generic failure statement, not the underlying exception's message or traceback.
-- `ConfigurationError` messages mention the configured (invalid) provider name and the list of currently supported providers (`mock`) — this is intentional operator-facing feedback, not a security-sensitive detail, but it is documented here for completeness.
+- `ConfigurationError` messages mention the configured (invalid) provider name and the list of currently supported providers (`mock`, `microsoft_foundry`) — this is intentional operator-facing feedback, not a security-sensitive detail, but it is documented here for completeness.
 
 ## Status Code Summary
 

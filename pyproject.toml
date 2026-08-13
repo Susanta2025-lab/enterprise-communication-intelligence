@@ -17,7 +17,7 @@ authors = [
 keywords = [
     "AI",
     "FastAPI",
-    "Azure AI Foundry",
+    "Microsoft Foundry",
     "AWS Bedrock",
     "Enterprise AI",
     "Solution Architecture",
@@ -39,7 +39,10 @@ dependencies = [
     "pydantic-settings>=2.10",
     "python-dotenv>=1.1",
     "httpx>=0.28",
-    "structlog>=25.4"
+    "structlog>=25.4",
+    "azure-ai-projects>=2.4.0",
+    "azure-identity>=1.15.0",
+    "openai>=2.8.0"
 ]
 
 [project.optional-dependencies]

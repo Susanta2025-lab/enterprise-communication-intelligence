@@ -1,6 +1,6 @@
 # Provider Abstraction
 
-This documents the provider abstraction as actually implemented: `app/domain/interfaces/ai_provider.py`, `app/providers/mock/provider.py`, `app/providers/factory.py`, and their wiring into `app/api/dependencies.py`.
+This documents the provider abstraction as actually implemented: `app/domain/interfaces/ai_provider.py`, `app/providers/mock/provider.py`, `app/providers/microsoft_foundry/provider.py`, `app/providers/factory.py`, and their wiring into `app/api/dependencies.py`.
 
 ## `AIProvider` (`app/domain/interfaces/ai_provider.py`)
 
@@ -17,7 +17,7 @@ The interface lives in `app/domain`, not `app/providers`, so it can be depended 
 
 ## `MockAIProvider` (`app/providers/mock/provider.py`)
 
-The only implemented provider. It is:
+Deterministic offline provider for local development and tests. It is:
 
 - **Deterministic** — identical input always produces identical output (verified by `test_mock_provider_is_deterministic`).
 - **Offline** — no network calls, no randomness, no cloud SDK usage.
@@ -34,6 +34,31 @@ It sets `provider="mock"` (via `MockAIProvider.PROVIDER_NAME`) on every `Communi
 
 This logic is intentionally simple test/development infrastructure — it is not, and is not meant to be, a real language model.
 
+## `MicrosoftFoundryProvider` (`app/providers/microsoft_foundry/provider.py`)
+
+Cloud adapter for Microsoft Foundry. It implements the same `AIProvider` contract and returns `provider="microsoft_foundry"`.
+
+```text
+DefaultAzureCredential
+        ↓
+AIProjectClient
+        ↓
+get_openai_client()
+        ↓
+responses.create(...)
+```
+
+Key properties:
+
+- Authenticates with Microsoft Entra ID via `DefaultAzureCredential` (Azure CLI locally; Managed Identity in a future Azure deployment).
+- Uses the Foundry project endpoint and deployment name from settings.
+- Requests strict JSON Schema structured output from the Responses API, validates it, and maps it onto existing domain models.
+- Honors `include_action_items` and `include_draft_reply`.
+- Keeps Azure SDK types inside the provider package.
+- Does not use API-key authentication.
+
+See [Microsoft Foundry](../cloud/azure-ai-foundry.md) and [ADR-006](../decisions/ADR-006-azure-ai-foundry.md).
+
 ## Provider Factory (`app/providers/factory.py`)
 
 ```python
@@ -43,15 +68,19 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     if provider_name == "mock":
         from app.providers.mock.provider import MockAIProvider
         return MockAIProvider()
+    if provider_name == "microsoft_foundry":
+        from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
+        return MicrosoftFoundryProvider(...)
     raise ConfigurationError(
-        f"Unsupported AI provider '{resolved.ai_provider}'. Supported providers: mock"
+        f"Unsupported AI provider '{resolved.ai_provider}'. "
+        "Supported providers: mock, microsoft_foundry"
     )
 ```
 
 Key properties:
 
 - **Configuration-driven selection.** The provider is chosen entirely by `Settings.ai_provider` (backed by the `AI_PROVIDER` environment variable, normalized to lowercase).
-- **Localized imports.** The `MockAIProvider` import happens inside the `if` branch, so importing the factory does not pull in every provider's dependencies — this matters once Azure/AWS SDK-backed providers exist.
+- **Localized imports.** Concrete provider imports happen inside each branch, so selecting `mock` does not construct Foundry clients.
 - **No global registry.** There is no module-level dict or singleton mapping provider names to classes; the factory is a plain function with an explicit `if`/`raise` structure.
 
 ## Dependency Injection
@@ -68,27 +97,21 @@ def get_communication_analysis_service(
     return CommunicationAnalysisService(provider)
 ```
 
-FastAPI resolves `get_ai_provider` as a dependency of `get_communication_analysis_service`, which is itself injected into the `POST /api/v1/communications/analyze` route. This is the only place `fastapi.Depends` is combined with provider resolution — the factory function itself has no FastAPI dependency.
+FastAPI resolves `get_ai_provider` as a dependency of `get_communication_analysis_service`, which is itself injected into the `POST /api/v1/communications/analyze` route. This is the only place `fastapi.Depends` is combined with provider resolution — the factory function itself has no FastAPI dependency. The API layer never imports `MicrosoftFoundryProvider` or `MockAIProvider` directly.
 
 ## Explicit Failure for Unsupported Providers
 
-If `AI_PROVIDER` is set to anything other than `mock` (e.g. `azure`, `aws`, `openai`), `create_ai_provider` raises `ConfigurationError` immediately. There is no `try`/`except` around the lookup that would swallow the error, and no default case that returns `MockAIProvider()`.
+If `AI_PROVIDER` is set to anything other than `mock` or `microsoft_foundry` (e.g. `azure`, `aws`, `openai`), `create_ai_provider` raises `ConfigurationError` immediately. There is no `try`/`except` around the lookup that would swallow the error, and no default case that returns `MockAIProvider()`.
 
 ## Why No Silent Fallback Is Allowed
 
 A silent fallback to `MockAIProvider` when an unsupported provider is configured would mean:
 
-- Production misconfiguration (e.g. a typo in `AI_PROVIDER`, or a not-yet-implemented provider name) would silently serve deterministic mock analysis instead of failing loudly.
+- Production misconfiguration (e.g. a typo in `AI_PROVIDER`) would silently serve deterministic mock analysis instead of failing loudly.
 - Operators would have no signal that the intended provider was never actually selected.
 
 Failing explicitly with `ConfigurationError` — which is translated into an HTTP `500` by the exception handler in `app/main.py` — surfaces misconfiguration immediately instead of masking it.
 
-## Azure and AWS: Future Adapters Only
+## AWS: Future Adapter Only
 
-`app/providers/azure/__init__.py` and `app/providers/aws/__init__.py` exist as empty scaffold packages. **No Azure AI Foundry or Amazon Bedrock code is implemented.** When added, each would be expected to:
-
-- Implement `AIProvider` in its own module (mirroring `app/providers/mock/provider.py`).
-- Be selected via a new branch in `create_ai_provider`, matching `AI_PROVIDER=azure` / `AI_PROVIDER=aws`.
-- Keep all cloud SDK imports confined to its own package, per `.cursor/rules/enterprise-communication-intelligence.mdc`.
-
-See [`docs/cloud/`](../cloud/README.md) for the (currently placeholder) planning documents for these future adapters.
+Amazon Bedrock is not implemented. When added, it should implement `AIProvider` in its own package and gain one factory branch, keeping AWS SDK imports confined to that package.

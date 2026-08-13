@@ -12,8 +12,8 @@ This directory documents the REST API implemented through Phase 5 of the ECI Pla
 
 ## Current Provider Status
 
-The API currently runs with `AI_PROVIDER=mock` by default (see `.env.example`). All communication analysis is produced by the deterministic `MockAIProvider`; no Azure or AWS provider is implemented or configured. See [Provider Abstraction](../architecture/provider-abstraction.md) for details.
+The API currently defaults to `AI_PROVIDER=mock` (see `.env.example`). `MicrosoftFoundryProvider` is available when `AI_PROVIDER=microsoft_foundry` and Foundry settings are present. See [Provider Abstraction](../architecture/provider-abstraction.md) and [Microsoft Foundry](../cloud/azure-ai-foundry.md).
 
 ## Scope
 
-This documentation reflects only what is implemented through **Phase 5 – REST API**. Cloud provider integrations, authentication, persistence, and deployment are future work and are not described here as if they exist. See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.
+This documentation reflects the REST API plus the Phase 6A Microsoft Foundry provider. Amazon Bedrock, authentication, persistence, and cloud hosting remain future work. See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.

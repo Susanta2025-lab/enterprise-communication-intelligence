@@ -16,6 +16,8 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_V1_PREFIX",
     "AI_PROVIDER",
+    "FOUNDRY_PROJECT_ENDPOINT",
+    "FOUNDRY_MODEL_DEPLOYMENT",
 )
 
 
@@ -39,6 +41,8 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.log_level == "INFO"
     assert settings.api_v1_prefix == "/api/v1"
     assert settings.ai_provider == "mock"
+    assert settings.foundry_project_endpoint is None
+    assert settings.foundry_model_deployment is None
 
 
 def test_get_settings_returns_cached_instance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,3 +96,86 @@ def test_ai_provider_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_PROVIDER", "MOCK")
     settings = Settings(_env_file=None)
     assert settings.ai_provider == "mock"
+
+
+def test_mock_provider_does_not_require_foundry_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AI_PROVIDER=mock must work without Foundry configuration."""
+    monkeypatch.setenv("AI_PROVIDER", "mock")
+    monkeypatch.delenv("FOUNDRY_PROJECT_ENDPOINT", raising=False)
+    monkeypatch.delenv("FOUNDRY_MODEL_DEPLOYMENT", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.ai_provider == "mock"
+    assert settings.foundry_project_endpoint is None
+    assert settings.foundry_model_deployment is None
+
+
+def test_microsoft_foundry_settings_are_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Foundry settings should load when the Microsoft Foundry provider is selected."""
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev",
+    )
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT", "eci-gpt-54-mini")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.ai_provider == "microsoft_foundry"
+    assert settings.foundry_project_endpoint == (
+        "https://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev"
+    )
+    assert settings.foundry_model_deployment == "eci-gpt-54-mini"
+
+
+def test_microsoft_foundry_requires_project_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FOUNDRY_PROJECT_ENDPOINT is required when AI_PROVIDER=microsoft_foundry."""
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.delenv("FOUNDRY_PROJECT_ENDPOINT", raising=False)
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT", "eci-gpt-54-mini")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_microsoft_foundry_requires_model_deployment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FOUNDRY_MODEL_DEPLOYMENT is required when AI_PROVIDER=microsoft_foundry."""
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev",
+    )
+    monkeypatch.delenv("FOUNDRY_MODEL_DEPLOYMENT", raising=False)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_blank_foundry_settings_are_treated_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank Foundry values should not satisfy microsoft_foundry configuration."""
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT", "   ")
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT", "eci-gpt-54-mini")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_foundry_endpoint_must_be_https(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FOUNDRY_PROJECT_ENDPOINT must use https when provided."""
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "http://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev",
+    )
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

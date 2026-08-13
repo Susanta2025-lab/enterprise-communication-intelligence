@@ -11,7 +11,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 ## Project Goals
 
 * Build a production-oriented AI application using Clean Architecture principles.
-* Learn and compare **Microsoft Azure AI Foundry** and **Amazon Bedrock** using the same codebase.
+* Learn and compare **Microsoft Foundry** and **Amazon Bedrock** using the same codebase.
 * Design a provider-independent architecture where business logic remains independent of AI providers and cloud platforms.
 * Demonstrate enterprise software engineering practices suitable for AI Engineer and AI Solution Architect roles.
 * Build a maintainable platform that can evolve beyond email into enterprise communication intelligence.
@@ -40,7 +40,10 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 
 * Provider abstraction through the `AIProvider` interface
 * Configuration-driven provider factory
-* Deterministic `MockAIProvider` for offline development
+* Deterministic `MockAIProvider` for offline development and testing
+* Production-capable `MicrosoftFoundryProvider`
+* Microsoft Entra ID authentication using `DefaultAzureCredential`
+* Structured model output using the Responses API and JSON Schema
 * Constructor-based dependency injection
 * Communication analysis service
 * Provider-independent orchestration
@@ -73,10 +76,12 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 3 – Provider Abstraction
 * ✅ Phase 4 – Communication Analysis Service
 * ✅ Phase 5 – REST API
+* ✅ Phase 6A – Microsoft Foundry Integration
 
-### Next
+### In Progress
 
-* ▶ Phase 6 – Cloud Integration (Azure AI Foundry & Amazon Bedrock)
+* ▶ Phase 6 – Cloud Integration
+* ⏳ Phase 6B – Amazon Bedrock Integration
 
 ---
 
@@ -84,26 +89,38 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 
 ```text
                     Client
-                       │
-                       ▼
+                      │
+                      ▼
                FastAPI REST API
-                       │
-                       ▼
-      CommunicationAnalysisService
-                       │
-                       ▼
-               AIProvider Interface
-                       │
-             ┌─────────┴─────────┐
-             │                   │
-     MockAIProvider      Future Providers
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-            Azure AI Foundry     Amazon Bedrock
+                      │
+                      ▼
+       CommunicationAnalysisService
+                      │
+                      ▼
+              AIProvider Interface
+                      │
+             ┌────────┴────────┐
+             │                 │
+             ▼                 ▼
+     MockAIProvider   MicrosoftFoundryProvider
+                               │
+                               ▼
+                       Microsoft Foundry
+                               │
+                               ▼
+                         GPT-5.4-mini
+
+                    Future Provider
+                          │
+                          ▼
+                 AmazonBedrockProvider
 ```
 
-The current implementation uses `MockAIProvider` for deterministic offline development. Azure AI Foundry and Amazon Bedrock integrations are planned and will be introduced without changing the application or business layers.
+The application and business layers depend only on the `AIProvider` interface. Provider selection is configuration-driven through `AI_PROVIDER`, allowing ECI to switch between deterministic offline analysis with `MockAIProvider` and real cloud inference with `MicrosoftFoundryProvider` without changing application orchestration.
+
+The Microsoft Foundry integration uses Microsoft Entra ID authentication through `DefaultAzureCredential`. Local development uses Azure CLI credentials, while future Azure deployment can use Managed Identity without changing the provider implementation.
+
+Amazon Bedrock integration is planned as the next provider implementation.
 
 ---
 
@@ -160,23 +177,55 @@ deployment/
 * Dependency Injection
 * Clean Architecture
 
-### Cloud (Planned)
+### Cloud & AI Services
 
-* Azure AI Foundry
+**Implemented**
 
-* Azure App Service
+* Microsoft Foundry
+* Microsoft Entra ID authentication
+* Azure AI Projects SDK
+* OpenAI Responses API
+* GPT-5.4-mini model integration
 
-* Azure Key Vault
-
-* Azure Monitor
+**Planned**
 
 * Amazon Bedrock
-
+* Azure App Service
+* Azure Key Vault
+* Azure Monitor
 * AWS App Runner
-
 * AWS Secrets Manager
-
 * Amazon CloudWatch
+
+---
+
+## AI Provider Configuration
+
+ECI selects the AI backend through configuration.
+
+For deterministic offline development and testing:
+
+```env
+AI_PROVIDER=mock
+```
+
+For Microsoft Foundry:
+
+```env
+AI_PROVIDER=microsoft_foundry
+FOUNDRY_PROJECT_ENDPOINT=<your-foundry-project-endpoint>
+FOUNDRY_MODEL_DEPLOYMENT=<your-model-deployment-name>
+```
+
+Microsoft Foundry authentication uses `DefaultAzureCredential`; no Azure API key is required.
+
+For local development, authenticate with the Azure CLI before starting the application:
+
+```bash
+az login
+```
+
+The current development deployment uses GPT-5.4-mini through Microsoft Foundry.
 
 ---
 
@@ -208,7 +257,9 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | Phase 3 – Provider Abstraction           | ✅ Completed   |
 | Phase 4 – Communication Analysis Service | ✅ Completed   |
 | Phase 5 – REST API                       | ✅ Completed   |
-| Phase 6 – Cloud Integration              | ▶ Next        |
+| Phase 6 – Cloud Integration              | ▶ In Progress |
+| ↳ Phase 6A – Microsoft Foundry           | ✅ Completed   |
+| ↳ Phase 6B – Amazon Bedrock              | ⏳ Not Started |
 | Phase 7 – Observability                  | ⏳ Not Started |
 | Phase 8 – Future Roadmap                 | ⏳ Not Started |
 
@@ -233,13 +284,13 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Azure AI Foundry provider
 * Amazon Bedrock provider
-* Authentication & authorization
+* Authentication & authorization for ECI application users
 * Persistent storage
 * Workflow automation
-* Enterprise integrations
-* Cloud deployment
+* Enterprise communication integrations
+* Production cloud deployment
+* Production observability and monitoring
 
 ---
 

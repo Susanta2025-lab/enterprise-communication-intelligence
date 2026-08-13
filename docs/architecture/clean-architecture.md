@@ -30,18 +30,18 @@ This matches the direction required by `.cursor/rules/enterprise-communication-i
 Framework and infrastructure concerns live at the outer edges:
 
 - **FastAPI** is confined to `app/api` (routes, dependency wiring, router assembly) and `app/main.py` (application construction, lifespan, exception handlers).
-- **Provider-specific code** is confined to `app/providers/<provider_name>/`. Today only `app/providers/mock/` has an implementation; `app/providers/aws/` and `app/providers/azure/` are empty scaffold packages reserved for future cloud SDK usage.
+- **Provider-specific code** is confined to `app/providers/<provider_name>/`. `app/providers/mock/` and `app/providers/microsoft_foundry/` are implemented. Amazon Bedrock is not implemented.
 - **Configuration and logging** (`app/core/config.py`, `app/core/logging.py`) are the only places environment variables and `structlog`/`logging` setup are touched.
 
 ## Why Domain Code Is Independent of FastAPI and Cloud SDKs
 
 - **Testability:** `app/domain` and `app/application` are tested with plain Python objects (see `tests/unit/domain`, `tests/unit/application`) — no FastAPI `TestClient` or cloud credentials required.
-- **Provider replaceability:** Because `CommunicationAnalysisService` only knows about `AIProvider`, a future Azure or AWS adapter can be introduced without modifying application or domain code — only `app/providers/factory.py` gains a new branch.
+- **Provider replaceability:** Because `CommunicationAnalysisService` only knows about `AIProvider`, Microsoft Foundry was added without modifying application or domain code — only `app/providers/factory.py` gained a new branch. A future Amazon Bedrock adapter can follow the same pattern.
 - **Avoiding lock-in:** Domain models (`CommunicationMessage`, `CommunicationAnalysis`, etc.) do not encode any vendor-specific concepts, keeping the business vocabulary reusable across future channels (Slack, Teams, WhatsApp, etc. — represented today only as `SourceType` enum values with no adapters).
 
 ## Trade-offs (Current State)
 
 - **Not full DDD:** ECI Platform borrows clean architecture's *layering and dependency direction*, but does not implement full Domain-Driven Design — there are no aggregates, domain events, repositories, or a ubiquitous-language modeling process. The "domain" layer here is intentionally lightweight: Pydantic models with validation, plus one interface.
 - **No application-service abstraction beyond one use case:** `app/application/services` currently contains a single service (`CommunicationAnalysisService`). No generic use-case base class or command/query separation has been introduced, per the project rule to avoid premature abstraction.
-- **Framework coupling still exists at the edges by design:** `app/api` necessarily depends on FastAPI (`Depends`, `APIRouter`), and `app/providers` will necessarily depend on cloud SDKs once Azure/AWS adapters are added. This is intentional — clean architecture pushes volatility to the edges rather than eliminating it.
+- **Framework coupling still exists at the edges by design:** `app/api` necessarily depends on FastAPI (`Depends`, `APIRouter`), and `app/providers/microsoft_foundry` depends on Azure SDKs. This is intentional — clean architecture pushes volatility to the edges rather than eliminating it.
 - **Core is shared, not layered further:** `app/core` (config, logging, exceptions) is used by every layer. It is deliberately minimal and framework-agnostic (aside from being read by FastAPI's lifespan hook in `app/main.py`), rather than being split into its own strict sub-layers.

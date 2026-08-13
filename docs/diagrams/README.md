@@ -1,22 +1,22 @@
 # Diagrams
 
-Mermaid diagram sources for ECI Platform.
+Mermaid source files for ECI Platform.
 
 ## Available Diagrams
 
 | File | Represents |
 |---|---|
-| [`architecture.mmd`](architecture.mmd) | The implemented layered system: client → FastAPI API → application service → `AIProvider` interface → `MockAIProvider`, with future Azure/AWS adapters shown as dashed, clearly-marked future nodes |
+| [`architecture.mmd`](architecture.mmd) | The implemented layered system: client → FastAPI API → application service → `AIProvider` → `MockAIProvider` / `MicrosoftFoundryProvider`, with Amazon Bedrock shown as a future node |
 | [`request-flow.mmd`](request-flow.mmd) | Sequence diagram of a communication-analysis request: validation, service resolution, provider analysis, result return, and the safe error-response path |
-| [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, its only implementation (`MockAIProvider`), the configuration-driven factory, and the future (not implemented) Azure/AWS provider classes |
+| [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, `MockAIProvider`, `MicrosoftFoundryProvider`, the configuration-driven factory, and the future Amazon Bedrock provider |
 | [`deployment-azure.mmd`](deployment-azure.mmd) | **Placeholder.** Future Azure deployment topology — not yet designed |
 | [`deployment-aws.mmd`](deployment-aws.mmd) | **Placeholder.** Future AWS deployment topology — not yet designed |
 
 ## Implemented vs. Placeholder
 
-`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the system as it exists today (Phase 5), and clearly mark any future component (Azure AI Foundry, Amazon Bedrock) as not implemented using dashed styling and explicit labels.
+`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the system as it exists today (Phase 6A). Amazon Bedrock remains unimplemented and is marked as future.
 
-`deployment-azure.mmd` and `deployment-aws.mmd` remain empty placeholders. No cloud deployment architecture has been designed or implemented yet — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/phase-06-cloud-deployment.md`](../roadmap/phase-06-cloud-deployment.md).
+`deployment-azure.mmd` and `deployment-aws.mmd` remain empty placeholders. No cloud hosting architecture has been implemented yet — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/phase-06-cloud-deployment.md`](../roadmap/phase-06-cloud-deployment.md).
 
 ## Embedding Mermaid in Markdown
 

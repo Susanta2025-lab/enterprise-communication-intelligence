@@ -4,12 +4,15 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import ConfigurationError
 from app.domain.interfaces import AIProvider
 
+_SUPPORTED_PROVIDERS = ("mock", "microsoft_foundry")
+
 
 def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     """Create an AI provider based on application settings.
 
     Supported providers:
     - ``mock``: deterministic offline provider for local development and tests
+    - ``microsoft_foundry``: Microsoft Foundry Responses API provider
 
     Unsupported provider names raise ``ConfigurationError``. There is no silent
     fallback to another provider.
@@ -22,6 +25,22 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
 
         return MockAIProvider()
 
+    if provider_name == "microsoft_foundry":
+        from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
+
+        endpoint = resolved.foundry_project_endpoint
+        deployment = resolved.foundry_model_deployment
+        if not endpoint or not deployment:
+            raise ConfigurationError(
+                "Microsoft Foundry provider requires FOUNDRY_PROJECT_ENDPOINT "
+                "and FOUNDRY_MODEL_DEPLOYMENT."
+            )
+        return MicrosoftFoundryProvider(
+            project_endpoint=endpoint,
+            model_deployment=deployment,
+        )
+
+    supported = ", ".join(_SUPPORTED_PROVIDERS)
     raise ConfigurationError(
-        f"Unsupported AI provider '{resolved.ai_provider}'. Supported providers: mock"
+        f"Unsupported AI provider '{resolved.ai_provider}'. Supported providers: {supported}"
     )

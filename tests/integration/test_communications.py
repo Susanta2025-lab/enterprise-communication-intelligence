@@ -1,6 +1,9 @@
 """Integration tests for the communication analysis REST endpoint."""
 
+import json
 from collections.abc import Iterator
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +13,7 @@ from app.core.config import get_settings
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.main import create_app
+from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
 
 _SETTINGS_ENV_VARS = (
     "APP_NAME",
@@ -20,6 +24,8 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_V1_PREFIX",
     "AI_PROVIDER",
+    "FOUNDRY_PROJECT_ENDPOINT",
+    "FOUNDRY_MODEL_DEPLOYMENT",
 )
 
 _ANALYZE_URL = "/api/v1/communications/analyze"
@@ -42,6 +48,8 @@ def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """Build a TestClient using the default (mock) provider configuration."""
     _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("AI_PROVIDER", "mock")
+    get_settings.cache_clear()
     with TestClient(create_app()) as test_client:
         yield test_client
 
@@ -211,3 +219,57 @@ def test_analyze_error_response_hides_implementation_details(
     assert "runtimeerror" not in body_text
     assert "traceback" not in body_text
     assert "site-packages" not in body_text
+
+
+def test_analyze_with_mocked_microsoft_foundry_provider(client: TestClient) -> None:
+    """API analysis should succeed with a mocked Microsoft Foundry provider."""
+    mock_openai = MagicMock()
+    mock_openai.responses.create.return_value = SimpleNamespace(
+        output_text=json.dumps(
+            {
+                "summary_text": "The sender asked for a review of the weekly report.",
+                "summary_confidence": 0.9,
+                "priority_level": "medium",
+                "priority_rationale": "Routine review request.",
+                "priority_confidence": 0.7,
+                "category": "request",
+                "action_items": [
+                    {
+                        "description": "Review the weekly report",
+                        "owner": "bob@example.com",
+                        "due_at": None,
+                        "priority": "medium",
+                    }
+                ],
+                "draft_reply": {
+                    "body": "Thank you. I will review the weekly report.",
+                    "tone": "neutral",
+                    "confidence": 0.8,
+                },
+            }
+        )
+    )
+    provider = MicrosoftFoundryProvider(
+        project_endpoint=(
+            "https://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev"
+        ),
+        model_deployment="eci-gpt-54-mini",
+        openai_client=mock_openai,
+    )
+    client.app.dependency_overrides[get_ai_provider] = lambda: provider
+    try:
+        response = client.post(
+            _ANALYZE_URL,
+            json=_valid_payload("Please review the weekly status report."),
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_ai_provider, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["provider"] == "microsoft_foundry"
+    assert payload["analysis"]["summary"]["text"] == (
+        "The sender asked for a review of the weekly report."
+    )
+    assert payload["analysis"]["priority"]["level"] == "medium"
+    assert payload["analysis"]["category"] == "request"

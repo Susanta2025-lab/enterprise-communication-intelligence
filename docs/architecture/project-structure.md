@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 5. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 6A. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -33,9 +33,11 @@ app/
 ├── providers/
 │   ├── factory.py             # create_ai_provider(): configuration-driven AIProvider selection
 │   ├── mock/
-│   │   └── provider.py        # MockAIProvider — the only implemented provider
-│   ├── aws/                    # empty scaffold package — no Amazon Bedrock code
-│   └── azure/                  # empty scaffold package — no Azure AI Foundry code
+│   │   └── provider.py        # MockAIProvider
+│   └── microsoft_foundry/
+│       ├── provider.py        # MicrosoftFoundryProvider
+│       ├── prompts.py         # Foundry system/user prompt construction
+│       └── output.py          # structured JSON schema and domain mapping
 ├── infrastructure/
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
@@ -50,7 +52,7 @@ tests/
 ├── conftest.py
 ├── unit/
 │   ├── domain/                  # enums, models, schemas, interface conformance
-│   ├── providers/                # MockAIProvider, provider factory
+│   ├── providers/                # MockAIProvider, MicrosoftFoundryProvider, provider factory
 │   ├── application/               # CommunicationAnalysisService
 │   ├── test_config.py
 │   ├── test_logging.py
@@ -62,12 +64,12 @@ tests/
     └── test_docs.py             # OpenAPI schema assertions
 
 docs/
-├── roadmap/                     # phase-by-phase roadmap (curated separately; not modified by this pass)
-├── api/                          # this documentation set
-├── architecture/                 # this documentation set
+├── roadmap/                     # phase-by-phase roadmap
+├── api/                          # REST API documentation
+├── architecture/                 # architecture documentation
 ├── decisions/                     # Architecture Decision Records
 ├── diagrams/                      # Mermaid diagram sources
-└── cloud/                         # placeholder — future Azure/AWS/deployment docs
+└── cloud/                         # Microsoft Foundry integration and future cloud docs
 
 deployment/
 ├── docker/                       # placeholder (.gitkeep only)
@@ -77,18 +79,18 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete provider class.
 - **`app/application`** — Use-case orchestration. Currently one service, `CommunicationAnalysisService`, coordinating providers and translating failures.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, and the base exception hierarchy. `security.py` is reserved for future authentication/authorization work and is currently empty.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, and the `AIProvider` interface. No framework or cloud dependencies. `app/domain/services/` is an empty scaffold; no domain-layer services have been needed so far — orchestration lives in `app/application`.
-- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. Only `mock` is implemented; `aws` and `azure` are empty scaffolds reserved for future work.
+- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock` and `microsoft_foundry` are implemented. Amazon Bedrock is not implemented.
 - **`app/infrastructure`** — Reserved for future cross-cutting infrastructure concerns (monitoring, parsing, storage). All three subpackages are currently empty scaffolds with no implementation or usage anywhere in the codebase.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map to a domain concept (health, readiness, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
-- **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. All 94 tests run offline with no external credentials.
-- **`docs`** — Project documentation, split by concern (API, architecture, decisions, diagrams, roadmap) plus a placeholder `cloud/` section for not-yet-implemented cloud provider and deployment documentation.
-- **`deployment`** — Currently placeholder directories only (`.gitkeep` files for `docker/`, `azure/`, `aws/`); no Dockerfile content, Compose configuration, or deployment manifests are implemented yet (the root `Dockerfile` and `docker-compose.yml` are also present but empty).
+- **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. All tests run offline with no external credentials.
+- **`docs`** — Project documentation, split by concern (API, architecture, decisions, diagrams, roadmap, cloud).
+- **`deployment`** — Currently placeholder directories only (`.gitkeep` files for `docker/`, `azure/`, `aws/`); no Dockerfile content, Compose configuration, or deployment manifests are implemented yet.
 
 ## Directories Not Listed Above
 
-`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository but contain no implementation relevant to Phase 5 and are out of scope for this documentation pass.
+`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository but contain no implementation relevant to Phase 6A and are out of scope for this documentation pass.

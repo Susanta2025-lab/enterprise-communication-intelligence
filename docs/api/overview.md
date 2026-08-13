@@ -39,7 +39,7 @@ No manual OpenAPI authoring is required or performed; the schema reflects the cu
 
 ## Provider Status
 
-The API resolves an `AIProvider` through configuration (`AI_PROVIDER`, default `mock`). Only `MockAIProvider` is implemented; it is deterministic, offline, and produces no network calls. Azure and AWS providers do not exist yet — see [Provider Abstraction](../architecture/provider-abstraction.md).
+The API resolves an `AIProvider` through configuration (`AI_PROVIDER`, default `mock`). Supported values are `mock` and `microsoft_foundry`. Automated tests and the default local configuration use `MockAIProvider`. See [Provider Abstraction](../architecture/provider-abstraction.md) and [Microsoft Foundry](../cloud/azure-ai-foundry.md).
 
 ## Request Flow (High Level)
 

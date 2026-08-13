@@ -7,5 +7,5 @@ class ErrorResponse(BaseModel):
     """Generic error payload returned by centralized exception handlers."""
 
     detail: str = Field(
-        examples=["Unsupported AI provider 'azure'. Supported providers: mock"]
+        examples=["Unsupported AI provider 'azure'. Supported providers: mock, microsoft_foundry"]
     )
