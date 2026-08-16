@@ -8,6 +8,7 @@ structlog
 azure-ai-projects
 azure-identity
 openai
+boto3[crt]
 
 pytest
 pytest-asyncio

@@ -1,6 +1,6 @@
 # ECI Platform Architecture Documentation
 
-This directory documents the architecture implemented through **Phase 6A – Microsoft Foundry provider**.
+This directory documents the architecture implemented through **Phase 6B – Amazon Bedrock provider**. Live ECI → Bedrock verification is complete.
 
 ## Contents
 
@@ -8,7 +8,7 @@ This directory documents the architecture implemented through **Phase 6A – Mic
 - [Clean Architecture](clean-architecture.md) — how dependency direction and layering are applied
 - [Dependency Flow](dependency-flow.md) — allowed and forbidden imports between layers
 - [Application Layer](application-layer.md) — `CommunicationAnalysisService` responsibilities
-- [Provider Abstraction](provider-abstraction.md) — `AIProvider`, mock and Microsoft Foundry providers, and the factory
+- [Provider Abstraction](provider-abstraction.md) — `AIProvider`, mock, Foundry, Bedrock, the common LLM contract, and the factory
 - [Project Structure](project-structure.md) — the actual repository layout and the role of each package
 - [Sequence Diagrams](sequence-diagrams.md) — request-level walkthroughs
 
@@ -22,4 +22,4 @@ Mermaid source files live in [`docs/diagrams/`](../diagrams/README.md):
 
 ## Scope
 
-This documentation describes what is implemented in the repository as of Phase 6A. Amazon Bedrock and cloud deployment hosting remain future work — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/README.md`](../roadmap/README.md).
+This documentation describes what is implemented in the repository as of Phase 6B. Cloud application hosting remains future work — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/README.md`](../roadmap/README.md).

@@ -14,8 +14,9 @@ classDiagram
         +analyze(request) CommunicationAnalysisResult
     }
 
-    class AWSBedrockProvider {
-        <<not implemented>>
+    class AmazonBedrockProvider {
+        +PROVIDER_NAME: str = "amazon_bedrock"
+        +analyze(request) CommunicationAnalysisResult
     }
 
     class ProviderFactory {
@@ -24,11 +25,12 @@ classDiagram
 
     AIProvider <|.. MockAIProvider : implements
     AIProvider <|.. MicrosoftFoundryProvider : implements
-    AIProvider <|.. AWSBedrockProvider : future, not implemented
+    AIProvider <|.. AmazonBedrockProvider : implements
 
     ProviderFactory ..> MockAIProvider : AI_PROVIDER=mock
     ProviderFactory ..> MicrosoftFoundryProvider : AI_PROVIDER=microsoft_foundry
-    ProviderFactory ..> AWSBedrockProvider : future
+    ProviderFactory ..> AmazonBedrockProvider : AI_PROVIDER=amazon_bedrock
 
-    note for MicrosoftFoundryProvider "DefaultAzureCredential\nAIProjectClient\nResponses API"
-    note for AWSBedrockProvider "Placeholder only.\nNo AWS SDK code exists."
+    note for MicrosoftFoundryProvider "DefaultAzureCredential\nAIProjectClient\nResponses API\nuses providers/common"
+    note for AmazonBedrockProvider "boto3 credential chain\nConverse\nJSON Schema\nuses providers/common"
+    note for MockAIProvider "Deterministic offline heuristics\ndoes not use providers/common"

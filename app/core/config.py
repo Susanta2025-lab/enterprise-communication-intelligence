@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"
     foundry_project_endpoint: str | None = None
     foundry_model_deployment: str | None = None
+    bedrock_region: str | None = None
+    bedrock_model_id: str | None = None
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -85,6 +87,24 @@ class Settings(BaseSettings):
             raise ValueError("FOUNDRY_PROJECT_ENDPOINT must be an https URL.")
         return value
 
+    @field_validator("bedrock_region", mode="before")
+    @classmethod
+    def normalize_bedrock_region(cls, value: object) -> object:
+        """Treat blank Bedrock regions as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("bedrock_model_id", mode="before")
+    @classmethod
+    def normalize_bedrock_model_id(cls, value: object) -> object:
+        """Treat blank Bedrock model IDs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
     @model_validator(mode="after")
     def validate_foundry_settings_when_selected(self) -> Self:
         """Require Foundry settings only when that provider is selected."""
@@ -99,6 +119,22 @@ class Settings(BaseSettings):
         if missing:
             names = " and ".join(missing)
             raise ValueError(f"{names} must be set when AI_PROVIDER=microsoft_foundry.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_bedrock_settings_when_selected(self) -> Self:
+        """Require Bedrock settings only when that provider is selected."""
+        if self.ai_provider != "amazon_bedrock":
+            return self
+
+        missing: list[str] = []
+        if not self.bedrock_region:
+            missing.append("BEDROCK_REGION")
+        if not self.bedrock_model_id:
+            missing.append("BEDROCK_MODEL_ID")
+        if missing:
+            names = " and ".join(missing)
+            raise ValueError(f"{names} must be set when AI_PROVIDER=amazon_bedrock.")
         return self
 
 

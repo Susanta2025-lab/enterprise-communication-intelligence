@@ -17,8 +17,8 @@ This documents the *actual* import relationships enforced in the current codebas
 
 - **Domain does not import API or providers.** `app/domain/*` imports only `pydantic`, the standard library, and other `app.domain` modules. Confirmed by inspecting `app/domain/enums.py`, `app/domain/models/`, `app/domain/schemas/`, `app/domain/interfaces/ai_provider.py`.
 - **Application does not import FastAPI or the provider factory.** `app/application/services/communication_analysis.py` imports only `app.application.exceptions`, `app.core.logging`, `app.domain.interfaces`, and `app.domain.schemas`. It never imports `fastapi` or `app.providers.factory`.
-- **API does not import concrete providers directly.** `app/api/dependencies.py` imports `app.providers.factory.create_ai_provider` (the factory), not `MockAIProvider` or `MicrosoftFoundryProvider`. `app/api/routes/communications.py` imports only `app.api.dependencies`, `app.application.services`, `app.core.logging`, `app.domain.schemas`, and `app.schemas.errors` — never a provider module.
-- **Provider implementations depend on domain interfaces.** `MockAIProvider` and `MicrosoftFoundryProvider` implement `AIProvider`. The factory imports `AIProvider` as its return type and `app.core.config`/`app.core.exceptions` for settings and error translation.
+- **API does not import concrete providers directly.** `app/api/dependencies.py` imports `app.providers.factory.create_ai_provider` (the factory), not `MockAIProvider`, `MicrosoftFoundryProvider`, or `AmazonBedrockProvider`. `app/api/routes/communications.py` imports only `app.api.dependencies`, `app.application.services`, `app.core.logging`, `app.domain.schemas`, and `app.schemas.errors` — never a provider module.
+- **Provider implementations depend on domain interfaces.** `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` implement `AIProvider`. The factory imports `AIProvider` as its return type and `app.core.config`/`app.core.exceptions` for settings and error translation. The two real LLM adapters also import `app.providers.common`.
 
 ## Where FastAPI-Specific Typing Is Allowed
 
@@ -26,4 +26,4 @@ This documents the *actual* import relationships enforced in the current codebas
 
 ## Where Cloud SDKs Are Allowed
 
-Only inside `app/providers/microsoft_foundry/`. That package imports `azure-identity` and `azure-ai-projects`. Domain, application, and API modules must not import Azure or AWS SDKs. Amazon Bedrock / `boto3` is not present.
+Azure SDK imports are allowed only inside `app/providers/microsoft_foundry/`. boto3 imports are allowed only inside `app/providers/amazon_bedrock/`. `app/providers/common/` maps structured LLM output onto domain models and must not import Azure or AWS SDKs. Domain, application, and API modules must not import cloud SDKs.

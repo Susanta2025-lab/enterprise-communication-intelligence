@@ -6,15 +6,24 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 
 | Capability | Status |
 |---|---|
-| Microsoft Foundry provider | Implemented (`AI_PROVIDER=microsoft_foundry`) |
 | Mock provider | Implemented (`AI_PROVIDER=mock`) |
-| Amazon Bedrock provider | Not implemented |
+| Microsoft Foundry provider | Implemented (`AI_PROVIDER=microsoft_foundry`) |
+| Amazon Bedrock provider | Implemented and live-verified (`AI_PROVIDER=amazon_bedrock`) |
 | Azure or AWS application hosting | Not implemented |
-| Managed Identity in deployed environments | Compatible in code; not yet deployed |
+| Managed Identity / IAM roles in deployed environments | Compatible in adapter design; not yet deployed |
+
+See:
+
+- [Microsoft Foundry](azure-ai-foundry.md)
+- [Amazon Bedrock](amazon-bedrock.md)
+- [Authentication](authentication.md)
+- [Provider comparison](comparison.md)
+- [Cloud roadmap](roadmap.md)
+- [Deployment](deployment.md)
 
 ## Microsoft Foundry (implemented)
 
-The first cloud adapter is `MicrosoftFoundryProvider` in `app/providers/microsoft_foundry/`. It uses:
+`MicrosoftFoundryProvider` in `app/providers/microsoft_foundry/` uses:
 
 ```text
 DefaultAzureCredential
@@ -40,15 +49,34 @@ Verified development infrastructure (no subscription IDs, tenant IDs, or secrets
 | Version | 2026-03-17 |
 | Deployment type | DataZoneStandard |
 
-See:
+## Amazon Bedrock (implemented and live-verified)
 
-- [Microsoft Foundry](azure-ai-foundry.md)
-- [Authentication](authentication.md)
+`AmazonBedrockProvider` in `app/providers/amazon_bedrock/` uses:
 
-## Amazon Bedrock (not implemented)
+```text
+boto3 standard credential chain
+        ↓
+bedrock-runtime
+        ↓
+converse(...)
+        ↓
+outputConfig.textFormat JSON Schema
+```
 
-Amazon Bedrock remains a planned future adapter behind the same `AIProvider` contract. See [Amazon Bedrock](amazon-bedrock.md) when that work is requested.
+Current configurable baseline:
+
+| Item | Value |
+|---|---|
+| Region | `eu-south-2` (Europe / Spain) |
+| Initial model | Claude Haiku 4.5 |
+| Model ID | `eu.anthropic.claude-haiku-4-5-20251001-v1:0` |
+
+Independent CLI Bedrock capability was verified before implementation. Offline automated tests are complete. The real ECI REST path to Bedrock has been live-verified.
+
+## Shared LLM analysis contract
+
+Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI prompt construction, structured-output models, JSON validation, and domain mapping. That package is not a generic LLM framework. `MockAIProvider` does not use it.
 
 ## Deployment (not implemented)
 
-Container images, App Service / App Runner, Key Vault / Secrets Manager, and Monitor / CloudWatch wiring are still future Phase 6 work. See [Deployment](deployment.md).
+Container images, App Service / App Runner, Key Vault / Secrets Manager, and Monitor / CloudWatch wiring remain future Phase 6 work. See [Deployment](deployment.md).

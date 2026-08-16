@@ -42,8 +42,11 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Configuration-driven provider factory
 * Deterministic `MockAIProvider` for offline development and testing
 * Production-capable `MicrosoftFoundryProvider`
+* Production-capable `AmazonBedrockProvider`
+* Shared LLM analysis contract in `app/providers/common/`
 * Microsoft Entra ID authentication using `DefaultAzureCredential`
-* Structured model output using the Responses API and JSON Schema
+* Amazon Bedrock authentication using the boto3 credential chain
+* Structured model output using JSON Schema (Responses API and Converse)
 * Constructor-based dependency injection
 * Communication analysis service
 * Provider-independent orchestration
@@ -77,11 +80,11 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 4 – Communication Analysis Service
 * ✅ Phase 5 – REST API
 * ✅ Phase 6A – Microsoft Foundry Integration
+* ✅ Phase 6B – Amazon Bedrock Integration
 
 ### In Progress
 
 * ▶ Phase 6 – Cloud Integration
-* ⏳ Phase 6B – Amazon Bedrock Integration
 
 ---
 
@@ -99,28 +102,26 @@ The project is being developed as a practical demonstration of **AI Solution Arc
                       ▼
               AIProvider Interface
                       │
-             ┌────────┴────────┐
-             │                 │
-             ▼                 ▼
-     MockAIProvider   MicrosoftFoundryProvider
-                               │
+        ┌─────────────┼─────────────────┐
+        │             │                 │
+        ▼             ▼                 ▼
+ MockAIProvider  MicrosoftFoundryProvider AmazonBedrockProvider
+                      │                 │
+                      └────────┬────────┘
                                ▼
-                       Microsoft Foundry
-                               │
-                               ▼
-                         GPT-5.4-mini
-
-                    Future Provider
-                          │
-                          ▼
-                 AmazonBedrockProvider
+                    providers/common
+              (ECI structured-analysis contract)
+                      │                 │
+                      ▼                 ▼
+               Microsoft Foundry    Amazon Bedrock
+                  GPT-5.4-mini     Claude Haiku 4.5
 ```
 
-The application and business layers depend only on the `AIProvider` interface. Provider selection is configuration-driven through `AI_PROVIDER`, allowing ECI to switch between deterministic offline analysis with `MockAIProvider` and real cloud inference with `MicrosoftFoundryProvider` without changing application orchestration.
+The application and business layers depend only on the `AIProvider` interface. Provider selection is configuration-driven through `AI_PROVIDER`. `MockAIProvider` remains a deterministic offline path. `MicrosoftFoundryProvider` and `AmazonBedrockProvider` reuse the shared ECI structured-analysis contract in `app/providers/common/` while keeping Azure and AWS SDKs inside their own packages.
 
-The Microsoft Foundry integration uses Microsoft Entra ID authentication through `DefaultAzureCredential`. Local development uses Azure CLI credentials, while future Azure deployment can use Managed Identity without changing the provider implementation.
+Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings.
 
-Amazon Bedrock integration is planned as the next provider implementation.
+Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application.
 
 ---
 
@@ -186,10 +187,13 @@ deployment/
 * Azure AI Projects SDK
 * OpenAI Responses API
 * GPT-5.4-mini model integration
+* Amazon Bedrock (implemented, regression-tested, and live-verified)
+* Amazon Bedrock Converse API
+* Claude Haiku 4.5 baseline
+* boto3 standard credential chain
 
 **Planned**
 
-* Amazon Bedrock
 * Azure App Service
 * Azure Key Vault
 * Azure Monitor
@@ -225,7 +229,19 @@ For local development, authenticate with the Azure CLI before starting the appli
 az login
 ```
 
-The current development deployment uses GPT-5.4-mini through Microsoft Foundry.
+The current development Foundry deployment uses GPT-5.4-mini.
+
+For Amazon Bedrock:
+
+```env
+AI_PROVIDER=amazon_bedrock
+BEDROCK_REGION=eu-south-2
+BEDROCK_MODEL_ID=eu.anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+Amazon Bedrock authentication uses boto3's standard credential chain. ECI does not store AWS access keys, secret keys, session tokens, or an AWS profile in Settings. For local development, authenticate with the AWS CLI (`aws login`) using the profile selected in the shell environment, then start the application.
+
+The current Bedrock baseline is Claude Haiku 4.5 through a configurable EU inference profile. Live inference through the ECI application has been verified.
 
 ---
 
@@ -259,7 +275,7 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | Phase 5 – REST API                       | ✅ Completed   |
 | Phase 6 – Cloud Integration              | ▶ In Progress |
 | ↳ Phase 6A – Microsoft Foundry           | ✅ Completed   |
-| ↳ Phase 6B – Amazon Bedrock              | ⏳ Not Started |
+| ↳ Phase 6B – Amazon Bedrock              | ✅ Completed   |
 | Phase 7 – Observability                  | ⏳ Not Started |
 | Phase 8 – Future Roadmap                 | ⏳ Not Started |
 
@@ -284,7 +300,6 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Amazon Bedrock provider
 * Authentication & authorization for ECI application users
 * Persistent storage
 * Workflow automation

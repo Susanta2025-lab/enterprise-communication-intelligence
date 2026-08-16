@@ -4,7 +4,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import ConfigurationError
 from app.domain.interfaces import AIProvider
 
-_SUPPORTED_PROVIDERS = ("mock", "microsoft_foundry")
+_SUPPORTED_PROVIDERS = ("mock", "microsoft_foundry", "amazon_bedrock")
 
 
 def create_ai_provider(settings: Settings | None = None) -> AIProvider:
@@ -13,6 +13,7 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     Supported providers:
     - ``mock``: deterministic offline provider for local development and tests
     - ``microsoft_foundry``: Microsoft Foundry Responses API provider
+    - ``amazon_bedrock``: Amazon Bedrock Converse API provider
 
     Unsupported provider names raise ``ConfigurationError``. There is no silent
     fallback to another provider.
@@ -38,6 +39,20 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
         return MicrosoftFoundryProvider(
             project_endpoint=endpoint,
             model_deployment=deployment,
+        )
+
+    if provider_name == "amazon_bedrock":
+        from app.providers.amazon_bedrock.provider import AmazonBedrockProvider
+
+        region = resolved.bedrock_region
+        model_id = resolved.bedrock_model_id
+        if not region or not model_id:
+            raise ConfigurationError(
+                "Amazon Bedrock provider requires BEDROCK_REGION and BEDROCK_MODEL_ID."
+            )
+        return AmazonBedrockProvider(
+            region=region,
+            model_id=model_id,
         )
 
     supported = ", ".join(_SUPPORTED_PROVIDERS)

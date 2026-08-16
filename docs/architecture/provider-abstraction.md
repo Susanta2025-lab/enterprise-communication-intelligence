@@ -1,6 +1,6 @@
 # Provider Abstraction
 
-This documents the provider abstraction as actually implemented: `app/domain/interfaces/ai_provider.py`, `app/providers/mock/provider.py`, `app/providers/microsoft_foundry/provider.py`, `app/providers/factory.py`, and their wiring into `app/api/dependencies.py`.
+This documents the provider abstraction as actually implemented: `app/domain/interfaces/ai_provider.py`, the concrete providers under `app/providers/`, the shared LLM analysis contract in `app/providers/common/`, `app/providers/factory.py`, and their wiring into `app/api/dependencies.py`.
 
 ## `AIProvider` (`app/domain/interfaces/ai_provider.py`)
 
@@ -14,6 +14,23 @@ class AIProvider(ABC):
 ```
 
 The interface lives in `app/domain`, not `app/providers`, so it can be depended on by both the application layer and any provider implementation without creating a dependency on a specific provider. It exposes and accepts only domain types (`CommunicationRequest`, `CommunicationAnalysisResult`) — no Azure or AWS concepts leak through it.
+
+The common package does **not** replace `AIProvider`. It sits below the real LLM adapters as shared adapter mechanics:
+
+```text
+Application
+    ↓
+AIProvider
+    ↓
+Concrete provider
+    ├── MockAIProvider
+    ├── MicrosoftFoundryProvider
+    │      ├── providers/common
+    │      └── Foundry-specific API/schema code
+    └── AmazonBedrockProvider
+           ├── providers/common
+           └── Bedrock-specific Converse/schema code
+```
 
 ## `MockAIProvider` (`app/providers/mock/provider.py`)
 
@@ -32,7 +49,20 @@ Deterministic offline provider for local development and tests. It is:
 
 It sets `provider="mock"` (via `MockAIProvider.PROVIDER_NAME`) on every `CommunicationAnalysisResult` it returns.
 
-This logic is intentionally simple test/development infrastructure — it is not, and is not meant to be, a real language model.
+This logic is intentionally simple test/development infrastructure — it is not, and is not meant to be, a real language model. It does not use `app/providers/common/`.
+
+## Shared LLM analysis contract (`app/providers/common/`)
+
+Microsoft Foundry and Amazon Bedrock use different cloud APIs, but they implement the same ECI communication-analysis contract. `app/providers/common/` holds that shared adapter-level contract so the business-analysis pipeline is not duplicated:
+
+- `AnalysisOutput` and related structured-output models
+- JSON parsing and Pydantic validation (`parse_analysis_output()`)
+- domain mapping and request-flag enforcement (`to_communication_analysis()`)
+- `SYSTEM_PROMPT` and `build_user_prompt()`
+
+It is not a generic LLM framework, schema strategy layer, or provider registry.
+
+Cloud transport, SDK clients, and schema envelopes remain provider-specific.
 
 ## `MicrosoftFoundryProvider` (`app/providers/microsoft_foundry/provider.py`)
 
@@ -52,12 +82,38 @@ Key properties:
 
 - Authenticates with Microsoft Entra ID via `DefaultAzureCredential` (Azure CLI locally; Managed Identity in a future Azure deployment).
 - Uses the Foundry project endpoint and deployment name from settings.
-- Requests strict JSON Schema structured output from the Responses API, validates it, and maps it onto existing domain models.
+- Requests strict JSON Schema structured output from the Responses API, then uses the shared common layer to validate and map domain results.
 - Honors `include_action_items` and `include_draft_reply`.
-- Keeps Azure SDK types inside the provider package.
+- Keeps Azure SDK types and OpenAI-strict schema normalization inside the provider package.
 - Does not use API-key authentication.
 
 See [Microsoft Foundry](../cloud/azure-ai-foundry.md) and [ADR-006](../decisions/ADR-006-azure-ai-foundry.md).
+
+## `AmazonBedrockProvider` (`app/providers/amazon_bedrock/provider.py`)
+
+Cloud adapter for Amazon Bedrock. It implements the same `AIProvider` contract and returns `provider="amazon_bedrock"`.
+
+```text
+boto3 credential chain
+        ↓
+bedrock-runtime
+        ↓
+converse(...)
+        ↓
+outputConfig.textFormat JSON Schema
+```
+
+Key properties:
+
+- Authenticates through boto3's standard credential chain (`aws login` locally; IAM role / workload identity in a future AWS deployment).
+- Uses configurable `BEDROCK_REGION` and `BEDROCK_MODEL_ID`.
+- Calls Bedrock Runtime Converse with a JSON Schema generated from shared `AnalysisOutput`.
+- Extracts Converse text in Bedrock-specific code, then uses the shared common layer to validate and map domain results.
+- Does not store AWS access keys or hard-code an AWS profile.
+
+Status: implemented, covered by offline tests, and live-verified through the ECI application.
+
+See [Amazon Bedrock](../cloud/amazon-bedrock.md) and [ADR-007](../decisions/ADR-007-amazon-bedrock.md).
 
 ## Provider Factory (`app/providers/factory.py`)
 
@@ -71,16 +127,19 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     if provider_name == "microsoft_foundry":
         from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
         return MicrosoftFoundryProvider(...)
+    if provider_name == "amazon_bedrock":
+        from app.providers.amazon_bedrock.provider import AmazonBedrockProvider
+        return AmazonBedrockProvider(...)
     raise ConfigurationError(
         f"Unsupported AI provider '{resolved.ai_provider}'. "
-        "Supported providers: mock, microsoft_foundry"
+        "Supported providers: mock, microsoft_foundry, amazon_bedrock"
     )
 ```
 
 Key properties:
 
 - **Configuration-driven selection.** The provider is chosen entirely by `Settings.ai_provider` (backed by the `AI_PROVIDER` environment variable, normalized to lowercase).
-- **Localized imports.** Concrete provider imports happen inside each branch, so selecting `mock` does not construct Foundry clients.
+- **Localized imports.** Concrete provider imports happen inside each branch, so selecting `mock` does not construct Foundry or Bedrock clients.
 - **No global registry.** There is no module-level dict or singleton mapping provider names to classes; the factory is a plain function with an explicit `if`/`raise` structure.
 
 ## Dependency Injection
@@ -97,11 +156,11 @@ def get_communication_analysis_service(
     return CommunicationAnalysisService(provider)
 ```
 
-FastAPI resolves `get_ai_provider` as a dependency of `get_communication_analysis_service`, which is itself injected into the `POST /api/v1/communications/analyze` route. This is the only place `fastapi.Depends` is combined with provider resolution — the factory function itself has no FastAPI dependency. The API layer never imports `MicrosoftFoundryProvider` or `MockAIProvider` directly.
+FastAPI resolves `get_ai_provider` as a dependency of `get_communication_analysis_service`, which is itself injected into the `POST /api/v1/communications/analyze` route. This is the only place `fastapi.Depends` is combined with provider resolution — the factory function itself has no FastAPI dependency. The API layer never imports a concrete provider class.
 
 ## Explicit Failure for Unsupported Providers
 
-If `AI_PROVIDER` is set to anything other than `mock` or `microsoft_foundry` (e.g. `azure`, `aws`, `openai`), `create_ai_provider` raises `ConfigurationError` immediately. There is no `try`/`except` around the lookup that would swallow the error, and no default case that returns `MockAIProvider()`.
+If `AI_PROVIDER` is set to anything other than `mock`, `microsoft_foundry`, or `amazon_bedrock` (e.g. `azure`, `aws`, `bedrock`, `openai`), `create_ai_provider` raises `ConfigurationError` immediately. There is no `try`/`except` around the lookup that would swallow the error, and no default case that returns `MockAIProvider()`.
 
 ## Why No Silent Fallback Is Allowed
 
@@ -111,7 +170,3 @@ A silent fallback to `MockAIProvider` when an unsupported provider is configured
 - Operators would have no signal that the intended provider was never actually selected.
 
 Failing explicitly with `ConfigurationError` — which is translated into an HTTP `500` by the exception handler in `app/main.py` — surfaces misconfiguration immediately instead of masking it.
-
-## AWS: Future Adapter Only
-
-Amazon Bedrock is not implemented. When added, it should implement `AIProvider` in its own package and gain one factory branch, keeping AWS SDK imports confined to that package.

@@ -1,4 +1,4 @@
-"""Prompt construction for the Microsoft Foundry provider."""
+"""Prompt construction for LLM communication-analysis providers."""
 
 from app.domain.schemas import CommunicationRequest
 
@@ -6,6 +6,9 @@ SYSTEM_PROMPT = """You analyze a single business communication.
 Operate only on the supplied content. Do not fabricate facts, people, dates, or commitments.
 Summarize the communication, classify its priority, and classify its category.
 Extract action items only when the request says they are required; otherwise return an empty list.
+For an action-item due date, return an ISO-8601 date-time only when it can be determined
+from the supplied communication. If the due date is relative, ambiguous, or cannot be
+resolved without inventing information, return null.
 Generate a draft reply only when the request says it is required; otherwise return null.
 Priority must be one of: low, medium, high, critical.
 Category must be one of: general, request, incident, approval, notification, inquiry, other.

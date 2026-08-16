@@ -22,9 +22,9 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-004](ADR-004-pydantic-v2.md) | Pydantic v2 for Validation, Serialization, and Configuration | Accepted |
 | [ADR-005](ADR-005-rest-api.md) | Synchronous REST API for Communication Analysis | Accepted |
 | [ADR-006](ADR-006-azure-ai-foundry.md) | Microsoft Foundry Provider | Accepted |
-| [ADR-007](ADR-007-amazon-bedrock.md) | Amazon Bedrock Provider | *(placeholder — future decision, not yet made)* |
+| [ADR-007](ADR-007-amazon-bedrock.md) | Amazon Bedrock Provider | Accepted |
 
-ADR-007 remains an unpopulated placeholder. Amazon Bedrock is a planned future capability; no AWS integration decision has been finalized or implemented yet.
+ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
 ## Template
 

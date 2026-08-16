@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 6A. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 6B. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -32,12 +32,19 @@ app/
 │   └── services/              # empty scaffold package — unused (business logic lives in app/application)
 ├── providers/
 │   ├── factory.py             # create_ai_provider(): configuration-driven AIProvider selection
+│   ├── common/
+│   │   ├── output.py          # shared LLM analysis models, parse, and domain mapping
+│   │   └── prompts.py         # shared ECI system/user prompt construction
 │   ├── mock/
 │   │   └── provider.py        # MockAIProvider
-│   └── microsoft_foundry/
-│       ├── provider.py        # MicrosoftFoundryProvider
-│       ├── prompts.py         # Foundry system/user prompt construction
-│       └── output.py          # structured JSON schema and domain mapping
+│   ├── microsoft_foundry/
+│   │   ├── provider.py        # MicrosoftFoundryProvider
+│   │   └── output.py          # OpenAI-strict JSON Schema transformation
+│   ├── amazon_bedrock/
+│   │   ├── provider.py        # AmazonBedrockProvider
+│   │   └── output.py          # Converse schema string and response extraction
+│   ├── aws/                   # unused Phase 3 vendor scaffold — not an active provider
+│   └── azure/                 # unused Phase 3 vendor scaffold — not an active provider
 ├── infrastructure/
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
@@ -52,7 +59,7 @@ tests/
 ├── conftest.py
 ├── unit/
 │   ├── domain/                  # enums, models, schemas, interface conformance
-│   ├── providers/                # MockAIProvider, MicrosoftFoundryProvider, provider factory
+│   ├── providers/                # Mock, Foundry, Bedrock, common layer, factory
 │   ├── application/               # CommunicationAnalysisService
 │   ├── test_config.py
 │   ├── test_logging.py
@@ -69,7 +76,7 @@ docs/
 ├── architecture/                 # architecture documentation
 ├── decisions/                     # Architecture Decision Records
 ├── diagrams/                      # Mermaid diagram sources
-└── cloud/                         # Microsoft Foundry integration and future cloud docs
+└── cloud/                         # Microsoft Foundry, Amazon Bedrock, and future hosting docs
 
 deployment/
 ├── docker/                       # placeholder (.gitkeep only)
@@ -83,7 +90,7 @@ deployment/
 - **`app/application`** — Use-case orchestration. Currently one service, `CommunicationAnalysisService`, coordinating providers and translating failures.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, and the base exception hierarchy. `security.py` is reserved for future authentication/authorization work and is currently empty.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, and the `AIProvider` interface. No framework or cloud dependencies. `app/domain/services/` is an empty scaffold; no domain-layer services have been needed so far — orchestration lives in `app/application`.
-- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock` and `microsoft_foundry` are implemented. Amazon Bedrock is not implemented.
+- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock.
 - **`app/infrastructure`** — Reserved for future cross-cutting infrastructure concerns (monitoring, parsing, storage). All three subpackages are currently empty scaffolds with no implementation or usage anywhere in the codebase.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map to a domain concept (health, readiness, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
@@ -93,4 +100,4 @@ deployment/
 
 ## Directories Not Listed Above
 
-`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository but contain no implementation relevant to Phase 6A and are out of scope for this documentation pass.
+`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository but contain no implementation relevant to Phase 6B and are out of scope for this documentation pass.

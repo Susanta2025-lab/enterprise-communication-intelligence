@@ -11,11 +11,9 @@ from app.core.exceptions import ConfigurationError
 from app.domain.enums import MessageCategory, PriorityLevel
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult
-from app.providers.microsoft_foundry.output import (
-    FOUNDRY_ANALYSIS_JSON_SCHEMA,
-    FoundryOutputError,
-)
-from app.providers.microsoft_foundry.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.providers.common.output import AnalysisOutputError
+from app.providers.common.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.providers.microsoft_foundry.output import FOUNDRY_ANALYSIS_JSON_SCHEMA
 from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
 from tests.unit.providers.conftest import RequestFactory
 
@@ -276,7 +274,7 @@ def test_malformed_model_output(make_request: RequestFactory, output_text: str) 
     """Malformed or schema-invalid model output must be rejected explicitly."""
     provider, _ = _provider_with_output(output_text)
 
-    with pytest.raises(FoundryOutputError):
+    with pytest.raises(AnalysisOutputError):
         provider.analyze(make_request("Please review this."))
 
 

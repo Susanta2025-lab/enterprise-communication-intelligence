@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 6A. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the successful and failure communication-analysis flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` occupies the same `AIProvider` slot when selected. This page also documents the health request flow, which has no dedicated `.mmd` file since it involves no failure branching worth diagramming separately.
+These diagrams describe the request flows implemented as of Phase 6B. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the successful and failure communication-analysis flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. This page also documents the health request flow, which has no dedicated `.mmd` file since it involves no failure branching worth diagramming separately.
 
 ## Successful Communication-Analysis Request
 
@@ -61,7 +61,7 @@ sequenceDiagram
     Factory--xDep: raises ConfigurationError (unsupported AI_PROVIDER)
     Dep--xRoute: propagates ConfigurationError
     Route--xHandler: propagates ECIPlatformError
-    Handler-->>Client: 500 + {"detail": "Unsupported AI provider '...'. Supported providers: mock, microsoft_foundry"}
+    Handler-->>Client: 500 + {"detail": "Unsupported AI provider '...'. Supported providers: mock, microsoft_foundry, amazon_bedrock"}
 ```
 
 ## Health Request Flow

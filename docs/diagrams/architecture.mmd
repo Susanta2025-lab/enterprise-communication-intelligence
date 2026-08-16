@@ -1,17 +1,15 @@
 graph TB
     Client[Client]
 
-    subgraph Implemented["Implemented (Phase 1-6A)"]
+    subgraph Implemented["Implemented (Phase 1-6B)"]
         API["FastAPI REST API<br/>app/api"]
         App["CommunicationAnalysisService<br/>app/application"]
         Iface["AIProvider interface<br/>app/domain/interfaces"]
         Mock["MockAIProvider<br/>app/providers/mock"]
         Foundry["MicrosoftFoundryProvider<br/>app/providers/microsoft_foundry"]
+        Bedrock["AmazonBedrockProvider<br/>app/providers/amazon_bedrock"]
+        Common["Shared LLM analysis contract<br/>app/providers/common"]
         Core["Core: Config, Logging, Exceptions<br/>app/core"]
-    end
-
-    subgraph Future["Future - Not Implemented"]
-        AWS["AWSBedrockProvider"]
     end
 
     Client --> API
@@ -19,14 +17,15 @@ graph TB
     App --> Iface
     Iface --> Mock
     Iface --> Foundry
-    Iface -.-> AWS
+    Iface --> Bedrock
+    Foundry --> Common
+    Bedrock --> Common
     API --> Core
     App --> Core
     Mock --> Core
     Foundry --> Core
+    Bedrock --> Core
 
     classDef implemented fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:1px
-    classDef future fill:#ffffff,color:#718096,stroke:#a0aec0,stroke-width:1px,stroke-dasharray: 5 5
 
-    class API,App,Iface,Mock,Foundry,Core implemented
-    class AWS future
+    class API,App,Iface,Mock,Foundry,Bedrock,Common,Core implemented

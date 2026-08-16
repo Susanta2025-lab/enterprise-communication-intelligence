@@ -51,7 +51,7 @@ Because Starlette/FastAPI matches exception handlers by most-specific registered
 If `AI_PROVIDER` is set to an unsupported value, `app/providers/factory.py` raises:
 
 ```text
-ConfigurationError("Unsupported AI provider '<value>'. Supported providers: mock, microsoft_foundry")
+ConfigurationError("Unsupported AI provider '<value>'. Supported providers: mock, microsoft_foundry, amazon_bedrock")
 ```
 
 This is raised during dependency resolution (`get_ai_provider` in `app/api/dependencies.py`), before the route body executes, and is translated into a `500` response by the `ECIPlatformError` handler. There is no silent fallback to another provider.

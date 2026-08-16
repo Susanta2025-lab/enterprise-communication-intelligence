@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.main import create_app
+from app.providers.amazon_bedrock.provider import AmazonBedrockProvider
 from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
 
 _SETTINGS_ENV_VARS = (
@@ -26,6 +27,8 @@ _SETTINGS_ENV_VARS = (
     "AI_PROVIDER",
     "FOUNDRY_PROJECT_ENDPOINT",
     "FOUNDRY_MODEL_DEPLOYMENT",
+    "BEDROCK_REGION",
+    "BEDROCK_MODEL_ID",
 )
 
 _ANALYZE_URL = "/api/v1/communications/analyze"
@@ -268,6 +271,68 @@ def test_analyze_with_mocked_microsoft_foundry_provider(client: TestClient) -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["provider"] == "microsoft_foundry"
+    assert payload["analysis"]["summary"]["text"] == (
+        "The sender asked for a review of the weekly report."
+    )
+    assert payload["analysis"]["priority"]["level"] == "medium"
+    assert payload["analysis"]["category"] == "request"
+
+
+def test_analyze_with_mocked_amazon_bedrock_provider(client: TestClient) -> None:
+    """API analysis should succeed with a mocked Amazon Bedrock provider."""
+    mock_client = MagicMock()
+    mock_client.converse.return_value = {
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "text": json.dumps(
+                            {
+                                "summary_text": (
+                                    "The sender asked for a review of the weekly report."
+                                ),
+                                "summary_confidence": 0.9,
+                                "priority_level": "medium",
+                                "priority_rationale": "Routine review request.",
+                                "priority_confidence": 0.7,
+                                "category": "request",
+                                "action_items": [
+                                    {
+                                        "description": "Review the weekly report",
+                                        "owner": "bob@example.com",
+                                        "due_at": None,
+                                        "priority": "medium",
+                                    }
+                                ],
+                                "draft_reply": {
+                                    "body": "Thank you. I will review the weekly report.",
+                                    "tone": "neutral",
+                                    "confidence": 0.8,
+                                },
+                            }
+                        )
+                    }
+                ]
+            }
+        }
+    }
+    provider = AmazonBedrockProvider(
+        region="eu-south-2",
+        model_id="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+        bedrock_runtime_client=mock_client,
+    )
+    client.app.dependency_overrides[get_ai_provider] = lambda: provider
+    try:
+        response = client.post(
+            _ANALYZE_URL,
+            json=_valid_payload("Please review the weekly status report."),
+        )
+    finally:
+        client.app.dependency_overrides.pop(get_ai_provider, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["provider"] == "amazon_bedrock"
     assert payload["analysis"]["summary"]["text"] == (
         "The sender asked for a review of the weekly report."
     )

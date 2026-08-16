@@ -9,13 +9,13 @@ from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
-from app.providers.microsoft_foundry.output import (
-    FOUNDRY_ANALYSIS_JSON_SCHEMA,
-    FoundryOutputError,
-    parse_foundry_output,
+from app.providers.common.output import (
+    AnalysisOutputError,
+    parse_analysis_output,
     to_communication_analysis,
 )
-from app.providers.microsoft_foundry.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.providers.common.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.providers.microsoft_foundry.output import FOUNDRY_ANALYSIS_JSON_SCHEMA
 
 logger = get_logger(__name__)
 
@@ -75,11 +75,11 @@ class MicrosoftFoundryProvider(AIProvider):
         )
         output_text = getattr(response, "output_text", None)
         if not isinstance(output_text, str):
-            raise FoundryOutputError(
+            raise AnalysisOutputError(
                 "Microsoft Foundry returned a response without JSON text output."
             )
 
-        output = parse_foundry_output(output_text)
+        output = parse_analysis_output(output_text)
         analysis = to_communication_analysis(output, request)
         return CommunicationAnalysisResult(
             analysis=analysis,

@@ -11,15 +11,15 @@ CommunicationAnalysisService
           │
           ▼
       AIProvider
-       /      \
-      /        \
-MockAIProvider  MicrosoftFoundryProvider
-                      │
-                      ▼
-              AIProjectClient
-                      │
-                      ▼
-              Responses API
+       /   |   \
+      /    |    \
+   Mock  Foundry  AmazonBedrockProvider
+           │
+           ▼
+   AIProjectClient
+           │
+           ▼
+   Responses API
 ```
 
 The adapter lives in `app/providers/microsoft_foundry/` so Azure SDK imports stay out of `app/domain`, `app/application`, and `app/api`.
@@ -76,9 +76,9 @@ It asks the model for:
 - action items, only when `include_action_items` is true
 - draft reply, only when `include_draft_reply` is true
 
-Output is requested as strict JSON Schema through the Responses API `text.format` structured-output path, then validated with provider-local Pydantic models and mapped onto existing domain models. Malformed JSON or schema-invalid content is rejected explicitly. Azure/OpenAI SDK types never leave the provider package.
+Output is requested as strict JSON Schema through the Responses API `text.format` structured-output path, then validated through the shared `app/providers/common/` analysis contract and mapped onto existing domain models. Malformed JSON or schema-invalid content is rejected explicitly. Azure/OpenAI SDK types never leave the provider package.
 
-Prompt construction stays inside `app/providers/microsoft_foundry/prompts.py`. The model is instructed to operate only on the supplied communication and not fabricate facts.
+Prompt construction lives in `app/providers/common/prompts.py` and is reused by Amazon Bedrock. OpenAI-strict schema normalization stays in `app/providers/microsoft_foundry/output.py`. The model is instructed to operate only on the supplied communication and not fabricate facts.
 
 ## Error handling
 

@@ -39,7 +39,7 @@ No manual OpenAPI authoring is required or performed; the schema reflects the cu
 
 ## Provider Status
 
-The API resolves an `AIProvider` through configuration (`AI_PROVIDER`, default `mock`). Supported values are `mock` and `microsoft_foundry`. Automated tests and the default local configuration use `MockAIProvider`. See [Provider Abstraction](../architecture/provider-abstraction.md) and [Microsoft Foundry](../cloud/azure-ai-foundry.md).
+The API resolves an `AIProvider` through configuration (`AI_PROVIDER`, default `mock`). Supported values are `mock`, `microsoft_foundry`, and `amazon_bedrock`. The REST request and response schemas do not change with the selected provider. Automated tests and the default local configuration use `MockAIProvider`. See [Provider Abstraction](../architecture/provider-abstraction.md), [Microsoft Foundry](../cloud/azure-ai-foundry.md), and [Amazon Bedrock](../cloud/amazon-bedrock.md).
 
 ## Request Flow (High Level)
 
@@ -50,7 +50,7 @@ FastAPI route (app/api/routes/*)
   ↓ dependency injection
 CommunicationAnalysisService (app/application/services)
   ↓ AIProvider interface (app/domain/interfaces)
-MockAIProvider (app/providers/mock)
+MockAIProvider | MicrosoftFoundryProvider | AmazonBedrockProvider
 ```
 
 Routes validate the incoming request via Pydantic, resolve a `CommunicationAnalysisService` through FastAPI dependencies, delegate to `service.analyze(...)`, and return the result. See [Endpoints](endpoints.md) for the concrete routes and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
