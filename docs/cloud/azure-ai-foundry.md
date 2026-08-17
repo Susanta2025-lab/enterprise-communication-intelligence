@@ -98,3 +98,9 @@ Automated tests stay offline. To verify a real deployment locally (paid inferenc
 4. `POST /api/v1/communications/analyze` against a running local API process
 
 Do not run that path from the pytest suite.
+
+## Production deployment
+
+Phase 6C hosts the same Foundry adapter on Azure Container Apps with user-assigned Managed Identity `eci-ca-identity-dev` and `DefaultAzureCredential`. Azure App Service is not used.
+
+See [Deployment](deployment.md) and the [Azure runbook](../../deployment/azure/README.md).

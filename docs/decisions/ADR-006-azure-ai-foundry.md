@@ -26,7 +26,7 @@ AIProvider
 → Microsoft Entra authentication
 ```
 
-Select the adapter with `AI_PROVIDER=microsoft_foundry`. Configure the Foundry project endpoint and deployment name through existing Pydantic Settings (`FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`). Authenticate with `DefaultAzureCredential` so local development can use Azure CLI and future Azure hosting can use Managed Identity without an API key.
+Select the adapter with `AI_PROVIDER=microsoft_foundry`. Configure the Foundry project endpoint and deployment name through existing Pydantic Settings (`FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`). Authenticate with `DefaultAzureCredential` so local development can use Azure CLI and Azure Container Apps can use user-assigned Managed Identity without an API key.
 
 ## Alternatives Considered
 

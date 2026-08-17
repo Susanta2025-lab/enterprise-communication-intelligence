@@ -9,14 +9,14 @@ Mermaid source files for ECI Platform.
 | [`architecture.mmd`](architecture.mmd) | The implemented layered system: client → FastAPI API → application service → `AIProvider` → `MockAIProvider` / `MicrosoftFoundryProvider` / `AmazonBedrockProvider`, with the shared `providers/common` contract used by the two real LLM adapters |
 | [`request-flow.mmd`](request-flow.mmd) | Sequence diagram of a communication-analysis request: validation, service resolution, provider analysis, result return, and the safe error-response path |
 | [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider`, and the configuration-driven factory |
-| [`deployment-azure.mmd`](deployment-azure.mmd) | **Placeholder.** Future Azure deployment topology — not yet designed |
-| [`deployment-aws.mmd`](deployment-aws.mmd) | **Placeholder.** Future AWS deployment topology — not yet designed |
+| [`deployment-azure.mmd`](deployment-azure.mmd) | Azure Container Apps path: same image → ACR → Container Apps → user-assigned Managed Identity → Microsoft Foundry |
+| [`deployment-aws.mmd`](deployment-aws.mmd) | ECS Fargate path: same image → ECR → Fargate → ECS container credential provider → Task Role → Amazon Bedrock |
 
 ## Implemented vs. Placeholder
 
-`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the system as it exists today (Phase 6B). Amazon Bedrock is implemented, covered by offline tests, and live-verified through ECI.
+`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the application as it exists today.
 
-`deployment-azure.mmd` and `deployment-aws.mmd` remain empty placeholders. No cloud hosting architecture has been implemented yet — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/phase-06-cloud-deployment.md`](../roadmap/phase-06-cloud-deployment.md).
+`deployment-azure.mmd` and `deployment-aws.mmd` describe the Phase 6C hosting paths. Direct Fargate public-IP ingress is verification-only. See [`docs/cloud/deployment.md`](../cloud/deployment.md).
 
 ## Embedding Mermaid in Markdown
 

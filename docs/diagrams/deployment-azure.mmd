@@ -1,0 +1,13 @@
+flowchart TD
+    Image["Same ECI Docker image"]
+    ACR["Azure Container Registry eciacrdev6c"]
+    CA["Azure Container Apps eci-api-dev"]
+    MI["User-assigned Managed Identity"]
+    DAC["DefaultAzureCredential"]
+    Foundry["Microsoft Foundry eci-gpt-54-mini"]
+
+    Image --> ACR
+    ACR --> CA
+    CA --> MI
+    MI --> DAC
+    DAC --> Foundry

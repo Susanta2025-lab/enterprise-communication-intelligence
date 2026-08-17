@@ -12,12 +12,15 @@ This is the cloud-integration view of Phase 6. It is not a substitute for the ph
 
 ## Production deployment
 
-Not implemented. Future hosted deployment is expected to keep the same provider adapters:
+Phase 6C deployment foundation is implemented:
 
-- Azure compute with Managed Identity for Foundry
-- AWS compute with an IAM role or other workload identity for Bedrock
+- one Docker image for local mock, Azure Container Apps / Foundry, and ECS Fargate / Bedrock
+- Azure compute uses user-assigned Managed Identity for Foundry
+- AWS compute uses an ECS Task Role and the ECS container credential provider for Bedrock
 
 See [Deployment](deployment.md).
+
+CI/CD automation is intentionally deferred until the manually validated Azure and AWS deployment paths are stable.
 
 ## Secrets and identity
 
@@ -27,8 +30,8 @@ See [Authentication](authentication.md).
 
 ## Observability
 
-Azure Monitor and Amazon CloudWatch are not implemented. That work belongs to later Phase 6 / Phase 7 scope.
+Azure Monitor and Amazon CloudWatch metrics, tracing, and dashboards are not implemented. Container Apps logs and CloudWatch `awslogs` used in Phase 6C are minimal deployment logs only. Structured production observability belongs to Phase 7.
 
-## Future enterprise deployment
+## Later enterprise deployment
 
-Container images, production networking, and operational runbooks remain out of scope until a dedicated hosting phase is requested.
+Production-hardened ingress, private networking, and CI/CD remain later work. Phase 6C validated the manual Azure and AWS paths first.

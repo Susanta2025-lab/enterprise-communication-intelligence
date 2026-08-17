@@ -1,0 +1,60 @@
+# Git and CI
+.git
+.gitignore
+.github
+
+# Secrets and local environment
+.env
+.env.*
+
+# Virtual environments
+.venv
+venv
+env
+
+# Python bytecode and packaging artifacts
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+*.egg-info
+.eggs
+build
+dist
+pip-wheel-metadata
+
+# Tests, coverage, and linters
+tests
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pyright
+.pyre
+.coverage
+.coverage.*
+coverage.xml
+htmlcov
+
+# Non-runtime project content
+docs
+data
+scripts
+deployment
+.cursor
+.vscode
+.idea
+
+# Local OS and editor debris
+.DS_Store
+Thumbs.db
+*.log
+logs
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.cache
+.phase*-check.sh
+.phase*-check-results.txt

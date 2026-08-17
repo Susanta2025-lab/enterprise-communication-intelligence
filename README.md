@@ -51,6 +51,14 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Communication analysis service
 * Provider-independent orchestration
 
+### Deployment
+
+* One provider-independent Docker image for local, Azure, and AWS
+* Local Docker Compose with `MockAIProvider`
+* Azure Container Apps with user-assigned Managed Identity and Microsoft Foundry
+* Amazon ECS on Fargate with an ECS Task Role and Amazon Bedrock
+* No cloud credentials baked into the application image
+
 ### REST API
 
 * Versioned REST API
@@ -81,10 +89,8 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 5 – REST API
 * ✅ Phase 6A – Microsoft Foundry Integration
 * ✅ Phase 6B – Amazon Bedrock Integration
-
-### In Progress
-
-* ▶ Phase 6 – Cloud Integration
+* ✅ Phase 6C – Deployment Foundation
+* ✅ Phase 6 – Cloud Integration
 
 ---
 
@@ -121,7 +127,45 @@ The application and business layers depend only on the `AIProvider` interface. P
 
 Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings.
 
-Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application.
+The same Docker image runs locally with the mock provider, on Azure Container Apps with Foundry, and on Amazon ECS Fargate with Bedrock. Cloud differences are environment variables and workload identity, not separate applications.
+
+```text
+same ECI Docker image
+├── local Docker / mock
+├── Azure Container Apps / Foundry
+└── ECS Fargate / Bedrock
+```
+
+Local:
+
+```text
+REST API → CommunicationAnalysisService → AIProvider → MockAIProvider
+```
+
+Azure:
+
+```text
+REST API
+→ CommunicationAnalysisService
+→ MicrosoftFoundryProvider
+→ DefaultAzureCredential
+→ User-Assigned Managed Identity
+→ Microsoft Foundry
+```
+
+AWS:
+
+```text
+REST API
+→ CommunicationAnalysisService
+→ AmazonBedrockProvider
+→ boto3
+→ ECS container credential provider
+→ ECS Task Role
+→ Amazon Bedrock
+```
+
+Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application. Azure Container Apps and ECS Fargate hosting are implemented and live-verified. Operator commands live in `deployment/azure/` and `deployment/aws/`.
 
 ---
 
@@ -191,15 +235,19 @@ deployment/
 * Amazon Bedrock Converse API
 * Claude Haiku 4.5 baseline
 * boto3 standard credential chain
+* Docker image (Python 3.12, non-root)
+* Azure Container Registry and Azure Container Apps
+* Amazon ECR and Amazon ECS Fargate
+* User-assigned Managed Identity (Azure)
+* ECS Task Role / Task Execution Role (AWS)
 
-**Planned**
+**Later**
 
-* Azure App Service
 * Azure Key Vault
 * Azure Monitor
-* AWS App Runner
 * AWS Secrets Manager
-* Amazon CloudWatch
+* Amazon CloudWatch observability (metrics, tracing, dashboards)
+* CI/CD automation
 
 ---
 
@@ -273,9 +321,10 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | Phase 3 – Provider Abstraction           | ✅ Completed   |
 | Phase 4 – Communication Analysis Service | ✅ Completed   |
 | Phase 5 – REST API                       | ✅ Completed   |
-| Phase 6 – Cloud Integration              | ▶ In Progress |
+| Phase 6 – Cloud Integration              | ✅ Completed   |
 | ↳ Phase 6A – Microsoft Foundry           | ✅ Completed   |
 | ↳ Phase 6B – Amazon Bedrock              | ✅ Completed   |
+| ↳ Phase 6C – Deployment Foundation       | ✅ Completed   |
 | Phase 7 – Observability                  | ⏳ Not Started |
 | Phase 8 – Future Roadmap                 | ⏳ Not Started |
 
@@ -291,6 +340,7 @@ Technical documentation is available under the `docs/` directory:
 * Mermaid diagrams
 * Development roadmap
 * Cloud planning documents
+* Azure and AWS deployment runbooks (`deployment/azure/`, `deployment/aws/`)
 
 ---
 
@@ -304,8 +354,9 @@ Not yet implemented:
 * Persistent storage
 * Workflow automation
 * Enterprise communication integrations
-* Production cloud deployment
-* Production observability and monitoring
+* Production-hardened ingress (stable load balancer and TLS termination)
+* CI/CD automation
+* Production observability and monitoring (Phase 7)
 
 ---
 

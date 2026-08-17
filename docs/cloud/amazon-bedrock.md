@@ -149,6 +149,10 @@ REST API
 
 The successful response used `provider = "amazon_bedrock"` and returned a valid summary, priority, category, action items, draft reply, and `message_id`. A live request with `include_action_items = true`, `include_draft_reply = true`, and a relative "by Friday" deadline returned two action items with `due_at = null`.
 
-## Production Deployment Direction
+## Production Deployment
 
-Provider integration is not the same as production hosting. Future AWS deployment should use an IAM role or other workload identity through the same boto3 credential chain. App Runner, Secrets Manager, and CloudWatch are not implemented.
+Phase 6C hosts the same Bedrock adapter on Amazon ECS Fargate. boto3 resolves credentials through the ECS container credential provider and Task Role `eci-bedrock-task-role-dev` (`bedrock:InvokeModel` only). The Task Execution Role is separate and does not invoke Bedrock. Fargate credentials are not EC2 instance metadata.
+
+AWS App Runner is not used. Secrets Manager is not implemented. CloudWatch `awslogs` in Phase 6C are minimal deployment logs, not Phase 7 observability.
+
+See [Deployment](deployment.md) and the [AWS runbook](../../deployment/aws/README.md).

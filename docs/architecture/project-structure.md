@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 6B. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 6C. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -76,12 +76,12 @@ docs/
 ├── architecture/                 # architecture documentation
 ├── decisions/                     # Architecture Decision Records
 ├── diagrams/                      # Mermaid diagram sources
-└── cloud/                         # Microsoft Foundry, Amazon Bedrock, and future hosting docs
+└── cloud/                         # Microsoft Foundry, Amazon Bedrock, and deployment docs
 
 deployment/
-├── docker/                       # placeholder (.gitkeep only)
-├── azure/                        # placeholder (.gitkeep only)
-└── aws/                          # placeholder (.gitkeep only)
+├── docker/                       # placeholder (.gitkeep only; image lives at repo root)
+├── azure/                        # Azure Container Apps runbook
+└── aws/                          # ECS Fargate runbook
 ```
 
 ## Role of Each Top-Level Package
@@ -96,8 +96,8 @@ deployment/
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
 - **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. All tests run offline with no external credentials.
 - **`docs`** — Project documentation, split by concern (API, architecture, decisions, diagrams, roadmap, cloud).
-- **`deployment`** — Currently placeholder directories only (`.gitkeep` files for `docker/`, `azure/`, `aws/`); no Dockerfile content, Compose configuration, or deployment manifests are implemented yet.
+- **`deployment`** — Azure and AWS operator runbooks. The provider-independent `Dockerfile`, `docker-compose.yml`, and `.dockerignore` live at the repository root. `deployment/docker/` remains a `.gitkeep` placeholder.
 
 ## Directories Not Listed Above
 
-`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository but contain no implementation relevant to Phase 6B and are out of scope for this documentation pass.
+`data/`, `scripts/`, `.github/`, and root files such as `LICENSE`, `Dockerfile`, and `docker-compose.yml` exist in the repository. The root Docker files are the Phase 6C image foundation.

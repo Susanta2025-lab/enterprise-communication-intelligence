@@ -1,6 +1,6 @@
 # ECI Platform Architecture Documentation
 
-This directory documents the architecture implemented through **Phase 6B – Amazon Bedrock provider**. Live ECI → Bedrock verification is complete.
+This directory documents the architecture implemented through **Phase 6C – Deployment Foundation**. Provider adapters and cloud hosting (Azure Container Apps and ECS Fargate) are implemented.
 
 ## Contents
 
@@ -19,7 +19,9 @@ Mermaid source files live in [`docs/diagrams/`](../diagrams/README.md):
 - [`architecture.mmd`](../diagrams/architecture.mmd) — layered system diagram
 - [`request-flow.mmd`](../diagrams/request-flow.mmd) — successful and failure request sequences
 - [`provider-abstraction.mmd`](../diagrams/provider-abstraction.mmd) — provider interface and factory selection
+- [`deployment-azure.mmd`](../diagrams/deployment-azure.mmd) — Azure Container Apps hosting path
+- [`deployment-aws.mmd`](../diagrams/deployment-aws.mmd) — ECS Fargate hosting path
 
 ## Scope
 
-This documentation describes what is implemented in the repository as of Phase 6B. Cloud application hosting remains future work — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/README.md`](../roadmap/README.md).
+This documentation describes what is implemented in the repository as of Phase 6C. Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate — see [`docs/cloud/`](../cloud/README.md) and [`docs/roadmap/README.md`](../roadmap/README.md).

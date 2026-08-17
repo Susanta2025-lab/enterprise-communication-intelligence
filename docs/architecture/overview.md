@@ -33,8 +33,8 @@ The application service and every layer above it depend only on `app.domain.inte
 
 ## Current Implementation Boundary
 
-The system is fully synchronous and has no persistence or API-level authentication. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Bedrock verification is complete.
+The system is fully synchronous and has no persistence or API-level authentication. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Foundry and ECI → Bedrock verification is complete, including hosted Container Apps and Fargate paths.
 
 ## Future Extensibility
 
-Cloud hosting and observability remain unimplemented. Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md) and [`docs/cloud/`](../cloud/README.md).
+Production observability remains unimplemented (Phase 7). Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md) and [`docs/cloud/`](../cloud/README.md).

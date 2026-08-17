@@ -9,8 +9,8 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | Mock provider | Implemented (`AI_PROVIDER=mock`) |
 | Microsoft Foundry provider | Implemented (`AI_PROVIDER=microsoft_foundry`) |
 | Amazon Bedrock provider | Implemented and live-verified (`AI_PROVIDER=amazon_bedrock`) |
-| Azure or AWS application hosting | Not implemented |
-| Managed Identity / IAM roles in deployed environments | Compatible in adapter design; not yet deployed |
+| Azure application hosting | Implemented (Container Apps + user-assigned Managed Identity) |
+| AWS application hosting | Implemented (ECS Fargate + ECS Task Role) |
 
 See:
 
@@ -77,6 +77,8 @@ Independent CLI Bedrock capability was verified before implementation. Offline a
 
 Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI prompt construction, structured-output models, JSON validation, and domain mapping. That package is not a generic LLM framework. `MockAIProvider` does not use it.
 
-## Deployment (not implemented)
+## Deployment (implemented)
 
-Container images, App Service / App Runner, Key Vault / Secrets Manager, and Monitor / CloudWatch wiring remain future Phase 6 work. See [Deployment](deployment.md).
+One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
+
+Key Vault, Secrets Manager, and production observability remain later work. See [Deployment](deployment.md).

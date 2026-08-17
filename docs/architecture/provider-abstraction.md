@@ -80,7 +80,7 @@ responses.create(...)
 
 Key properties:
 
-- Authenticates with Microsoft Entra ID via `DefaultAzureCredential` (Azure CLI locally; Managed Identity in a future Azure deployment).
+- Authenticates with Microsoft Entra ID via `DefaultAzureCredential` (Azure CLI locally; user-assigned Managed Identity on Azure Container Apps).
 - Uses the Foundry project endpoint and deployment name from settings.
 - Requests strict JSON Schema structured output from the Responses API, then uses the shared common layer to validate and map domain results.
 - Honors `include_action_items` and `include_draft_reply`.
@@ -105,7 +105,7 @@ outputConfig.textFormat JSON Schema
 
 Key properties:
 
-- Authenticates through boto3's standard credential chain (`aws login` locally; IAM role / workload identity in a future AWS deployment).
+- Authenticates through boto3's standard credential chain (`aws login` locally; ECS container credential provider and ECS Task Role on Fargate).
 - Uses configurable `BEDROCK_REGION` and `BEDROCK_MODEL_ID`.
 - Calls Bedrock Runtime Converse with a JSON Schema generated from shared `AnalysisOutput`.
 - Extracts Converse text in Bedrock-specific code, then uses the shared common layer to validate and map domain results.

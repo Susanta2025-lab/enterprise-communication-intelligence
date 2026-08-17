@@ -28,7 +28,7 @@ AIProvider
 → outputConfig.textFormat JSON Schema
 ```
 
-Select the adapter with `AI_PROVIDER=amazon_bedrock`. Configure region and model ID through Pydantic Settings (`BEDROCK_REGION`, `BEDROCK_MODEL_ID`). Authenticate with boto3's standard credential chain so local development can use `aws login` temporary credentials from an externally selected CLI profile, and a future AWS deployment can use an IAM role or other workload identity without changing provider code.
+Select the adapter with `AI_PROVIDER=amazon_bedrock`. Configure region and model ID through Pydantic Settings (`BEDROCK_REGION`, `BEDROCK_MODEL_ID`). Authenticate with boto3's standard credential chain so local development can use `aws login` temporary credentials from an externally selected CLI profile, and ECS Fargate can use the ECS container credential provider and Task Role without changing provider code.
 
 The initial baseline model is Claude Haiku 4.5 through the EU inference profile `eu.anthropic.claude-haiku-4-5-20251001-v1:0` in `eu-south-2`. The model ID remains fully configurable.
 
@@ -71,7 +71,7 @@ Cloud transport, SDK clients, and schema envelopes remain provider-specific. Sha
 - model behavior may differ across providers
 - priority classification may require later prompt calibration
 - additional AWS SDK dependency (`boto3[crt]`)
-- production hosting, secrets management, and observability remain pending
+- secrets management and observability remain later work; Phase 6C later added ECS Fargate hosting
 
 ## Related Components
 

@@ -1,0 +1,17 @@
+flowchart TD
+    Image["Same ECI Docker image"]
+    ECR["Amazon ECR eci-api-dev"]
+    Fargate["ECS Fargate eci-api-dev"]
+    ExecRole["Task Execution Role ECR and awslogs"]
+    TaskRole["ECS Task Role"]
+    Boto["boto3 credential chain"]
+    ECSCreds["ECS container credential provider"]
+    Bedrock["Amazon Bedrock Converse"]
+
+    Image --> ECR
+    ECR --> Fargate
+    ExecRole --> Fargate
+    Fargate --> Boto
+    Boto --> ECSCreds
+    ECSCreds --> TaskRole
+    TaskRole --> Bedrock
