@@ -1,11 +1,13 @@
 """Amazon Bedrock implementation of the AIProvider contract."""
 
+import time
 from typing import Any
 
 import boto3
 
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
+from app.core.telemetry import elapsed_ms, error_class
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.providers.amazon_bedrock.output import (
@@ -49,42 +51,67 @@ class AmazonBedrockProvider(AIProvider):
 
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication through Amazon Bedrock and map domain results."""
+        message_id = request.message.message_id
         logger.info(
             "amazon_bedrock_analysis_requested",
+            provider=self.PROVIDER_NAME,
             model_id=self._model_id,
             region=self._region,
-            message_id=request.message.message_id,
+            message_id=message_id,
         )
+        started_at = time.perf_counter()
 
-        response = self._get_bedrock_runtime_client().converse(
-            modelId=self._model_id,
-            system=[{"text": SYSTEM_PROMPT}],
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"text": build_user_prompt(request)}],
-                }
-            ],
-            outputConfig={
-                "textFormat": {
-                    "type": "json_schema",
-                    "structure": {
-                        "jsonSchema": {
-                            "schema": BEDROCK_ANALYSIS_JSON_SCHEMA,
-                            "name": "communication_analysis",
-                            "description": "Structured communication analysis.",
-                        }
-                    },
-                }
-            },
-        )
-        output_text = extract_converse_output_text(response)
-        output = parse_analysis_output(output_text)
-        analysis = to_communication_analysis(output, request)
-        return CommunicationAnalysisResult(
-            analysis=analysis,
+        try:
+            response = self._get_bedrock_runtime_client().converse(
+                modelId=self._model_id,
+                system=[{"text": SYSTEM_PROMPT}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [{"text": build_user_prompt(request)}],
+                    }
+                ],
+                outputConfig={
+                    "textFormat": {
+                        "type": "json_schema",
+                        "structure": {
+                            "jsonSchema": {
+                                "schema": BEDROCK_ANALYSIS_JSON_SCHEMA,
+                                "name": "communication_analysis",
+                                "description": "Structured communication analysis.",
+                            }
+                        },
+                    }
+                },
+            )
+            output_text = extract_converse_output_text(response)
+            output = parse_analysis_output(output_text)
+            analysis = to_communication_analysis(output, request)
+            result = CommunicationAnalysisResult(
+                analysis=analysis,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "amazon_bedrock_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                model_id=self._model_id,
+                region=self._region,
+                message_id=message_id,
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "amazon_bedrock_analysis_completed",
             provider=self.PROVIDER_NAME,
+            model_id=self._model_id,
+            region=self._region,
+            message_id=message_id,
+            duration_ms=elapsed_ms(started_at),
         )
+        return result
 
     def _get_bedrock_runtime_client(self) -> Any:
         """Return a reusable Bedrock Runtime client for the configured region."""

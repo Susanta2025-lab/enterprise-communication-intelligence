@@ -6,11 +6,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.api.middleware import RequestTelemetryMiddleware
 from app.api.router import create_api_router
 from app.api.routes import health
 from app.core.config import get_settings
 from app.core.exceptions import ECIPlatformError, ServiceUnavailableError
 from app.core.logging import configure_logging, get_logger
+from app.core.telemetry import error_class
 
 
 @asynccontextmanager
@@ -53,7 +55,7 @@ def create_app() -> FastAPI:
         exc: ServiceUnavailableError,
     ) -> JSONResponse:
         logger = get_logger(__name__)
-        logger.warning("service_unavailable", error=exc.message)
+        logger.warning("service_unavailable", error_class=error_class(exc))
         return JSONResponse(status_code=503, content={"detail": exc.message})
 
     @application.exception_handler(ECIPlatformError)
@@ -62,9 +64,10 @@ def create_app() -> FastAPI:
         exc: ECIPlatformError,
     ) -> JSONResponse:
         logger = get_logger(__name__)
-        logger.error("application_error", error=exc.message)
+        logger.error("application_error", error_class=error_class(exc))
         return JSONResponse(status_code=500, content={"detail": exc.message})
 
+    application.add_middleware(RequestTelemetryMiddleware)
     application.include_router(health.liveness_router)
     application.include_router(create_api_router())
     return application

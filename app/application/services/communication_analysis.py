@@ -1,7 +1,10 @@
 """Application service orchestrating communication analysis."""
 
+import time
+
 from app.application.exceptions import AnalysisFailedError
 from app.core.logging import get_logger
+from app.core.telemetry import elapsed_ms, error_class, resolve_provider_name
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 
@@ -27,8 +30,9 @@ class CommunicationAnalysisService:
             AnalysisFailedError: if the underlying provider fails to analyze
                 the communication.
         """
-        provider_name = type(self._provider).__name__
+        provider_name = resolve_provider_name(self._provider)
         message_id = request.message.message_id
+        started_at = time.perf_counter()
 
         logger.info(
             "communication_analysis_started",
@@ -44,10 +48,12 @@ class CommunicationAnalysisService:
                 "communication_analysis_failed",
                 provider=provider_name,
                 message_id=message_id,
-                error=str(exc),
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
             )
             raise AnalysisFailedError(
-                f"AI provider '{provider_name}' failed to analyze the communication."
+                f"AI provider '{type(self._provider).__name__}' failed to analyze "
+                "the communication."
             ) from exc
 
         logger.info(
@@ -56,6 +62,7 @@ class CommunicationAnalysisService:
             message_id=message_id,
             priority=result.analysis.priority.level.value,
             category=result.analysis.category.value,
+            duration_ms=elapsed_ms(started_at),
         )
 
         return result

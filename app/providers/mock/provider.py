@@ -1,5 +1,9 @@
 """Deterministic mock AI provider for local development and tests."""
 
+import time
+
+from app.core.logging import get_logger
+from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import MessageCategory, PriorityLevel
 from app.domain.interfaces import AIProvider
 from app.domain.models import (
@@ -11,6 +15,8 @@ from app.domain.models import (
     Summary,
 )
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
+
+logger = get_logger(__name__)
 
 _URGENT_KEYWORDS = ("urgent", "asap", "immediately", "critical", "emergency")
 _ACTION_KEYWORDS = (
@@ -37,6 +43,36 @@ class MockAIProvider(AIProvider):
 
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication using deterministic keyword heuristics."""
+        message_id = request.message.message_id
+        logger.info(
+            "mock_analysis_requested",
+            provider=self.PROVIDER_NAME,
+            message_id=message_id,
+        )
+        started_at = time.perf_counter()
+
+        try:
+            result = self._analyze(request)
+        except Exception as exc:
+            logger.error(
+                "mock_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                message_id=message_id,
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "mock_analysis_completed",
+            provider=self.PROVIDER_NAME,
+            message_id=message_id,
+            duration_ms=elapsed_ms(started_at),
+        )
+        return result
+
+    def _analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
+        """Run the deterministic keyword analysis without telemetry."""
         message = request.message
         haystack = _combined_text(message)
 

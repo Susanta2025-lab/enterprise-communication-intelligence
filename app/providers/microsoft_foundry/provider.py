@@ -1,5 +1,6 @@
 """Microsoft Foundry implementation of the AIProvider contract."""
 
+import time
 from typing import Any
 
 from azure.ai.projects import AIProjectClient
@@ -7,6 +8,7 @@ from azure.identity import DefaultAzureCredential
 
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
+from app.core.telemetry import elapsed_ms, error_class
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.providers.common.output import (
@@ -54,37 +56,60 @@ class MicrosoftFoundryProvider(AIProvider):
 
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication through Microsoft Foundry and map domain results."""
+        message_id = request.message.message_id
         logger.info(
             "microsoft_foundry_analysis_requested",
-            deployment=self._model_deployment,
-            message_id=request.message.message_id,
-        )
-
-        response = self._get_openai_client().responses.create(
-            model=self._model_deployment,
-            instructions=SYSTEM_PROMPT,
-            input=build_user_prompt(request),
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "communication_analysis",
-                    "strict": True,
-                    "schema": FOUNDRY_ANALYSIS_JSON_SCHEMA,
-                }
-            },
-        )
-        output_text = getattr(response, "output_text", None)
-        if not isinstance(output_text, str):
-            raise AnalysisOutputError(
-                "Microsoft Foundry returned a response without JSON text output."
-            )
-
-        output = parse_analysis_output(output_text)
-        analysis = to_communication_analysis(output, request)
-        return CommunicationAnalysisResult(
-            analysis=analysis,
             provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            message_id=message_id,
         )
+        started_at = time.perf_counter()
+
+        try:
+            response = self._get_openai_client().responses.create(
+                model=self._model_deployment,
+                instructions=SYSTEM_PROMPT,
+                input=build_user_prompt(request),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "communication_analysis",
+                        "strict": True,
+                        "schema": FOUNDRY_ANALYSIS_JSON_SCHEMA,
+                    }
+                },
+            )
+            output_text = getattr(response, "output_text", None)
+            if not isinstance(output_text, str):
+                raise AnalysisOutputError(
+                    "Microsoft Foundry returned a response without JSON text output."
+                )
+
+            output = parse_analysis_output(output_text)
+            analysis = to_communication_analysis(output, request)
+            result = CommunicationAnalysisResult(
+                analysis=analysis,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "microsoft_foundry_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                deployment=self._model_deployment,
+                message_id=message_id,
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "microsoft_foundry_analysis_completed",
+            provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            message_id=message_id,
+            duration_ms=elapsed_ms(started_at),
+        )
+        return result
 
     def _get_openai_client(self) -> Any:
         """Return a reusable OpenAI-compatible client from the Foundry project."""

@@ -96,6 +96,68 @@ def test_service_translates_provider_failures(make_request: RequestFactory) -> N
     assert isinstance(exc_info.value.__cause__, RuntimeError)
 
 
+def test_service_success_telemetry_uses_stable_provider_and_duration(
+    make_request: RequestFactory,
+    log_events: list[dict],
+) -> None:
+    """Successful service logs should use PROVIDER_NAME and duration_ms."""
+    service = CommunicationAnalysisService(MockAIProvider())
+    request = make_request("Please review the report.")
+
+    service.analyze(request)
+
+    started = [event for event in log_events if event["event"] == "communication_analysis_started"]
+    completed = [
+        event for event in log_events if event["event"] == "communication_analysis_completed"
+    ]
+    assert started[-1]["provider"] == "mock"
+    assert completed[-1]["provider"] == "mock"
+    assert completed[-1]["message_id"] == "msg-001"
+    assert isinstance(completed[-1]["duration_ms"], float)
+    assert completed[-1]["duration_ms"] >= 0
+
+
+def test_service_failure_telemetry_uses_error_class_not_message(
+    make_request: RequestFactory,
+    log_events: list[dict],
+) -> None:
+    """Failed service logs must include error_class and must not include str(exc)."""
+    service = CommunicationAnalysisService(_FailingProvider())
+    request = make_request("Please review the report.")
+
+    with pytest.raises(AnalysisFailedError):
+        service.analyze(request)
+
+    failed = [event for event in log_events if event["event"] == "communication_analysis_failed"]
+    assert failed[-1]["error_class"] == "RuntimeError"
+    assert failed[-1]["provider"] == "_FailingProvider"
+    assert isinstance(failed[-1]["duration_ms"], float)
+    assert failed[-1]["duration_ms"] >= 0
+    assert "provider unreachable" not in repr(failed[-1])
+
+
+def test_service_failure_detail_keeps_provider_class_name(
+    make_request: RequestFactory,
+    log_events: list[dict],
+) -> None:
+    """HTTP/exception detail should keep the class name; logs use PROVIDER_NAME."""
+
+    class _NamedFailingProvider(AIProvider):
+        PROVIDER_NAME = "mock"
+
+        def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
+            raise RuntimeError("provider unreachable")
+
+    service = CommunicationAnalysisService(_NamedFailingProvider())
+
+    with pytest.raises(AnalysisFailedError) as exc_info:
+        service.analyze(make_request("Please review the report."))
+
+    assert "'_NamedFailingProvider'" in exc_info.value.message
+    failed = [event for event in log_events if event["event"] == "communication_analysis_failed"]
+    assert failed[-1]["provider"] == "mock"
+
+
 def test_invalid_request_is_rejected_before_reaching_the_service() -> None:
     """Invalid communication data must fail domain validation, not provider logic."""
     with pytest.raises(ValidationError):
