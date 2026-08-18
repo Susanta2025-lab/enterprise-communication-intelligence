@@ -20,6 +20,11 @@ _SETTINGS_ENV_VARS = (
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
     "BEDROCK_MODEL_ID",
+    "AUTH_MODE",
+    "OIDC_ISSUER",
+    "OIDC_AUDIENCE",
+    "OIDC_JWKS_URL",
+    "OIDC_REQUIRED_PERMISSION",
 )
 
 
@@ -47,6 +52,11 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.foundry_model_deployment is None
     assert settings.bedrock_region is None
     assert settings.bedrock_model_id is None
+    assert settings.auth_mode == "disabled"
+    assert settings.oidc_issuer is None
+    assert settings.oidc_audience is None
+    assert settings.oidc_jwks_url is None
+    assert settings.oidc_required_permission == "communications:analyze"
 
 
 def test_get_settings_returns_cached_instance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,9 +100,9 @@ def test_log_level_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_app_env_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
     """APP_ENV values should be normalized to lowercase."""
-    monkeypatch.setenv("APP_ENV", "PRODUCTION")
+    monkeypatch.setenv("APP_ENV", "STAGING")
     settings = Settings(_env_file=None)
-    assert settings.app_env == "production"
+    assert settings.app_env == "staging"
 
 
 def test_ai_provider_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -325,3 +335,125 @@ def test_settings_do_not_include_aws_credential_fields(
     assert "aws_secret_access_key" not in field_names
     assert "aws_session_token" not in field_names
     assert "aws_profile" not in field_names
+
+
+def _complete_oidc_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+
+
+def test_development_auth_disabled_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Development may start with AUTH_MODE=disabled."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("AUTH_MODE", "disabled")
+    settings = Settings(_env_file=None)
+    assert settings.auth_mode == "disabled"
+
+
+def test_oidc_mode_with_complete_configuration_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AUTH_MODE=oidc is valid when issuer, audience, and JWKS URL are set."""
+    _complete_oidc_env(monkeypatch)
+    settings = Settings(_env_file=None)
+    assert settings.auth_mode == "oidc"
+    assert settings.oidc_issuer == "https://example.invalid/"
+    assert settings.oidc_audience == "eci-api"
+    assert settings.oidc_jwks_url == "https://example.invalid/.well-known/jwks.json"
+    assert settings.oidc_required_permission == "communications:analyze"
+
+
+def test_oidc_mode_missing_issuer_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OIDC_ISSUER is required when AUTH_MODE=oidc."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.delenv("OIDC_ISSUER", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_oidc_mode_missing_audience_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OIDC_AUDIENCE is required when AUTH_MODE=oidc."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_oidc_mode_missing_jwks_url_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OIDC_JWKS_URL is required when AUTH_MODE=oidc."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.delenv("OIDC_JWKS_URL", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_with_auth_disabled_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production must not start with AUTH_MODE=disabled."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "disabled")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_with_incomplete_oidc_config_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production OIDC mode still requires issuer, audience, and JWKS URL."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.delenv("OIDC_ISSUER", raising=False)
+    monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
+    monkeypatch.delenv("OIDC_JWKS_URL", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_oidc_with_complete_configuration_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """APP_ENV=production is valid when AUTH_MODE=oidc and OIDC settings are complete."""
+    monkeypatch.setenv("APP_ENV", "PRODUCTION")
+    _complete_oidc_env(monkeypatch)
+    settings = Settings(_env_file=None)
+    assert settings.app_env == "production"
+    assert settings.auth_mode == "oidc"
+
+
+def test_blank_oidc_settings_do_not_satisfy_oidc_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank OIDC values should not satisfy AUTH_MODE=oidc."""
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "   ")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_oidc_issuer_and_jwks_url_must_be_https(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OIDC issuer and JWKS URL must use https when provided."""
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "http://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_JWKS_URL", "http://example.invalid/.well-known/jwks.json")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_invalid_auth_mode_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AUTH_MODE must be disabled or oidc."""
+    monkeypatch.setenv("AUTH_MODE", "entra")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

@@ -38,6 +38,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
+    docs_enabled = settings.app_env != "production"
 
     application = FastAPI(
         title=settings.app_name,
@@ -47,6 +48,9 @@ def create_app() -> FastAPI:
             "provider-independent AI architecture."
         ),
         lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     @application.exception_handler(ServiceUnavailableError)

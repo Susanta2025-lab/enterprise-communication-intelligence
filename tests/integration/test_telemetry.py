@@ -51,6 +51,11 @@ def client(monkeypatch: pytest.MonkeyPatch, log_events: list[dict]) -> Iterator[
         "FOUNDRY_MODEL_DEPLOYMENT",
         "BEDROCK_REGION",
         "BEDROCK_MODEL_ID",
+        "AUTH_MODE",
+        "OIDC_ISSUER",
+        "OIDC_AUDIENCE",
+        "OIDC_JWKS_URL",
+        "OIDC_REQUIRED_PERMISSION",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AI_PROVIDER", "mock")

@@ -2,7 +2,7 @@
 
 Phase 6C deploys one provider-independent Docker image to local Docker, Azure Container Apps, and Amazon ECS Fargate. Provider integration (Microsoft Foundry and Amazon Bedrock) is unchanged; hosting supplies environment variables and workload identity.
 
-This is a verified deployment foundation, not a fully production-hardened platform. Application-user authentication is not implemented. Operator `/32` ingress restriction is network access control, not API authentication.
+This is a verified deployment foundation, not a fully production-hardened platform. Application-user JWT authentication is implemented in the API; live cloud identity-provider registration is not part of Phase 8A. Operator `/32` ingress restriction is network access control, not a substitute for API authentication.
 
 ## Same image
 
@@ -155,7 +155,7 @@ Azure: ACR admin disabled; managed-identity pull and Foundry authentication; ope
 
 AWS: dedicated ECI security group; operator `/32` on TCP 8000; no `0.0.0.0/0` inbound on 8000; separate execution and task roles; least-privilege Bedrock `InvokeModel`; no NAT or load balancer for this verification.
 
-Application-user authentication remains outside Phase 6C.
+Application-user JWT authentication is implemented at the API boundary. Live issuer registration remains a later configuration step.
 
 ## Cost controls
 

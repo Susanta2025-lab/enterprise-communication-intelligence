@@ -9,6 +9,7 @@ azure-ai-projects
 azure-identity
 openai
 boto3[crt]
+PyJWT[crypto]
 
 pytest
 pytest-asyncio

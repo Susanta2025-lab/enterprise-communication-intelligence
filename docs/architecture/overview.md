@@ -22,7 +22,7 @@ Every layer in this path is implemented and exercised by tests spanning `tests/u
 - **Application service (`app/application`)** — Orchestrates use cases. `CommunicationAnalysisService` receives an already-validated `CommunicationRequest`, calls the injected `AIProvider`, translates provider failures into `AnalysisFailedError`, and emits structured logs. It has no knowledge of FastAPI, HTTP, or which concrete provider is behind the interface.
 - **Domain (`app/domain`)** — Provider-independent business objects: enums (`SourceType`, `PriorityLevel`, `MessageCategory`), models (`CommunicationMessage`, `MessageMetadata`, `CommunicationAnalysis`, `Summary`, `Priority`, `ActionItem`, `DraftReply`), schemas (`CommunicationRequest`, `CommunicationAnalysisResult`), and the `AIProvider` interface. Domain code imports neither FastAPI nor any cloud SDK.
 - **Providers (`app/providers`)** — Concrete implementations of `AIProvider`. `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` are implemented. The two real LLM adapters share `app/providers/common/`. `app/providers/factory.py` selects a provider from configuration.
-- **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings), `logging.py` (structlog configuration), `telemetry.py` (request-safe `duration_ms` and `error_class` helpers), `exceptions.py` (the base application exception hierarchy). `app/core/security.py` exists as an empty scaffold file with no implementation. HTTP `request_id` binding lives in `app/api/middleware.py`.
+- **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings), `logging.py` (structlog configuration), `telemetry.py` (request-safe `duration_ms` and `error_class` helpers), `exceptions.py` (the base application exception hierarchy), `security.py` (OIDC JWT validation and `AuthenticatedPrincipal`). HTTP `request_id` binding lives in `app/api/middleware.py`.
 
 ## Provider Independence
 
@@ -33,7 +33,7 @@ The application service and every layer above it depend only on `app.domain.inte
 
 ## Current Implementation Boundary
 
-The system is fully synchronous and has no persistence or API-level authentication. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Foundry and ECI → Bedrock verification is complete, including hosted Container Apps and Fargate paths.
+The system is fully synchronous and has no persistence. When `AUTH_MODE=oidc`, `POST /api/v1/communications/analyze` requires a JWT bearer token; health and readiness remain public. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Foundry and ECI → Bedrock verification is complete, including hosted Container Apps and Fargate paths.
 
 ## Future Extensibility
 

@@ -18,7 +18,7 @@ app/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
 │   ├── exceptions.py          # ECIPlatformError, ConfigurationError, ServiceUnavailableError
-│   └── security.py           # empty scaffold — no implementation
+│   └── security.py           # OIDC JWT validation and AuthenticatedPrincipal
 ├── domain/
 │   ├── enums.py               # SourceType, PriorityLevel, MessageCategory
 │   ├── models/
@@ -88,7 +88,7 @@ deployment/
 
 - **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete provider class.
 - **`app/application`** — Use-case orchestration. Currently one service, `CommunicationAnalysisService`, coordinating providers and translating failures.
-- **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, and the base exception hierarchy. `security.py` is reserved for future authentication/authorization work and is currently empty.
+- **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, and the `AIProvider` interface. No framework or cloud dependencies. `app/domain/services/` is an empty scaffold; no domain-layer services have been needed so far — orchestration lives in `app/application`.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock.
 - **`app/infrastructure`** — Reserved for future cross-cutting infrastructure concerns (monitoring, parsing, storage). All three subpackages are currently empty scaffolds with no implementation or usage anywhere in the codebase.

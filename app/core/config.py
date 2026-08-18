@@ -7,6 +7,7 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnvironment = Literal["development", "staging", "production"]
+AuthMode = Literal["disabled", "oidc"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
@@ -36,6 +37,11 @@ class Settings(BaseSettings):
     foundry_model_deployment: str | None = None
     bedrock_region: str | None = None
     bedrock_model_id: str | None = None
+    auth_mode: AuthMode = "disabled"
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_required_permission: str = "communications:analyze"
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -105,6 +111,65 @@ class Settings(BaseSettings):
             return stripped or None
         return value
 
+    @field_validator("auth_mode", mode="before")
+    @classmethod
+    def normalize_auth_mode(cls, value: object) -> object:
+        """Normalize authentication mode names to lowercase."""
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("oidc_issuer", mode="before")
+    @classmethod
+    def normalize_oidc_issuer(cls, value: object) -> object:
+        """Treat blank OIDC issuers as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("oidc_audience", mode="before")
+    @classmethod
+    def normalize_oidc_audience(cls, value: object) -> object:
+        """Treat blank OIDC audiences as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("oidc_jwks_url", mode="before")
+    @classmethod
+    def normalize_oidc_jwks_url(cls, value: object) -> object:
+        """Treat blank OIDC JWKS URLs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("oidc_required_permission", mode="before")
+    @classmethod
+    def normalize_oidc_required_permission(cls, value: object) -> object:
+        """Strip surrounding whitespace from the required permission."""
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("oidc_issuer")
+    @classmethod
+    def validate_oidc_issuer(cls, value: str | None) -> str | None:
+        """Require an https OIDC issuer when one is provided."""
+        if value is not None and not value.startswith("https://"):
+            raise ValueError("OIDC_ISSUER must be an https URL.")
+        return value
+
+    @field_validator("oidc_jwks_url")
+    @classmethod
+    def validate_oidc_jwks_url(cls, value: str | None) -> str | None:
+        """Require an https OIDC JWKS URL when one is provided."""
+        if value is not None and not value.startswith("https://"):
+            raise ValueError("OIDC_JWKS_URL must be an https URL.")
+        return value
+
     @model_validator(mode="after")
     def validate_foundry_settings_when_selected(self) -> Self:
         """Require Foundry settings only when that provider is selected."""
@@ -135,6 +200,29 @@ class Settings(BaseSettings):
         if missing:
             names = " and ".join(missing)
             raise ValueError(f"{names} must be set when AI_PROVIDER=amazon_bedrock.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_auth_settings(self) -> Self:
+        """Fail closed in production and require complete OIDC settings when enabled."""
+        if self.app_env == "production" and self.auth_mode != "oidc":
+            raise ValueError("AUTH_MODE must be oidc when APP_ENV=production.")
+
+        if self.auth_mode != "oidc":
+            return self
+
+        missing: list[str] = []
+        if not self.oidc_issuer:
+            missing.append("OIDC_ISSUER")
+        if not self.oidc_audience:
+            missing.append("OIDC_AUDIENCE")
+        if not self.oidc_jwks_url:
+            missing.append("OIDC_JWKS_URL")
+        if missing:
+            names = " and ".join(missing)
+            raise ValueError(f"{names} must be set when AUTH_MODE=oidc.")
+        if not self.oidc_required_permission:
+            raise ValueError("OIDC_REQUIRED_PERMISSION must be set when AUTH_MODE=oidc.")
         return self
 
 

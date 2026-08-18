@@ -26,16 +26,51 @@ All request and response bodies use `application/json`. Request bodies are valid
 
 ## OpenAPI and Swagger UI
 
-FastAPI generates OpenAPI documentation automatically from the route definitions and Pydantic schemas:
+FastAPI generates OpenAPI documentation automatically from the route definitions and Pydantic schemas.
+
+Development and tests:
 
 - Swagger UI: `GET /docs`
+- ReDoc: `GET /redoc`
 - OpenAPI schema: `GET /openapi.json`
+
+When `APP_ENV=production`, those documentation routes are disabled.
 
 No manual OpenAPI authoring is required or performed; the schema reflects the current route and model definitions exactly.
 
 ## Authentication Status
 
-**No authentication or authorization is implemented.** All endpoints are open. This is explicitly out of scope for the current phase (see `.cursor/rules/enterprise-communication-intelligence.mdc` and the Phase 5 roadmap entry) and should not be treated as production-ready without an authentication layer.
+Application-user authentication is implemented as provider-independent JWT bearer validation.
+
+```text
+Client
+  → Authorization: Bearer <JWT>
+  → ECI validates signature, issuer, audience, and expiry
+  → ECI requires permission communications:analyze
+  → POST /api/v1/communications/analyze
+```
+
+Configuration (`app/core/config.py`):
+
+- `AUTH_MODE=disabled` — allowed in development and tests; analyze does not require a token
+- `AUTH_MODE=oidc` — requires `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL`
+- `APP_ENV=production` requires `AUTH_MODE=oidc` (fail closed)
+
+This is **not** cloud workload identity. Foundry Managed Identity and the ECS Task Role authenticate ECI to AI platforms; they do not authenticate API callers.
+
+Public (no token):
+
+- `GET /health`
+- `GET /api/v1/health`
+- `GET /api/v1/readiness`
+
+Protected when `AUTH_MODE=oidc`:
+
+- `POST /api/v1/communications/analyze`
+
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without `communications:analyze` returns `403`.
+
+Permissions are read only from bounded claims `scp`, `scope`, or `roles`. There is no user database or session store.
 
 ## Provider Status
 

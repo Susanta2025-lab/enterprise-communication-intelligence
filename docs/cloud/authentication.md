@@ -1,6 +1,12 @@
 # Authentication
 
-ECI authenticates to cloud AI platforms through each provider's standard identity chain. The application does not store static cloud keys. This is cloud/provider authentication, not ECI application-user authentication. REST API user login and authorization are not implemented.
+ECI has two separate identity concerns.
+
+**Application-user authentication** (`Client → ECI API`) is implemented as provider-independent JWT bearer validation. See [API Overview](../api/overview.md). This is not Microsoft Entra Easy Auth, Cognito SDK integration, or a user database.
+
+**Cloud/provider authentication** (`ECI → Microsoft Foundry / Amazon Bedrock`) uses each cloud's standard workload identity chain. The application does not store static cloud keys.
+
+The rest of this document describes cloud/provider authentication only.
 
 ## Microsoft Foundry
 
@@ -90,6 +96,6 @@ Key Vault, Secrets Manager, and production secret management are not implemented
 ## What is not implemented
 
 - API-key authentication for Foundry
-- Application-level user authentication/authorization for the REST API
+- A user database, password login, or session store for the REST API
 - Storing or caching Entra tokens or AWS credentials in application code
 - Hard-coded AWS profile selection

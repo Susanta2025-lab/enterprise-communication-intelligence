@@ -22,6 +22,14 @@ logger = get_logger(__name__)
         "produced by the configured AI provider."
     ),
     responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Missing or invalid bearer token.",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Authenticated caller lacks communications:analyze.",
+        },
         500: {
             "model": ErrorResponse,
             "description": "Analysis or configuration failure.",

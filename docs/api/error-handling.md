@@ -46,6 +46,20 @@ Two handlers are registered on the FastAPI app:
 
 Because Starlette/FastAPI matches exception handlers by most-specific registered type, `ConfigurationError` and `AnalysisFailedError` — which have no dedicated handler — are both caught by the `ECIPlatformError` handler and return `500`.
 
+Authentication and authorization failures are raised as FastAPI `HTTPException` values from `app/api/dependencies.py`. They are not `ECIPlatformError` subclasses and therefore are not mapped to `500`.
+
+## Authentication and Authorization Errors
+
+When `AUTH_MODE=oidc`, `POST /api/v1/communications/analyze` requires a bearer token. Responses:
+
+| Condition | Status | `WWW-Authenticate` | Body |
+|---|---|---|---|
+| Missing bearer token | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
+| Invalid, expired, wrong issuer/audience, or bad signature | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
+| Valid token without `communications:analyze` | `403` | not set | `{"detail": "Not authorized"}` |
+
+Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
+
 ## Configuration Errors
 
 If `AI_PROVIDER` is set to an unsupported value, `app/providers/factory.py` raises:
@@ -78,8 +92,8 @@ This is translated by the `ECIPlatformError` handler into a `500` response.
 | Status | Meaning | Source |
 |---|---|---|
 | `200` | Successful request | Normal route return |
+| `401` | Missing or invalid bearer token | `require_communications_analyze` when `AUTH_MODE=oidc` |
+| `403` | Authenticated token lacks `communications:analyze` | `require_communications_analyze` when `AUTH_MODE=oidc` |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
 | `503` | A required service dependency is unavailable (`ServiceUnavailableError`) | `app/main.py` exception handler; documented on `POST /api/v1/communications/analyze` in OpenAPI, but not currently raised by any implemented code path |
-
-No other status codes are produced by application code in this phase.

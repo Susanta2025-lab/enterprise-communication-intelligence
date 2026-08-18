@@ -89,7 +89,7 @@ Future AWS deployment:
 ECI → boto3 credential chain → IAM role / workload credentials
 ```
 
-Cloud/provider authentication is separate from ECI application-user authentication, which is not implemented.
+Cloud/provider authentication is separate from ECI application-user JWT authentication. See [Authentication](authentication.md).
 
 ## Converse API
 

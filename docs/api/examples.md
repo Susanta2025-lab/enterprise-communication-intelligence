@@ -1,12 +1,20 @@
 # Examples
 
-All examples assume the server is running locally with default configuration (`AI_PROVIDER=mock`):
+All examples assume the server is running locally with default configuration (`AI_PROVIDER=mock`, `AUTH_MODE=disabled`):
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
 Base URL: `http://localhost:8000`
+
+When `AUTH_MODE=oidc`, analysis requests also need:
+
+```bash
+-H "Authorization: Bearer <access-token>"
+```
+
+Health and readiness examples remain unchanged; they do not require a token.
 
 ## Health
 

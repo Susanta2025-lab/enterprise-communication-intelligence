@@ -43,7 +43,8 @@ dependencies = [
     "azure-ai-projects>=2.4.0",
     "azure-identity>=1.15.0",
     "openai>=2.8.0",
-    "boto3[crt]>=1.41.0"
+    "boto3[crt]>=1.41.0",
+    "PyJWT[crypto]>=2.10.0"
 ]
 
 [project.optional-dependencies]
@@ -92,7 +93,12 @@ ignore = []
 # FastAPI's dependency-injection pattern requires calling Depends() (and similar
 # parameter functions) as an argument default; this is the documented Ruff
 # configuration for recognizing that pattern as safe, rather than a mutable default.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.params.Depends",
+    "fastapi.Security",
+    "fastapi.params.Security",
+]
 
 [tool.ruff.format]
 

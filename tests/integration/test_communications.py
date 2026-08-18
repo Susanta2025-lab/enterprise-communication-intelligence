@@ -29,6 +29,11 @@ _SETTINGS_ENV_VARS = (
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
     "BEDROCK_MODEL_ID",
+    "AUTH_MODE",
+    "OIDC_ISSUER",
+    "OIDC_AUDIENCE",
+    "OIDC_JWKS_URL",
+    "OIDC_REQUIRED_PERMISSION",
 )
 
 _ANALYZE_URL = "/api/v1/communications/analyze"

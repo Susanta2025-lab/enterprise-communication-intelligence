@@ -21,6 +21,11 @@ _SETTINGS_ENV_VARS = (
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
     "BEDROCK_MODEL_ID",
+    "AUTH_MODE",
+    "OIDC_ISSUER",
+    "OIDC_AUDIENCE",
+    "OIDC_JWKS_URL",
+    "OIDC_REQUIRED_PERMISSION",
 )
 
 
@@ -59,5 +64,44 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert analyze_operation["summary"] == "Analyze a business communication"
     assert "requestBody" in analyze_operation
     assert "200" in analyze_operation["responses"]
+    assert "401" in analyze_operation["responses"]
+    assert "403" in analyze_operation["responses"]
     assert "500" in analyze_operation["responses"]
     assert "503" in analyze_operation["responses"]
+    assert analyze_operation.get("security") == [{"HTTPBearer": []}]
+
+    security_schemes = schema["components"]["securitySchemes"]
+    assert security_schemes["HTTPBearer"]["type"] == "http"
+    assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
+
+    for public_path in ("/health", "/api/v1/health", "/api/v1/readiness"):
+        operation = schema["paths"][public_path]["get"]
+        assert not operation.get("security")
+
+
+def test_redoc_available(client: TestClient) -> None:
+    """ReDoc should be available at /redoc in development."""
+    response = client.get("/redoc")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production must not expose OpenAPI or interactive docs."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as production_client:
+        docs = production_client.get("/docs")
+        redoc = production_client.get("/redoc")
+        openapi = production_client.get("/openapi.json")
+
+    assert docs.status_code == 404
+    assert redoc.status_code == 404
+    assert openapi.status_code == 404
