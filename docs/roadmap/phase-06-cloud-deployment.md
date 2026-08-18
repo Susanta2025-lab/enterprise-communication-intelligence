@@ -23,7 +23,7 @@ Phase 6 is complete:
 Not part of Phase 6 (later work):
 
 - Azure Key Vault or AWS Secrets Manager
-- Azure Monitor or CloudWatch metrics, tracing, and dashboards (Phase 7)
+- Azure Monitor or CloudWatch tracing, dashboards, and custom metrics (Phase 7 later added structured logs and native platform metrics)
 - CI/CD automation
 
 ## Deliverables (6A)
@@ -118,8 +118,8 @@ See [ADR-006](../decisions/ADR-006-azure-ai-foundry.md) and [ADR-007](../decisio
 
 ## Lessons Learned
 
-Provider integration and the deployment foundation are complete for Foundry and Bedrock. Remaining work is secrets management, production-hardened ingress, CI/CD, and Phase 7 observability.
+Provider integration and the deployment foundation are complete for Foundry and Bedrock. Remaining work after Phase 6 was secrets management, production-hardened ingress, CI/CD, and observability. Phase 7 later completed structured logs and native platform metrics.
 
 ## Next Phase
 
-Phase 7 – Observability.
+Phase 7 – Observability (completed). Phase 8 – Future Roadmap.

@@ -25,6 +25,9 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * FastAPI application foundation
 * Centralized configuration management (Pydantic Settings)
 * Structured logging
+* Request correlation (`request_id` / `X-Request-ID`)
+* Latency telemetry (`duration_ms`)
+* Privacy-safe operational logs
 * Framework-independent exception hierarchy
 * OpenAPI / Swagger documentation
 * Health and readiness endpoints
@@ -59,6 +62,14 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Amazon ECS on Fargate with an ECS Task Role and Amazon Bedrock
 * No cloud credentials baked into the application image
 
+### Observability
+
+* Structured JSON telemetry on stdout (same image on Azure and AWS)
+* Server-generated `X-Request-ID` for operational correlation
+* Azure Log Analytics and native Container Apps metrics
+* AWS CloudWatch Logs and standard ECS CPU/memory metrics
+* Scale-to-zero / desiredCount=0 when idle
+
 ### REST API
 
 * Versioned REST API
@@ -91,6 +102,11 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 6B – Amazon Bedrock Integration
 * ✅ Phase 6C – Deployment Foundation
 * ✅ Phase 6 – Cloud Integration
+* ✅ Phase 7A – Application Telemetry Foundation
+* ✅ Phase 7B – Azure Observability Integration
+* ✅ Phase 7C – AWS Observability Integration
+* ✅ Phase 7D – Observability Documentation
+* ✅ Phase 7 – Observability
 
 ---
 
@@ -165,7 +181,7 @@ REST API
 → Amazon Bedrock
 ```
 
-Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application. Azure Container Apps and ECS Fargate hosting are implemented and live-verified. Operator commands live in `deployment/azure/` and `deployment/aws/`.
+Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application. Azure Container Apps and ECS Fargate hosting are implemented and live-verified. Phase 7 observability uses the same stdout JSON on both clouds: Azure Log Analytics plus native Container Apps metrics, and AWS CloudWatch Logs plus standard ECS metrics. Operator commands live in `deployment/azure/` and `deployment/aws/`. Details: [`docs/cloud/observability.md`](docs/cloud/observability.md).
 
 ---
 
@@ -240,13 +256,15 @@ deployment/
 * Amazon ECR and Amazon ECS Fargate
 * User-assigned Managed Identity (Azure)
 * ECS Task Role / Task Execution Role (AWS)
+* Azure Log Analytics and native Container Apps metrics
+* Amazon CloudWatch Logs and standard ECS metrics
 
 **Later**
 
 * Azure Key Vault
-* Azure Monitor
 * AWS Secrets Manager
-* Amazon CloudWatch observability (metrics, tracing, dashboards)
+* Distributed tracing / OpenTelemetry
+* Custom metrics, dashboards, and alerts
 * CI/CD automation
 
 ---
@@ -325,7 +343,11 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 6A – Microsoft Foundry           | ✅ Completed   |
 | ↳ Phase 6B – Amazon Bedrock              | ✅ Completed   |
 | ↳ Phase 6C – Deployment Foundation       | ✅ Completed   |
-| Phase 7 – Observability                  | ⏳ Not Started |
+| Phase 7 – Observability                  | ✅ Completed   |
+| ↳ Phase 7A – Application Telemetry       | ✅ Completed   |
+| ↳ Phase 7B – Azure Observability         | ✅ Completed   |
+| ↳ Phase 7C – AWS Observability           | ✅ Completed   |
+| ↳ Phase 7D – Documentation               | ✅ Completed   |
 | Phase 8 – Future Roadmap                 | ⏳ Not Started |
 
 ---
@@ -356,7 +378,7 @@ Not yet implemented:
 * Enterprise communication integrations
 * Production-hardened ingress (stable load balancer and TLS termination)
 * CI/CD automation
-* Production observability and monitoring (Phase 7)
+* Distributed tracing, custom metrics, dashboards, alerts, and SLOs
 
 ---
 

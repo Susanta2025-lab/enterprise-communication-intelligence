@@ -77,6 +77,8 @@ boto3 then resolves credentials from the environment. No AWS key is copied into 
 
 The application identity is Task Role `eci-bedrock-task-role-dev` (inline policy `eci-bedrock-invoke-dev`, `bedrock:InvokeModel` only). Task Execution Role `eci-ecs-execution-role-dev` pulls from ECR and writes CloudWatch `awslogs`. Those roles are not merged. The container does not receive AWS access keys or `AWS_PROFILE`.
 
+Operator CloudWatch metric-read permissions (`cloudwatch:ListMetrics`, `cloudwatch:GetMetricStatistics`) belong to IAM user `eci-developer` (CLI profile `eci-dev`). They are not on the application task role or the execution role. Azure Log Analytics configuration does not introduce application credentials.
+
 See [Deployment](deployment.md) and the [AWS runbook](../../deployment/aws/README.md).
 
 ## Shared rule

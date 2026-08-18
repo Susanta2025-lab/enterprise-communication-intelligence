@@ -2,7 +2,29 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Amazon ECS on Fargate in `eu-south-2`.
 
-**Status:** Prompt 7 live deployment completed. The ECS service is scaled to `desiredCount=0`. ECR, cluster, service, task definition, IAM roles, security group, and log group are retained. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+**Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. ECR, cluster, service, both task-definition revisions, IAM roles, security group, and log group are retained. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+
+## Current operational state (Phase 7)
+
+```text
+Region:                  eu-south-2
+ECR repository:          eci-api-dev
+Current image tag:       phase7a-5f4f5f8
+Previous image tag:      phase6c (retained)
+ECS cluster:             eci-cluster-dev
+ECS service:             eci-api-dev
+Current task definition: eci-api-dev:2
+Previous revision:       eci-api-dev:1 (retained)
+desiredCount:            0
+runningCount:            0
+Log group:               /ecs/eci-api-dev
+Log retention:           1 day
+Container Insights:      disabled
+```
+
+Historical inspection: CloudWatch Logs group `/ecs/eci-api-dev`. Quote `request_id` in filter patterns (hyphens are operators). Standard service metrics: namespace `AWS/ECS`, dimensions `ClusterName=eci-cluster-dev` and `ServiceName=eci-api-dev`, metrics `CPUUtilization` and `MemoryUtilization`.
+
+Operator `eci-developer` (profile `eci-dev`) may call `cloudwatch:ListMetrics` and `cloudwatch:GetMetricStatistics`. Those permissions are not on `eci-bedrock-task-role-dev` or `eci-ecs-execution-role-dev`. Phase 7C did not call Bedrock and did not enable Container Insights.
 
 ## Purpose
 
@@ -69,7 +91,7 @@ Do **not** describe this as EC2 instance metadata or instance-profile credential
 ```text
 Region:                  eu-south-2
 ECR repository:          eci-api-dev
-Image tag:               phase6c
+Image tag:               phase7a-5f4f5f8 (Phase 6C used phase6c; that tag remains)
 ECS cluster:             eci-cluster-dev
 Task definition family:  eci-api-dev
 ECS service:             eci-api-dev
@@ -126,9 +148,11 @@ Ingress security group `eci-fargate-sg-dev`:
 
 Do not write the operator IP into this repository.
 
-## Logging
+## Logging and metrics
 
-Log group `/ecs/eci-api-dev`, retention **1 day**, driver `awslogs`. No Container Insights, alarms, X-Ray, or Application Insights.
+Log group `/ecs/eci-api-dev`, retention **1 day**, driver `awslogs`. Phase 7C verified structured Phase 7A JSON in this group. Standard AWS/ECS `CPUUtilization` and `MemoryUtilization` are the service metrics in use. No Container Insights, alarms, X-Ray, custom metrics, or Application Insights.
+
+`ECIPhase6CDeploymentPolicy` (or an equivalent operator grant) now includes `cloudwatch:ListMetrics` and `cloudwatch:GetMetricStatistics` for inspection. Do not add CloudWatch write permissions to the application.
 
 ## Cost control
 
@@ -189,6 +213,7 @@ ec2:DescribeVpcs, ec2:DescribeSubnets, ec2:DescribeRouteTables,
   ec2:CreateSecurityGroup, ec2:AuthorizeSecurityGroupIngress,
   ec2:CreateTags
 logs:CreateLogGroup, logs:DescribeLogGroups, logs:PutRetentionPolicy, logs:GetLogEvents
+cloudwatch:ListMetrics, cloudwatch:GetMetricStatistics
 ```
 
 Bedrock `InvokeModel` is **not** required on the operator.

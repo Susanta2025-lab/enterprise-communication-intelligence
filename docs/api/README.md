@@ -16,4 +16,4 @@ The API currently defaults to `AI_PROVIDER=mock` (see `.env.example`). `Microsof
 
 ## Scope
 
-This documentation reflects the REST API plus the Phase 6 cloud AI providers. Application-user authentication and persistence remain future work. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.
+This documentation reflects the REST API plus the Phase 6 cloud AI providers. Responses include `X-Request-ID` for operational correlation; see [Overview](overview.md) and [Observability](../cloud/observability.md). Application-user authentication and persistence remain future work. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.

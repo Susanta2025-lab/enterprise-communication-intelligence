@@ -1,0 +1,14 @@
+flowchart TD
+    Image["ECI Phase 7A image"]
+    CA["Azure Container Apps eci-api-dev"]
+    Stdout["stdout JSON"]
+    LAW["Log Analytics eci-law-dev"]
+    Metrics["Azure Monitor native metrics"]
+
+    Image --> CA
+    CA --> Stdout
+    Stdout --> LAW
+    CA --> Metrics
+
+    Scale["min replicas 0 / max 1"]
+    CA --- Scale

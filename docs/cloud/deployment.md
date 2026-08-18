@@ -66,7 +66,7 @@ ECI Docker image
 
 Runtime: `AI_PROVIDER=microsoft_foundry`, `APP_ENV=production`.
 
-Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, image `eci-api:phase6c`).
+Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, Log Analytics workspace `eci-law-dev`, current image `eci-api:phase7a-5f4f5f8`, revision `eci-api-dev--0000001`). The earlier `phase6c` tag remains in ACR.
 
 Verified security controls:
 
@@ -159,17 +159,23 @@ Application-user authentication remains outside Phase 6C.
 
 ## Cost controls
 
-Azure: ACR Basic; Container Apps Consumption; min replicas 0; max replicas 1; no Log Analytics; no Application Insights. ACR Basic can still incur a standing registry charge.
+Azure: ACR Basic; Container Apps Consumption; min replicas 0; max replicas 1; Log Analytics 30-day retention; no Application Insights; no custom metrics; no dashboards/alerts. ACR Basic and Log Analytics ingestion/retention can incur charges.
 
-AWS: one temporary 0.5 vCPU / 1 GiB Fargate task during verification; service returned to `desiredCount=0`, so Fargate compute is not running; no NAT Gateway; no ALB/NLB; CloudWatch logs retention 1 day. ECS orchestration and IAM roles/policies have no usage charge. Retained ECR image storage and CloudWatch Logs storage/usage may incur charges.
+AWS: one temporary 0.5 vCPU / 1 GiB Fargate task during verification; service returned to `desiredCount=0`, so Fargate compute is not running; no NAT Gateway; no ALB/NLB; CloudWatch Logs retention 1 day; Container Insights disabled. Retained ECR image storage and CloudWatch Logs storage/usage may incur charges.
 
 This is not a zero-cost deployment.
 
-## Observability boundary
+## Observability
 
-Container Apps live logs and CloudWatch `awslogs` are minimal deployment/runtime logs. They are not a completed observability architecture.
+Phase 7 is implemented. The same Phase 7A image writes structured JSON to stdout on both clouds.
 
-Phase 6C covers deployment health and minimal operational logging. Phase 7 covers structured production observability, metrics, tracing, and dashboards/alerts as later designed.
+Azure: Container Apps environment `eci-ca-env-dev` sends logs to Log Analytics workspace `eci-law-dev` (30 days). Native Container Apps metrics (`Requests`, `ResponseTime`, `Replicas`, `CpuPercentage`, `MemoryPercentage`, `RestartCount`) were verified. Use Log Analytics for historical inspection. `az containerapp logs show` can wake a scale-to-zero replica and is for active diagnostics only.
+
+AWS: current task definition is `eci-api-dev:2` (`phase7a-5f4f5f8`). CloudWatch log group `/ecs/eci-api-dev` retains logs for 1 day via awslogs. Standard AWS/ECS `CPUUtilization` and `MemoryUtilization` were verified. Container Insights remains disabled. The service stays at `desiredCount=0` when idle.
+
+Phase 7 does not include distributed tracing, custom metrics, alerts, dashboards, or a full production SRE/SLO stack.
+
+See [Observability](observability.md).
 
 ## CI/CD
 
@@ -179,7 +185,7 @@ CI/CD automation is intentionally deferred until the manually validated Azure an
 
 - Azure App Service / AWS App Runner (not used; hosting is Container Apps and ECS Fargate)
 - Azure Key Vault / AWS Secrets Manager
-- Azure Monitor / Amazon CloudWatch metrics, tracing, and dashboards
+- Azure Monitor / Amazon CloudWatch tracing, dashboards, and custom metrics (native log retention and platform metrics are in Phase 7)
 - production networking beyond operator-restricted verification ingress
 - CI/CD deployment pipelines
 

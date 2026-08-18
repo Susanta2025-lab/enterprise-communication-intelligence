@@ -42,8 +42,8 @@ There is no branching on provider type, no retry logic, and no additional busine
 
 If `self._provider.analyze(request)` raises any exception, the service:
 
-- Logs `communication_analysis_failed` with the provider's class name, the message ID (if present), and `str(exc)` — never the message body.
-- Raises `AnalysisFailedError(f"AI provider '{provider_name}' failed to analyze the communication.")`, using `raise ... from exc` to preserve the original cause internally without exposing it externally.
+- Logs `communication_analysis_failed` with the configuration provider name (`PROVIDER_NAME` when present), the message ID (if present), `duration_ms`, and `error_class` — never the message body or `str(exc)`.
+- Raises `AnalysisFailedError` with the provider's Python class name in the HTTP detail (for example `MockAIProvider`), using `raise ... from exc` to preserve the original cause internally without exposing it externally. Operational logs use `PROVIDER_NAME` and `error_class`; the HTTP `detail` does not.
 
 This keeps the API layer's exception handling simple: it only needs to know about `ECIPlatformError` and its subclasses, never about what a specific provider might raise.
 
@@ -54,10 +54,10 @@ Three structured log events are emitted, all via `app.core.logging.get_logger(__
 | Event | Level | Fields |
 |---|---|---|
 | `communication_analysis_started` | info | `provider`, `message_id`, `source_type` |
-| `communication_analysis_completed` | info | `provider`, `message_id`, `priority`, `category` |
-| `communication_analysis_failed` | error | `provider`, `message_id`, `error` |
+| `communication_analysis_completed` | info | `provider`, `message_id`, `priority`, `category`, `duration_ms` |
+| `communication_analysis_failed` | error | `provider`, `message_id`, `duration_ms`, `error_class` |
 
-None of these log the communication body, sender/recipient contents beyond what's already structural (message id), credentials, or secrets.
+`provider` is the configuration name (`mock`, `microsoft_foundry`, `amazon_bedrock`) when the adapter exposes `PROVIDER_NAME`. HTTP middleware binds `request_id` for the same request. None of these log the communication body, subject, sender, recipient, prompt, model output, credentials, or raw exception messages. See [Observability](../cloud/observability.md).
 
 ## Statelessness
 

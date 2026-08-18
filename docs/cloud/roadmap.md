@@ -30,7 +30,9 @@ See [Authentication](authentication.md).
 
 ## Observability
 
-Azure Monitor and Amazon CloudWatch metrics, tracing, and dashboards are not implemented. Container Apps logs and CloudWatch `awslogs` used in Phase 6C are minimal deployment logs only. Structured production observability belongs to Phase 7.
+Phase 7 is implemented: portable structured logs, Azure Log Analytics plus native Container Apps metrics, and AWS CloudWatch Logs plus standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, alerts, Application Insights, Container Insights, and OpenTelemetry remain deferred.
+
+See [Observability](observability.md).
 
 ## Later enterprise deployment
 

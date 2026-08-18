@@ -11,6 +11,9 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | Amazon Bedrock provider | Implemented and live-verified (`AI_PROVIDER=amazon_bedrock`) |
 | Azure application hosting | Implemented (Container Apps + user-assigned Managed Identity) |
 | AWS application hosting | Implemented (ECS Fargate + ECS Task Role) |
+| Application telemetry | Implemented (structlog JSON, `request_id`, `duration_ms`) |
+| Azure retained logs / native metrics | Implemented (Log Analytics + Container Apps metrics) |
+| AWS retained logs / standard ECS metrics | Implemented (CloudWatch Logs + AWS/ECS CPU/memory) |
 
 See:
 
@@ -20,6 +23,7 @@ See:
 - [Provider comparison](comparison.md)
 - [Cloud roadmap](roadmap.md)
 - [Deployment](deployment.md)
+- [Observability](observability.md)
 
 ## Microsoft Foundry (implemented)
 
@@ -81,4 +85,4 @@ Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI promp
 
 One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
 
-Key Vault, Secrets Manager, and production observability remain later work. See [Deployment](deployment.md).
+Key Vault and Secrets Manager remain later work. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. See [Deployment](deployment.md) and [Observability](observability.md).

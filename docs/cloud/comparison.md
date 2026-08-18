@@ -36,10 +36,26 @@ The same Docker image was verified locally and deployed to both clouds. Direct F
 | Model | GPT-5.4-mini deployment | Claude Haiku 4.5 |
 | Runtime scaling | min 0 / max 1 | service scaled to `desiredCount` 0 after verification |
 | Verification ingress | HTTPS + operator `/32` | task public IP:8000 + operator `/32` |
-| Logging during deployment | Container Apps live logs | CloudWatch `awslogs` |
+| Logging during deployment | Container Apps live logs (diagnostic) | CloudWatch `awslogs` |
+| Retained application logs | Log Analytics `eci-law-dev` (30 days) | CloudWatch Logs `/ecs/eci-api-dev` (1 day) |
+| Platform metrics | Container Apps native metrics | Standard AWS/ECS CPU and memory |
+| Idle compute | min replicas 0 | desiredCount 0 |
 | Static cloud credentials | None | None |
 
-A production AWS service would normally introduce a stable ingress layer and TLS termination. Phase 7 observability is separate from these deployment logs.
+A production AWS service would normally introduce a stable ingress layer and TLS termination.
+
+## Observability comparison (Phase 7)
+
+Application telemetry is the same on both clouds: structlog JSON on stdout, `request_id` / `X-Request-ID`, `duration_ms`, and `error_class`. There is no application telemetry SDK beyond structlog. Tracing and custom metrics are deferred.
+
+| Concern | Azure | AWS |
+|---|---|---|
+| Retained logs | Log Analytics | CloudWatch Logs via awslogs |
+| Platform metrics | Container Apps native metrics | Standard AWS/ECS `CPUUtilization` / `MemoryUtilization` |
+| Runtime cost control | min replicas 0 / max 1 | desiredCount 0 when idle |
+| Not enabled | Application Insights, OpenTelemetry | Container Insights, ADOT, X-Ray |
+
+See [Observability](observability.md).
 
 See [Deployment](deployment.md).
 
@@ -50,3 +66,4 @@ See:
 - [Authentication](authentication.md)
 - [ADR-006](../decisions/ADR-006-azure-ai-foundry.md)
 - [ADR-007](../decisions/ADR-007-amazon-bedrock.md)
+- [ADR-008](../decisions/ADR-008-observability.md)

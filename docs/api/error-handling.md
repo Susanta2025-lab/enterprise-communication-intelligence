@@ -60,8 +60,10 @@ This is raised during dependency resolution (`get_ai_provider` in `app/api/depen
 
 If the injected `AIProvider.analyze(...)` call raises any exception, `CommunicationAnalysisService.analyze(...)` (`app/application/services/communication_analysis.py`):
 
-1. Logs `communication_analysis_failed` with the provider name, message ID, and error message (never the message body).
+1. Logs `communication_analysis_failed` with the provider name, message ID, `duration_ms`, and `error_class` (never the message body or `str(exc)`).
 2. Raises `AnalysisFailedError("AI provider '<ProviderClassName>' failed to analyze the communication.")`, chained via `raise ... from exc` so the original exception is preserved as the Python `__cause__` internally — it is not exposed in the HTTP response.
+
+The HTTP `detail` still uses the provider's Python class name (for example `MockAIProvider`). Operational logs use the configuration provider name and `error_class`.
 
 This is translated by the `ECIPlatformError` handler into a `500` response.
 

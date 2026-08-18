@@ -1,0 +1,20 @@
+flowchart TD
+    Client["HTTP request"]
+    MW["request_id middleware"]
+    API["FastAPI API"]
+    Svc["CommunicationAnalysisService"]
+    Iface["AIProvider"]
+    Prov["mock / microsoft_foundry / amazon_bedrock"]
+    Logs["structlog JSON"]
+    Out["stdout"]
+
+    Client --> MW
+    MW -->|"bind request_id"| API
+    API --> Svc
+    Svc --> Iface
+    Iface --> Prov
+    MW --> Logs
+    API --> Logs
+    Svc --> Logs
+    Prov --> Logs
+    Logs --> Out

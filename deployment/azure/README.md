@@ -2,7 +2,28 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. `eci-api-dev` remains in `rg-eci-deploy-dev` with operator `/32` ingress. Do not re-run mutating commands unless a later prompt requests it. Never delete `rg-eci-dev`.
+**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics and deployed image `eci-api:phase7a-5f4f5f8` (revision `eci-api-dev--0000001`). `eci-api-dev` remains in `rg-eci-deploy-dev` with operator `/32` ingress and min replicas 0. Do not re-run mutating commands unless a later prompt requests it. Never delete `rg-eci-dev`.
+
+## Current operational state (Phase 7)
+
+```text
+rg-eci-deploy-dev
+├── Azure Container Registry     eciacrdev6c
+├── User-assigned identity       eci-ca-identity-dev
+├── Log Analytics workspace      eci-law-dev   (PerGB2018, 30 days)
+└── Container Apps environment   eci-ca-env-dev
+    └── logs destination         log-analytics
+    └── Container App            eci-api-dev
+        └── image                eci-api:phase7a-5f4f5f8
+        └── revision             eci-api-dev--0000001
+        └── scale                min 0 / max 1
+```
+
+Historical inspection: query Log Analytics table `ContainerAppConsoleLogs_CL` (application JSON) and `ContainerAppSystemLogs_CL` (platform events). Native Container Apps metrics to inspect: `Requests`, `ResponseTime`, `Replicas`, `CpuPercentage`, `MemoryPercentage`, `RestartCount`.
+
+Do **not** use `az containerapp logs show` for routine history. Attaching to the live console stream can wake a scale-to-zero replica. Use live streaming only for active diagnostics.
+
+UAMI, secret count 0, ACR admin disabled, and operator `/32` ingress are unchanged. Phase 7B did not call Foundry.
 
 ## Purpose
 
@@ -45,6 +66,7 @@ All new resources go in a **separate** resource group so they can be deleted lat
 rg-eci-deploy-dev
 ├── Azure Container Registry     eciacrdev6c
 ├── User-assigned identity       eci-ca-identity-dev
+├── Log Analytics workspace      eci-law-dev   (added in Phase 7B)
 └── Container Apps environment   eci-ca-env-dev
     └── Container App            eci-api-dev
 ```
@@ -76,7 +98,7 @@ Do not add Terraform, Bicep, GitHub Actions, Application Insights, or authentica
 
 One user-assigned managed identity does both:
 
-1. **AcrPull** — Container Apps pulls `eci-api:phase6c` from ACR.
+1. **AcrPull** — Container Apps pulls the configured image tag from ACR (current: `eci-api:phase7a-5f4f5f8`).
 2. **Foundry User** — ECI runtime authenticates with `DefaultAzureCredential()` to Microsoft Foundry.
 
 ECI constructs `DefaultAzureCredential()` with no client ID in application code. Installed `azure-identity` (`1.25.3` in the verified image) reads `AZURE_CLIENT_ID` for user-assigned managed identity selection.
@@ -115,18 +137,19 @@ Phase 6C uses **default TCP probes** on ingress port `8000` (no extra YAML). Ope
 
 ## Logging
 
-Create the environment with `--logs-destination none` so Azure does not create a Log Analytics workspace.
+Phase 6C created the environment with `--logs-destination none`. Phase 7B registered `Microsoft.OperationalInsights`, created workspace `eci-law-dev` (30-day retention), and set the environment destination to `log-analytics`.
 
-Live console logs (if needed):
+Routine historical inspection:
 
-```bash
-az containerapp logs show \
-  --name eci-api-dev \
-  --resource-group rg-eci-deploy-dev \
-  --follow
+```text
+Log Analytics workspace eci-law-dev
+→ ContainerAppConsoleLogs_CL
+→ filter ContainerAppName_s == "eci-api-dev"
 ```
 
-This is platform plumbing, not Phase 7 observability. Do not add Application Insights, OpenTelemetry, dashboards, or alerts.
+Live console streaming (`az containerapp logs show --follow`) can start a scale-to-zero replica. Use it only for active diagnostics, not for routine history. That command is a diagnostic action, not a configuration change.
+
+Do not add Application Insights, OpenTelemetry, dashboards, or alerts.
 
 ## Image strategy
 
@@ -442,7 +465,7 @@ Before deleting, confirm the group contains only Phase 6C deployment resources:
 az resource list --resource-group rg-eci-deploy-dev --output table
 ```
 
-Expected kinds of resources: ACR, user-assigned identity, Container Apps environment, Container App. **Foundry must not appear here.**
+Expected kinds of resources: ACR, user-assigned identity, Log Analytics workspace, Container Apps environment, Container App. **Foundry must not appear here.**
 
 Then, only when cleanup is explicitly requested:
 

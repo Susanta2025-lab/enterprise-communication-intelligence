@@ -15,6 +15,7 @@ All endpoints implemented in the repository as of Phase 5. No other routes exist
   { "status": "healthy" }
   ```
 - **Status codes:** `200 OK`
+- **Headers:** `X-Request-ID` is always set by the server. An incoming value is ignored.
 
 **Limitations:** Always returns `healthy`; it does not check downstream dependencies (there are none in this phase).
 

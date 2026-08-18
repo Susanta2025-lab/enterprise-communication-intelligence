@@ -153,6 +153,6 @@ The successful response used `provider = "amazon_bedrock"` and returned a valid 
 
 Phase 6C hosts the same Bedrock adapter on Amazon ECS Fargate. boto3 resolves credentials through the ECS container credential provider and Task Role `eci-bedrock-task-role-dev` (`bedrock:InvokeModel` only). The Task Execution Role is separate and does not invoke Bedrock. Fargate credentials are not EC2 instance metadata.
 
-AWS App Runner is not used. Secrets Manager is not implemented. CloudWatch `awslogs` in Phase 6C are minimal deployment logs, not Phase 7 observability.
+AWS App Runner is not used. Secrets Manager is not implemented. Phase 7 retains application stdout through CloudWatch Logs (`/ecs/eci-api-dev`, 1 day) and uses standard AWS/ECS CPU/memory metrics. Container Insights remains disabled. See [Observability](observability.md).
 
 See [Deployment](deployment.md) and the [AWS runbook](../../deployment/aws/README.md).

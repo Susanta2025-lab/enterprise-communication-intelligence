@@ -1,0 +1,16 @@
+flowchart TD
+    Image["ECI Phase 7A image"]
+    Fargate["ECS Fargate eci-api-dev"]
+    Stdout["stdout JSON"]
+    AwsLogs["awslogs"]
+    CW["CloudWatch Logs /ecs/eci-api-dev"]
+    Metrics["AWS/ECS CPUUtilization + MemoryUtilization"]
+
+    Image --> Fargate
+    Fargate --> Stdout
+    Stdout --> AwsLogs
+    AwsLogs --> CW
+    Fargate --> Metrics
+
+    Idle["desiredCount 0 when idle"]
+    Fargate --- Idle

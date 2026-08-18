@@ -22,7 +22,7 @@ Every layer in this path is implemented and exercised by tests spanning `tests/u
 - **Application service (`app/application`)** — Orchestrates use cases. `CommunicationAnalysisService` receives an already-validated `CommunicationRequest`, calls the injected `AIProvider`, translates provider failures into `AnalysisFailedError`, and emits structured logs. It has no knowledge of FastAPI, HTTP, or which concrete provider is behind the interface.
 - **Domain (`app/domain`)** — Provider-independent business objects: enums (`SourceType`, `PriorityLevel`, `MessageCategory`), models (`CommunicationMessage`, `MessageMetadata`, `CommunicationAnalysis`, `Summary`, `Priority`, `ActionItem`, `DraftReply`), schemas (`CommunicationRequest`, `CommunicationAnalysisResult`), and the `AIProvider` interface. Domain code imports neither FastAPI nor any cloud SDK.
 - **Providers (`app/providers`)** — Concrete implementations of `AIProvider`. `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` are implemented. The two real LLM adapters share `app/providers/common/`. `app/providers/factory.py` selects a provider from configuration.
-- **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings), `logging.py` (structlog configuration), `exceptions.py` (the base application exception hierarchy). `app/core/security.py` exists as an empty scaffold file with no implementation.
+- **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings), `logging.py` (structlog configuration), `telemetry.py` (request-safe `duration_ms` and `error_class` helpers), `exceptions.py` (the base application exception hierarchy). `app/core/security.py` exists as an empty scaffold file with no implementation. HTTP `request_id` binding lives in `app/api/middleware.py`.
 
 ## Provider Independence
 
@@ -37,4 +37,4 @@ The system is fully synchronous and has no persistence or API-level authenticati
 
 ## Future Extensibility
 
-Production observability remains unimplemented (Phase 7). Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md) and [`docs/cloud/`](../cloud/README.md).
+Phase 7 observability is implemented: portable structured JSON on stdout, `request_id` / `X-Request-ID` correlation, `duration_ms`, and `error_class`. Azure retains logs in Log Analytics and exposes native Container Apps metrics. AWS retains logs in CloudWatch via awslogs and exposes standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, and alerts remain deferred. Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md), [Observability](../cloud/observability.md), and [`docs/cloud/`](../cloud/README.md).

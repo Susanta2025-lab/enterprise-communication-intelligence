@@ -23,8 +23,11 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-005](ADR-005-rest-api.md) | Synchronous REST API for Communication Analysis | Accepted |
 | [ADR-006](ADR-006-azure-ai-foundry.md) | Microsoft Foundry Provider | Accepted |
 | [ADR-007](ADR-007-amazon-bedrock.md) | Amazon Bedrock Provider | Accepted |
+| [ADR-008](ADR-008-observability.md) | Portable Structured Observability | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
+
+ADR-008 records the Phase 7 observability decision: portable structured logs with request correlation, plus native Azure and AWS log retention and platform metrics. Tracing and custom metric infrastructure remain deferred.
 
 ## Template
 

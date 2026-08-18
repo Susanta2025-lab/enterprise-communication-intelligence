@@ -23,5 +23,5 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 4 – AI Services | Completed |
 | Phase 5 – REST API | Completed |
 | Phase 6 – Cloud Deployment | Completed |
-| Phase 7 – Observability | Not started |
+| Phase 7 – Observability | Completed |
 | Phase 8 – Future Roadmap | Not started |

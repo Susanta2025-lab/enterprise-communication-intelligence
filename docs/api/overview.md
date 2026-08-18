@@ -41,11 +41,19 @@ No manual OpenAPI authoring is required or performed; the schema reflects the cu
 
 The API resolves an `AIProvider` through configuration (`AI_PROVIDER`, default `mock`). Supported values are `mock`, `microsoft_foundry`, and `amazon_bedrock`. The REST request and response schemas do not change with the selected provider. Automated tests and the default local configuration use `MockAIProvider`. See [Provider Abstraction](../architecture/provider-abstraction.md), [Microsoft Foundry](../cloud/azure-ai-foundry.md), and [Amazon Bedrock](../cloud/amazon-bedrock.md).
 
+## Request Correlation
+
+Every HTTP response includes `X-Request-ID`. The server generates a UUID `request_id` for the request, binds it through `structlog.contextvars`, and returns it on the response. An incoming `X-Request-ID` is ignored. The value is operational correlation only; it is not part of JSON response schemas. `message_id` in analysis requests remains business metadata and is separate.
+
+See [Observability](../cloud/observability.md).
+
 ## Request Flow (High Level)
 
 ```text
 Client
   ↓ HTTP request
+request_id middleware
+  ↓
 FastAPI route (app/api/routes/*)
   ↓ dependency injection
 CommunicationAnalysisService (app/application/services)
