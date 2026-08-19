@@ -1,12 +1,19 @@
 """FastAPI dependency providers."""
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.application.services.analysis_history import AnalysisHistoryService
 from app.application.services.communication_analysis import CommunicationAnalysisService
+from app.application.services.communication_analysis_workflow import (
+    CommunicationAnalysisWorkflowService,
+)
+from app.application.services.identity import IdentityResolver
 from app.core.config import get_settings
+from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import (
     AuthenticatedPrincipal,
@@ -14,7 +21,7 @@ from app.core.security import (
     AuthorizationFailedError,
     TokenValidator,
 )
-from app.domain.interfaces import AIProvider
+from app.domain.interfaces import AIProvider, PersistenceUnitOfWork
 from app.providers.factory import create_ai_provider
 
 logger = get_logger(__name__)
@@ -24,6 +31,9 @@ bearer_scheme = HTTPBearer(auto_error=False, bearerFormat="JWT")
 _AUTHENTICATE_DETAIL = "Not authenticated"
 _AUTHORIZE_DETAIL = "Not authorized"
 _WWW_AUTHENTICATE = {"WWW-Authenticate": "Bearer"}
+_UNAVAILABLE = "Persistence is currently unavailable."
+
+UnitOfWorkFactory = Callable[[], PersistenceUnitOfWork]
 
 
 def get_ai_provider() -> AIProvider:
@@ -91,12 +101,85 @@ def require_communications_analyze(
     return principal
 
 
-def get_communication_analysis_service(
-    _: Annotated[
+def require_authenticated_communications_analyze(
+    principal: Annotated[
         AuthenticatedPrincipal | None,
         Depends(require_communications_analyze),
     ],
+) -> AuthenticatedPrincipal:
+    """Require a real authenticated principal for history endpoints.
+
+    ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
+    Missing permission remains 403.
+    """
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
+    return principal
+
+
+def get_unit_of_work_factory() -> UnitOfWorkFactory | None:
+    """Return a persistence unit-of-work factory when DATABASE_URL is configured."""
+    settings = get_settings()
+    if not settings.database_url:
+        return None
+    from app.infrastructure.storage.runtime import get_unit_of_work_factory as build_factory
+
+    return build_factory(settings.database_url)
+
+
+def require_unit_of_work_factory(
+    factory: Annotated[UnitOfWorkFactory | None, Depends(get_unit_of_work_factory)],
+) -> UnitOfWorkFactory:
+    """Require persistence for history endpoints."""
+    if factory is None:
+        logger.warning("persistence_unavailable", operation="history")
+        raise ServiceUnavailableError(_UNAVAILABLE)
+    return factory
+
+
+def get_communication_analysis_service(
     provider: AIProvider = Depends(get_ai_provider),
 ) -> CommunicationAnalysisService:
-    """Build the analysis service after authentication and authorization."""
+    """Build the AI-only analysis service from the configured provider."""
     return CommunicationAnalysisService(provider)
+
+
+def get_communication_analysis_workflow_service(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(require_communications_analyze),
+    ],
+    analysis_service: Annotated[
+        CommunicationAnalysisService,
+        Depends(get_communication_analysis_service),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory | None, Depends(get_unit_of_work_factory)],
+) -> CommunicationAnalysisWorkflowService:
+    """Build persistence-aware analysis orchestration after authorization."""
+    identity_resolver = IdentityResolver(uow_factory) if uow_factory is not None else None
+    history_service = AnalysisHistoryService(uow_factory) if uow_factory is not None else None
+    return CommunicationAnalysisWorkflowService(
+        analysis_service,
+        principal=principal,
+        identity_resolver=identity_resolver,
+        history_service=history_service,
+    )
+
+
+def get_identity_resolver(
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> IdentityResolver:
+    """Build an identity resolver for history endpoints."""
+    return IdentityResolver(uow_factory)
+
+
+def get_analysis_history_service(
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> AnalysisHistoryService:
+    """Build the analysis history service for authenticated history endpoints."""
+    return AnalysisHistoryService(uow_factory)

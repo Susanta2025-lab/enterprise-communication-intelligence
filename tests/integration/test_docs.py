@@ -60,6 +60,8 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/api/v1/health" in schema["paths"]
     assert "/api/v1/readiness" in schema["paths"]
     assert "/api/v1/communications/analyze" in schema["paths"]
+    assert "/api/v1/analyses" in schema["paths"]
+    assert "/api/v1/analyses/{analysis_id}" in schema["paths"]
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
@@ -71,16 +73,38 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "503" in analyze_operation["responses"]
     assert analyze_operation.get("security") == [{"HTTPBearer": []}]
 
+    history_list = schema["paths"]["/api/v1/analyses"]["get"]
+    history_get = schema["paths"]["/api/v1/analyses/{analysis_id}"]["get"]
+    history_delete = schema["paths"]["/api/v1/analyses/{analysis_id}"]["delete"]
+    assert "200" in history_list["responses"]
+    assert "401" in history_list["responses"]
+    assert "403" in history_list["responses"]
+    assert "200" in history_get["responses"]
+    assert "404" in history_get["responses"]
+    assert "204" in history_delete["responses"]
+    assert "404" in history_delete["responses"]
+
+    serialized = repr(schema)
+    assert "user_id" not in serialized
+    assert "ExternalIdentity" not in serialized
+    assert "sqlalchemy" not in serialized.lower()
+
     security_schemes = schema["components"]["securitySchemes"]
     assert security_schemes["HTTPBearer"]["type"] == "http"
     assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
 
-def test_openapi_schema_has_no_analysis_history_routes(client: TestClient) -> None:
-    """Phase 9A must not expose analysis history endpoints."""
+def test_openapi_schema_exposes_analysis_history_routes(client: TestClient) -> None:
+    """Phase 9B exposes owned analysis history endpoints."""
     schema = client.get("/openapi.json").json()
     paths = schema["paths"]
-    assert "/api/v1/analyses" not in paths
-    assert not any(path.startswith("/api/v1/analyses") for path in paths)
+    assert "/api/v1/analyses" in paths
+    assert "/api/v1/analyses/{analysis_id}" in paths
+    assert "get" in paths["/api/v1/analyses"]
+    assert "get" in paths["/api/v1/analyses/{analysis_id}"]
+    assert "delete" in paths["/api/v1/analyses/{analysis_id}"]
+    assert "post" not in paths["/api/v1/analyses"]
+    assert "put" not in paths.get("/api/v1/analyses/{analysis_id}", {})
+    assert "patch" not in paths.get("/api/v1/analyses/{analysis_id}", {})
 
 
 def test_redoc_available(client: TestClient) -> None:

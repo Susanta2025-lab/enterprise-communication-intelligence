@@ -9,10 +9,12 @@ from fastapi.responses import JSONResponse
 from app.api.middleware import RequestTelemetryMiddleware
 from app.api.router import create_api_router
 from app.api.routes import health
+from app.application.exceptions import AnalysisNotFoundError
 from app.core.config import get_settings
-from app.core.exceptions import ECIPlatformError, ServiceUnavailableError
+from app.core.exceptions import ECIPlatformError, PersistenceError, ServiceUnavailableError
 from app.core.logging import configure_logging, get_logger
 from app.core.telemetry import error_class
+from app.infrastructure.storage.runtime import dispose_persistence_runtime
 
 
 @asynccontextmanager
@@ -28,6 +30,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         environment=settings.app_env,
     )
     yield
+    dispose_persistence_runtime()
     logger.info(
         "application_shutdown",
         service=settings.app_name,
@@ -52,6 +55,27 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs_enabled else None,
         openapi_url="/openapi.json" if docs_enabled else None,
     )
+
+    @application.exception_handler(AnalysisNotFoundError)
+    async def analysis_not_found_handler(
+        _request: Request,
+        exc: AnalysisNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("analysis_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(PersistenceError)
+    async def persistence_error_handler(
+        _request: Request,
+        exc: PersistenceError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.warning("persistence_unavailable", error_class=error_class(exc))
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Persistence is currently unavailable."},
+        )
 
     @application.exception_handler(ServiceUnavailableError)
     async def service_unavailable_handler(

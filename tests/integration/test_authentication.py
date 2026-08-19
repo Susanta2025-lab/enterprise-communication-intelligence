@@ -189,6 +189,7 @@ def test_analyze_with_authorized_token_returns_existing_analysis(
     assert payload["analysis"]["priority"]["level"] == "medium"
     assert payload["analysis"]["category"] == "general"
     assert payload["analysis"]["message_id"] == "msg-001"
+    assert "analysis_id" not in payload
 
 
 def test_unauthorized_requests_do_not_invoke_provider(
@@ -307,3 +308,10 @@ def test_privacy_sentinels_are_not_logged_for_valid_token(
     assert token not in serialized
     assert _PRIVATE_CLAIM_SENTINEL not in serialized
     assert "eci-test-subject" not in serialized
+    assert TEST_ISSUER not in serialized
+    succeeded = [event for event in log_events if event.get("event") == "authentication_succeeded"]
+    assert succeeded
+    for event in succeeded:
+        assert "issuer" not in event
+        assert "subject" not in event
+        assert "user_id" not in event

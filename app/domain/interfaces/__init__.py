@@ -7,6 +7,7 @@ from app.domain.interfaces.analysis_repository import (
     NewAnalysis,
 )
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 
 __all__ = [
     "AIProvider",
@@ -14,4 +15,5 @@ __all__ = [
     "AnalysisRepository",
     "IdentityRepository",
     "NewAnalysis",
+    "PersistenceUnitOfWork",
 ]

@@ -2,7 +2,12 @@
 
 import pytest
 
-from app.core.telemetry import elapsed_ms, error_class, resolve_provider_name
+from app.core.telemetry import (
+    bound_request_id_as_uuid,
+    elapsed_ms,
+    error_class,
+    resolve_provider_name,
+)
 from app.providers.mock.provider import MockAIProvider
 
 
@@ -40,3 +45,25 @@ def test_resolve_provider_name_prefers_stable_constant() -> None:
 def test_resolve_provider_name_falls_back_to_class_name() -> None:
     """Providers without PROVIDER_NAME still have a bounded identifier."""
     assert resolve_provider_name(_AnonymousProvider()) == "_AnonymousProvider"
+
+
+def test_bound_request_id_as_uuid_parses_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Server-generated UUID request IDs are persisted as UUID values."""
+    request_id = "11111111-1111-4111-8111-111111111111"
+
+    monkeypatch.setattr(
+        "app.core.telemetry.structlog.contextvars.get_contextvars",
+        lambda: {"request_id": request_id},
+    )
+
+    assert str(bound_request_id_as_uuid()) == request_id
+
+
+def test_bound_request_id_as_uuid_rejects_non_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-UUID request IDs are stored as null rather than raising."""
+    monkeypatch.setattr(
+        "app.core.telemetry.structlog.contextvars.get_contextvars",
+        lambda: {"request_id": "not-a-uuid"},
+    )
+
+    assert bound_request_id_as_uuid() is None

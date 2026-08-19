@@ -102,6 +102,7 @@ def test_analyze_normal_communication(client: TestClient) -> None:
     assert payload["provider"] == "mock"
     assert payload["analysis"]["priority"]["level"] == "medium"
     assert payload["analysis"]["category"] == "general"
+    assert "analysis_id" not in payload
 
 
 def test_analyze_urgent_communication(client: TestClient) -> None:

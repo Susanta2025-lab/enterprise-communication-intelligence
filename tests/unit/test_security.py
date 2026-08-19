@@ -1,7 +1,8 @@
 """Unit tests for provider-independent JWT validation and authorization."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from jwt.exceptions import PyJWKClientConnectionError
 
@@ -13,6 +14,8 @@ from app.core.security import (
     TokenValidator,
 )
 from tests.support.jwt_tokens import (
+    TEST_AUDIENCE,
+    TEST_ISSUER,
     TEST_KID,
     TEST_PERMISSION,
     TEST_SUBJECT,
@@ -39,6 +42,7 @@ def test_valid_signed_token_returns_principal(private_key, validator: TokenValid
         extra_claims={"scp": TEST_PERMISSION},
     )
     principal = validator.authenticate(token)
+    assert principal.issuer == TEST_ISSUER
     assert principal.subject == TEST_SUBJECT
     assert TEST_PERMISSION in principal.permissions
     validator.authorize(principal)
@@ -124,6 +128,25 @@ def test_alg_none_token_is_rejected(validator: TokenValidator) -> None:
     with pytest.raises(AuthenticationFailedError) as exc_info:
         validator.authenticate(token)
     assert exc_info.value.reason in {"invalid_token", "unknown_signing_key"}
+
+
+def test_missing_issuer_is_rejected(private_key, validator: TokenValidator) -> None:
+    """Tokens without a usable iss claim must fail authentication."""
+    now = datetime.now(UTC)
+    token = jwt.encode(
+        {
+            "sub": TEST_SUBJECT,
+            "aud": TEST_AUDIENCE,
+            "exp": now + timedelta(minutes=5),
+            "iat": now,
+        },
+        private_key,
+        algorithm="RS256",
+        headers={"kid": TEST_KID},
+    )
+    with pytest.raises(AuthenticationFailedError) as exc_info:
+        validator.authenticate(token)
+    assert exc_info.value.reason in {"invalid_token", "invalid_issuer"}
 
 
 def test_missing_subject_is_rejected(private_key, validator: TokenValidator) -> None:

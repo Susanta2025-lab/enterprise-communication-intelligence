@@ -19,8 +19,9 @@ def create_database_engine(database_url: str) -> Engine:
             echo=False,
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
+            isolation_level="SERIALIZABLE",
         )
-        _enable_sqlite_foreign_keys(engine)
+        _configure_sqlite(engine)
         return engine
 
     return create_engine(database_url, echo=False)
@@ -31,11 +32,21 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-def _enable_sqlite_foreign_keys(engine: Engine) -> None:
-    """Enforce foreign keys on every SQLite connection."""
+def _configure_sqlite(engine: Engine) -> None:
+    """Enable foreign keys and real SAVEPOINT transactions on SQLite only.
+
+    pysqlite does not emit BEGIN in a way that makes SAVEPOINT inner
+    transactions roll back. SQLAlchemy's documented serializable recipe is
+    required so unit-of-work rollback and identity savepoints work in tests.
+    """
 
     @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection: object, _connection_record: object) -> None:
+    def _on_connect(dbapi_connection: object, _connection_record: object) -> None:
+        dbapi_connection.isolation_level = None  # type: ignore[attr-defined]
         cursor = dbapi_connection.cursor()  # type: ignore[union-attr]
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+    @event.listens_for(engine, "begin")
+    def _on_begin(connection: object) -> None:
+        connection.exec_driver_sql("BEGIN")  # type: ignore[union-attr]

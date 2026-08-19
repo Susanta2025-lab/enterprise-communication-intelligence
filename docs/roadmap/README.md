@@ -28,6 +28,6 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 8 – Production Hardening | Completed |
 | Phase 9 – Persistence & Multi-Tenant/User-Associated Data | In progress |
 
-Phase 9A — Persistence Foundation is completed. Phases 9B–9D are not started.
+Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phases 9C–9D are not started.
 
 Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation.

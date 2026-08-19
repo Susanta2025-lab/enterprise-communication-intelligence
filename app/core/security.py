@@ -42,9 +42,11 @@ class AuthorizationFailedError(Exception):
 class AuthenticatedPrincipal:
     """Generic authenticated caller derived from a validated access token.
 
-    ``subject`` is the token ``sub`` claim and is not persisted.
+    ``issuer`` and ``subject`` come from verified JWT ``iss`` and ``sub`` claims
+    after signature, issuer, audience, and expiry checks.
     """
 
+    issuer: str
     subject: str
     permissions: frozenset[str]
 
@@ -173,11 +175,16 @@ class TokenValidator:
         except PyJWTError as exc:
             raise AuthenticationFailedError("invalid_token") from exc
 
+        issuer = payload.get("iss")
+        if not isinstance(issuer, str) or not issuer.strip():
+            raise AuthenticationFailedError("invalid_token")
+
         subject = payload.get("sub")
         if not isinstance(subject, str) or not subject.strip():
             raise AuthenticationFailedError("invalid_token")
 
         return AuthenticatedPrincipal(
+            issuer=issuer,
             subject=subject,
             permissions=_extract_permissions(payload),
         )
