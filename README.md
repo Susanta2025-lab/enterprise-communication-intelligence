@@ -60,7 +60,23 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Local Docker Compose with `MockAIProvider`
 * Azure Container Apps with user-assigned Managed Identity and Microsoft Foundry
 * Amazon ECS on Fargate with an ECS Task Role and Amazon Bedrock
+* Azure Container Apps managed HTTPS (`allowInsecure=false`, operator `/32`)
+* AWS ALB architecture verified then removed (domain/ACM required before HTTPS)
 * No cloud credentials baked into the application image
+
+### Authentication
+
+* Provider-independent OIDC JWT validation
+* Permission authorization (`communications:analyze` from `scp` / `scope` / `roles`)
+* Fail-closed production (`APP_ENV=production` requires `AUTH_MODE=oidc`)
+* First live identity provider: Microsoft Entra ID (single-tenant resource application)
+
+### CI/CD
+
+* GitHub Actions CI (automatic tests-only: pip check, ruff, pytest)
+* Manual multi-cloud CD (`workflow_dispatch` target `azure` | `aws` | `both`)
+* GitHub OIDC federation (no long-lived deploy secrets)
+* Build-once SHA and `stable` image tags
 
 ### Observability
 
@@ -107,6 +123,11 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 7C – AWS Observability Integration
 * ✅ Phase 7D – Observability Documentation
 * ✅ Phase 7 – Observability
+* ✅ Phase 8A – Application Authentication
+* ✅ Phase 8B – Production Ingress
+* ✅ Phase 8C – GitHub Actions CI/CD
+* ✅ Phase 8D – Cross-Cloud Verification
+* ✅ Phase 8 – Production Hardening
 
 ---
 
@@ -181,7 +202,16 @@ REST API
 → Amazon Bedrock
 ```
 
-Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application. Azure Container Apps and ECS Fargate hosting are implemented and live-verified. Phase 7 observability uses the same stdout JSON on both clouds: Azure Log Analytics plus native Container Apps metrics, and AWS CloudWatch Logs plus standard ECS metrics. Operator commands live in `deployment/azure/` and `deployment/aws/`. Details: [`docs/cloud/observability.md`](docs/cloud/observability.md).
+Amazon Bedrock is implemented, covered by offline tests, and live-verified through the ECI application in Phase 6. Azure Container Apps and ECS Fargate hosting are implemented and live-verified. Phase 7 observability uses the same stdout JSON on both clouds: Azure Log Analytics plus native Container Apps metrics, and AWS CloudWatch Logs plus standard ECS metrics. Operator commands live in `deployment/azure/` and `deployment/aws/`. Details: [`docs/cloud/observability.md`](docs/cloud/observability.md).
+
+Application users authenticate with a Microsoft Entra ID JWT. Runtime Foundry/Bedrock identities and GitHub deploy identities stay separate. GitHub Actions builds the image once and deploys it through OIDC to Azure Container Apps and Amazon ECS.
+
+```text
+APPLICATION USER          DEPLOYMENT                         INGRESS
+Entra ID → JWT → ECI      GitHub → OIDC                      Azure: HTTPS → ACA → ECI
+ECI → Foundry UAMI        → Azure deploy UAMI → ACR → ACA    AWS current: /32 HTTP (verification-only)
+ECI → Bedrock task role   → AWS deploy IAM role → ECR → ECS  AWS ALB HTTPS: verified, not retained
+```
 
 ---
 
@@ -258,6 +288,8 @@ deployment/
 * ECS Task Role / Task Execution Role (AWS)
 * Azure Log Analytics and native Container Apps metrics
 * Amazon CloudWatch Logs and standard ECS metrics
+* GitHub Actions CI/CD
+* GitHub OIDC federation
 
 **Later**
 
@@ -265,7 +297,6 @@ deployment/
 * AWS Secrets Manager
 * Distributed tracing / OpenTelemetry
 * Custom metrics, dashboards, and alerts
-* CI/CD automation
 
 ---
 
@@ -348,7 +379,13 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 7B – Azure Observability         | ✅ Completed   |
 | ↳ Phase 7C – AWS Observability           | ✅ Completed   |
 | ↳ Phase 7D – Documentation               | ✅ Completed   |
-| Phase 8 – Future Roadmap                 | ⏳ Not Started |
+| Phase 8 – Production Hardening           | ✅ Completed   |
+| ↳ Phase 8A – Application Authentication  | ✅ Completed   |
+| ↳ Phase 8B – Production Ingress          | ✅ Completed   |
+| ↳ Phase 8C – GitHub Actions CI/CD        | ✅ Completed   |
+| ↳ Phase 8D – Cross-Cloud Verification    | ✅ Completed   |
+
+Next: Phase 9 — Persistence & Multi-Tenant/User-Associated Data (not implemented).
 
 ---
 
@@ -372,13 +409,15 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Authentication & authorization for ECI application users
-* Persistent storage
-* Workflow automation
-* Enterprise communication integrations
-* Production-hardened ingress (stable load balancer and TLS termination)
-* CI/CD automation
+* Persistent storage (Phase 9)
+* Enterprise communication integrations / connectors (Phase 10)
+* Workflow automation (Phase 11)
+* AWS persistent HTTPS / custom domain (domain and ACM not configured)
+* AWS real-bearer authorized requests (deferred until TLS)
+* Phase 8B temporary IAM policy cleanup if still attached
 * Distributed tracing, custom metrics, dashboards, alerts, and SLOs
+
+AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only.
 
 ---
 

@@ -1,6 +1,6 @@
 # ECI Platform Architecture Documentation
 
-This directory documents the architecture implemented through **Phase 7 – Observability**. Provider adapters, cloud hosting, and portable structured telemetry are implemented.
+This directory documents the architecture implemented through **Phase 8 – Production Hardening**. Provider adapters, cloud hosting, portable structured telemetry, application-user OIDC, and GitHub OIDC CI/CD are implemented.
 
 ## Contents
 
@@ -24,7 +24,10 @@ Mermaid source files live in [`docs/diagrams/`](../diagrams/README.md):
 - [`observability-application.mmd`](../diagrams/observability-application.mmd) — request_id and structured stdout telemetry
 - [`observability-azure.mmd`](../diagrams/observability-azure.mmd) — Log Analytics and native Container Apps metrics
 - [`observability-aws.mmd`](../diagrams/observability-aws.mmd) — CloudWatch Logs and standard ECS metrics
+- [`identity.mmd`](../diagrams/identity.mmd) — application-user, workload, and deploy identity classes
+- [`cicd.mmd`](../diagrams/cicd.mmd) — GitHub build-once to ACR/ACA and ECR/ECS
+- [`ingress.mmd`](../diagrams/ingress.mmd) — Azure HTTPS live; AWS HTTP verification-only; ALB verified then torn down
 
 ## Scope
 
-This documentation describes what is implemented in the repository as of Phase 7. Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Observability uses the same stdout JSON on both clouds — see [`docs/cloud/`](../cloud/README.md), [`docs/cloud/observability.md`](../cloud/observability.md), and [`docs/roadmap/README.md`](../roadmap/README.md).
+This documentation describes what is implemented in the repository as of Phase 8. Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Application-user authentication is provider-independent OIDC JWT; live Entra is the first IdP. Azure real-bearer requests are verified over managed HTTPS. AWS real-bearer TLS verification is not claimed. Observability uses the same stdout JSON on both clouds — see [`docs/cloud/`](../cloud/README.md), [`docs/cloud/authentication.md`](../cloud/authentication.md), [`docs/cloud/observability.md`](../cloud/observability.md), and [`docs/roadmap/README.md`](../roadmap/README.md).

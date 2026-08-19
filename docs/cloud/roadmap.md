@@ -1,6 +1,6 @@
 # Cloud Roadmap
 
-This is the cloud-integration view of Phase 6. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+This is the cloud-integration view of Phase 6 through Phase 8. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
 
 ## Provider integration
 
@@ -20,11 +20,20 @@ Phase 6C deployment foundation is implemented:
 
 See [Deployment](deployment.md).
 
-GitHub Actions CI (tests only) and manual `workflow_dispatch` CD are implemented. Automatic cloud deployment is not enabled. Azure and AWS GitHub OIDC deploy identities exist; live CD is deferred until application-user OIDC is provisioned.
+## CI/CD
+
+Phase 8 CI/CD is implemented:
+
+- GitHub Actions CI is automatic and tests-only (`contents: read`, no `id-token`)
+- Manual `workflow_dispatch` CD deploys `azure` | `aws` | `both` with one build and SHA + `stable` tags
+- GitHub OIDC federation to Azure UAMI `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`
+- First verified multi-cloud deploy: commit `dd55327`, identical ACR/ECR digest
+
+Automatic (push/tag) cloud deployment is not enabled.
 
 ## Secrets and identity
 
-Cloud AI authentication uses platform identity rather than application-stored static keys. Azure Key Vault and AWS Secrets Manager are not implemented.
+Cloud AI authentication uses platform identity rather than application-stored static keys. Application-user authentication uses provider-independent OIDC JWT. Live authenticated Azure deployment is verified. AWS real bearer is deferred until TLS. Azure Key Vault and AWS Secrets Manager are not implemented.
 
 See [Authentication](authentication.md).
 
@@ -36,4 +45,4 @@ See [Observability](observability.md).
 
 ## Later enterprise deployment
 
-Private networking, AWS domain-gated HTTPS, and live authenticated application deployment remain later work. Phase 6C validated the manual Azure and AWS paths first.
+Phase 8 is complete. Next is Phase 9 — Persistence & Multi-Tenant/User-Associated Data. Do not implement Phase 9 here. Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, and advanced observability remain later work.

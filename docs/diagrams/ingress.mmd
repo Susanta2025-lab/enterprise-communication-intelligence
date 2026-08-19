@@ -1,0 +1,24 @@
+flowchart TD
+    subgraph AzureLive["Azure live"]
+        AzHttps["HTTPS"]
+        ACA["Azure Container Apps"]
+        ECIAzure["ECI"]
+        AzHttps --> ACA
+        ACA --> ECIAzure
+    end
+
+    subgraph AwsCurrent["AWS current verification-only"]
+        OpHttp["operator /32 HTTP"]
+        Task["ECS task"]
+        ECIAws["ECI"]
+        OpHttp --> Task
+        Task --> ECIAws
+    end
+
+    subgraph AwsVerified["AWS verified not retained"]
+        DomainAcm["HTTPS domain ACM"]
+        ALB["ALB"]
+        ECS["ECS Fargate"]
+        DomainAcm --> ALB
+        ALB --> ECS
+    end

@@ -1,14 +1,47 @@
 # Authentication
 
-ECI has three separate identity classes. They must not be mixed.
+ECI has four identity paths. They must not be mixed.
 
-1. **Application-user identity** (`Client → ECI API`) is provider-independent JWT bearer validation. See [API Overview](../api/overview.md). This is not Microsoft Entra Easy Auth, Cognito SDK integration, or a user database. Live issuer registration (`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`) remains pending before the Phase 8A image can be deployed.
+1. **Application user → Microsoft Entra ID → JWT → ECI API.** Provider-independent OIDC JWT validation at the API boundary. The first live identity provider is a single-tenant Microsoft Entra ID resource application. ECI does not use Easy Auth, a Cognito SDK, or a user database. See [API Overview](../api/overview.md) and [ADR-009](../decisions/ADR-009-application-user-authentication.md).
+2. **Azure workload → Microsoft Foundry.** Container Apps user-assigned identity `eci-ca-identity-dev` through `DefaultAzureCredential`.
+3. **AWS workload → Amazon Bedrock.** ECS Task Role `eci-bedrock-task-role-dev` through boto3's standard credential chain.
+4. **GitHub Actions → Azure / AWS deploy identities.** GitHub OIDC federation to Azure user-assigned managed identity `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`. Same display name, different cloud object types. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
 
-2. **Runtime workload identity** (`ECI → Microsoft Foundry / Amazon Bedrock`) uses each cloud's standard workload identity chain. Azure uses user-assigned identity `eci-ca-identity-dev`. AWS uses task role `eci-bedrock-task-role-dev`. The application does not store static cloud keys.
+The rest of this document describes application-user OIDC and cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
 
-3. **Deployment identity** (`GitHub Actions → Azure / AWS`) is GitHub OIDC federation to dedicated deploy identities. Azure uses UAMI `eci-github-deploy-dev`. AWS uses IAM role `eci-github-deploy-dev`. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
+## Application-user authentication
 
-The rest of this document describes cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
+```text
+Client
+→ Microsoft Entra ID
+→ access token (JWT)
+→ ECI TokenValidator
+→ permission communications:analyze
+→ POST /api/v1/communications/analyze
+```
+
+Live Entra configuration is conceptual here (placeholders only; no tenant or client IDs):
+
+- Resource application: `eci-api-auth-dev`
+- `requestedAccessTokenVersion=2`
+- Application ID URI: `api://<ECI_API_CLIENT_ID>`
+- One delegated scope: `communications:analyze` (expected token claim: `scp`)
+
+Runtime settings are identifiers and metadata, not secrets:
+
+```env
+AUTH_MODE=oidc
+OIDC_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
+OIDC_AUDIENCE=<ECI_API_CLIENT_ID>
+OIDC_JWKS_URL=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
+OIDC_REQUIRED_PERMISSION=communications:analyze
+```
+
+A DEV-ONLY public client (`eci-auth-verifier-dev`) exists for interactive verification. It has no client secret. It is retained as test identity infrastructure with only the ECI delegated permission `communications:analyze`. It is not a runtime or deploy identity. Do not store Entra client secrets in ECI Settings, the container image, or GitHub.
+
+`APP_ENV=production` requires `AUTH_MODE=oidc`. Health and readiness remain public. Production OpenAPI routes stay disabled.
+
+Azure authorized inference was verified over Container Apps HTTPS with a real bearer token. Never send a real application-user bearer token over the AWS HTTP verification path. AWS real-bearer authorized inference is deferred until domain/ACM TLS exists.
 
 ## Microsoft Foundry
 
@@ -101,3 +134,4 @@ Key Vault, Secrets Manager, and production secret management are not implemented
 - A user database, password login, or session store for the REST API
 - Storing or caching Entra tokens or AWS credentials in application code
 - Hard-coded AWS profile selection
+- AWS real-bearer authorized requests over TLS (deferred until domain/ACM)

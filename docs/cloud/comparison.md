@@ -44,6 +44,22 @@ The same Docker image was verified locally and deployed to both clouds. Direct F
 
 A production AWS service would normally introduce a stable ingress layer and TLS termination.
 
+## Production hardening (Phase 8)
+
+Application-user OIDC is live on both clouds (`AUTH_MODE=oidc`). Azure accepted a real bearer token over managed HTTPS. AWS missing-token and JWKS fail-closed paths were verified over operator `/32` HTTP. A real bearer token must not be sent over that HTTP path.
+
+GitHub Actions CI is automatic and tests-only. Manual `workflow_dispatch` CD deploys `azure` | `aws` | `both` with one build. GitHub OIDC federates to Azure user-assigned managed identity `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`. Those deploy identities are not the runtime Foundry or Bedrock identities.
+
+| Concern | Azure | AWS |
+|---|---|---|
+| Application-user auth | Entra JWT over HTTPS | Entra JWT configured; real bearer deferred until TLS |
+| Live ingress | Container Apps HTTPS, operator `/32` | operator `/32` HTTP (verification-only) |
+| Production TLS | ACA managed TLS | domain/ACM deferred |
+| Deploy identity | user-assigned managed identity `eci-github-deploy-dev` | IAM role `eci-github-deploy-dev` |
+| Workload identity | user-assigned managed identity `eci-ca-identity-dev` | Task Role `eci-bedrock-task-role-dev` |
+
+See [Authentication](authentication.md), [Deployment](deployment.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), [ADR-010](../decisions/ADR-010-multi-cloud-ingress.md), and [ADR-011](../decisions/ADR-011-github-actions-oidc-cicd.md).
+
 ## Observability comparison (Phase 7)
 
 Application telemetry is the same on both clouds: structlog JSON on stdout, `request_id` / `X-Request-ID`, `duration_ms`, and `error_class`. There is no application telemetry SDK beyond structlog. Tracing and custom metrics are deferred.

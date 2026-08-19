@@ -1,0 +1,20 @@
+flowchart TD
+    Client["Client"]
+    Entra["Microsoft Entra ID"]
+    JWT["OIDC JWT"]
+    ECI["ECI API"]
+    FoundryUAMI["Azure Foundry UAMI"]
+    BedrockRole["AWS Bedrock task role"]
+    GitHub["GitHub Actions"]
+    GHOidc["GitHub OIDC"]
+    AzDeploy["Azure deploy UAMI"]
+    AwsDeploy["AWS deploy IAM role"]
+
+    Client --> Entra
+    Entra --> JWT
+    JWT --> ECI
+    ECI --> FoundryUAMI
+    ECI --> BedrockRole
+    GitHub --> GHOidc
+    GHOidc --> AzDeploy
+    GHOidc --> AwsDeploy

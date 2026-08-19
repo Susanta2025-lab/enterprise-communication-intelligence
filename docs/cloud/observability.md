@@ -211,6 +211,21 @@ Fargate credentials use the ECS container credential provider. They are not EC2 
 
 Not enabled: Container Insights, enhanced Container Insights, ADOT, OpenTelemetry, AWS X-Ray, custom CloudWatch metrics, metric filters, dashboards, alarms, Prometheus, Grafana. Standard ECS service metrics plus CloudWatch Logs are enough at the current service scale.
 
+## Phase 8D request correlation
+
+Phase 8D reused the Phase 7 telemetry contract. No OpenTelemetry, Application Insights, Container Insights, X-Ray, Prometheus, or Grafana was added.
+
+Azure Log Analytics (`eci-law-dev`) retained bounded events for:
+
+- missing-token analyze `401`: `http_request_started`, `authentication_failed`, `http_request_completed`
+- one authorized analyze `200`: `authentication_succeeded`, Foundry requested/completed, `http_request_completed`
+
+Those logs did not contain a JWT, Authorization header, subject, or email. Correlation used server-generated `request_id` / `X-Request-ID`.
+
+AWS CloudWatch Logs (`/ecs/eci-api-dev`) retained matching `http_request_*` and `authentication_failed` events for the controlled HTTP checks. No Bedrock inference events were recorded during Phase 8D. The service returned to `desiredCount=0`.
+
+Use Log Analytics and CloudWatch for historical inspection. Do not treat live Container Apps console streaming as the Phase 8D evidence path.
+
 ## Cross-cloud comparison
 
 | Concern | Shared / Azure / AWS |

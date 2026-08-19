@@ -40,7 +40,7 @@ No manual OpenAPI authoring is required or performed; the schema reflects the cu
 
 ## Authentication Status
 
-Application-user authentication is implemented as provider-independent JWT bearer validation.
+Application-user authentication is implemented as provider-independent JWT bearer validation. Live Microsoft Entra ID is the first identity provider. ECI remains IdP-agnostic in application code. Production clouds use `AUTH_MODE=oidc`.
 
 ```text
 Client

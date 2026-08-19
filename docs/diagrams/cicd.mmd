@@ -1,0 +1,15 @@
+flowchart TD
+    GitHub["GitHub Actions"]
+    Build["Build once"]
+    Artifact["Image artifact SHA + stable"]
+    ACR["Azure Container Registry"]
+    ACA["Azure Container Apps"]
+    ECR["Amazon ECR"]
+    ECS["Amazon ECS"]
+
+    GitHub --> Build
+    Build --> Artifact
+    Artifact --> ACR
+    ACR --> ACA
+    Artifact --> ECR
+    ECR --> ECS

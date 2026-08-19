@@ -33,8 +33,48 @@ The application service and every layer above it depend only on `app.domain.inte
 
 ## Current Implementation Boundary
 
-The system is fully synchronous and has no persistence. When `AUTH_MODE=oidc`, `POST /api/v1/communications/analyze` requires a JWT bearer token; health and readiness remain public. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Foundry and ECI → Bedrock verification is complete, including hosted Container Apps and Fargate paths.
+The system is fully synchronous and has no persistence. When `AUTH_MODE=oidc`, `POST /api/v1/communications/analyze` requires a JWT bearer token; health and readiness remain public. Production clouds use `AUTH_MODE=oidc`. Live Entra is the first identity provider; ECI remains provider-independent. Application-user identity, runtime workload identity (Foundry UAMI / Bedrock task role), and GitHub deploy identity stay separate. Azure real-bearer authorized inference is verified over HTTPS. AWS real-bearer TLS verification is not claimed. When `AI_PROVIDER=mock`, there are no external network calls. When `AI_PROVIDER=microsoft_foundry`, inference goes to Microsoft Foundry using Entra ID. When `AI_PROVIDER=amazon_bedrock`, inference goes to Amazon Bedrock through Converse. Automated tests do not execute those cloud paths. Live ECI → Foundry and ECI → Bedrock workload inference was verified in Phase 6. Phase 8D verified one authorized Foundry call after application-user auth; AWS authorized Bedrock after a real bearer is deferred until TLS.
+
+## Phase 8 identity, deployment, and ingress
+
+```text
+APPLICATION USER
+
+    Microsoft Entra ID
+            |
+          JWT
+            |
+            v
+      ECI REST API
+            |
+ CommunicationAnalysisService
+            |
+        AIProvider
+      /            \
+Microsoft Foundry  Amazon Bedrock
+     UAMI          ECS Task Role
+
+DEPLOYMENT
+
+         GitHub Actions
+           /          \
+        OIDC          OIDC
+         |              |
+ Azure deploy UAMI   AWS deploy IAM role
+         |              |
+        ACR            ECR
+         |              |
+        ACA            ECS
+
+INGRESS
+
+Azure live: HTTPS → Container Apps → ECI
+AWS current: operator /32 HTTP → ECS task → ECI (verification-only)
+AWS verified, not retained: HTTPS / domain / ACM → ALB → ECS
+```
+
+See [`identity.mmd`](../diagrams/identity.mmd), [`cicd.mmd`](../diagrams/cicd.mmd), and [`ingress.mmd`](../diagrams/ingress.mmd).
 
 ## Future Extensibility
 
-Phase 7 observability is implemented: portable structured JSON on stdout, `request_id` / `X-Request-ID` correlation, `duration_ms`, and `error_class`. Azure retains logs in Log Analytics and exposes native Container Apps metrics. AWS retains logs in CloudWatch via awslogs and exposes standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, and alerts remain deferred. Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md), [Observability](../cloud/observability.md), and [`docs/cloud/`](../cloud/README.md).
+Phase 8 identity separation is implemented: application-user OIDC JWT, Azure/AWS workload identity, and GitHub OIDC deploy identities. Phase 7 observability is implemented: portable structured JSON on stdout, `request_id` / `X-Request-ID` correlation, `duration_ms`, and `error_class`. Azure retains logs in Log Analytics and exposes native Container Apps metrics. AWS retains logs in CloudWatch via awslogs and exposes standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, and alerts remain deferred. Additional providers can still be added behind `AIProvider` and the factory without changing the application or API layers. See [Provider Abstraction](provider-abstraction.md), [Observability](../cloud/observability.md), [Authentication](../cloud/authentication.md), and [`docs/cloud/`](../cloud/README.md).

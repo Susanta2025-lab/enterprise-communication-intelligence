@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 6B. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the successful and failure communication-analysis flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. This page also documents the health request flow, which has no dedicated `.mmd` file since it involves no failure branching worth diagramming separately.
+These diagrams describe the request flows implemented as of Phase 8. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the successful and failure communication-analysis flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. This page also documents the health request flow, which has no dedicated `.mmd` file since it involves no failure branching worth diagramming separately.
 
 ## Successful Communication-Analysis Request
 
@@ -87,3 +87,26 @@ sequenceDiagram
 ```
 
 Health and readiness routes never call `CommunicationAnalysisService` or any `AIProvider` — they only read configuration.
+
+## Authenticated Analyze Request (`AUTH_MODE=oidc`)
+
+When `AUTH_MODE=oidc`, analyze requires a bearer token. Missing or invalid tokens return `401`. A valid token with permission `communications:analyze` continues to the service.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Dep as TokenValidator
+    participant Route as FastAPI Route
+    participant Service as CommunicationAnalysisService
+
+    Client->>Dep: POST /api/v1/communications/analyze (no token)
+    Dep-->>Client: 401 Unauthorized
+
+    Client->>Dep: POST /api/v1/communications/analyze<br/>Authorization Bearer JWT
+    Dep->>Dep: validate iss, aud, exp, JWKS
+    Dep->>Dep: require communications:analyze
+    Dep->>Route: AuthenticatedPrincipal
+    Route->>Service: analyze(request)
+    Service-->>Route: CommunicationAnalysisResult
+    Route-->>Client: 200 OK
+```

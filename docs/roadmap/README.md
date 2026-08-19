@@ -11,7 +11,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 5 – REST API](phase-05-rest-api.md)
 - [Phase 6 – Cloud Deployment](phase-06-cloud-deployment.md)
 - [Phase 7 – Observability](phase-07-observability.md)
-- [Phase 8 – Future Roadmap](phase-08-future-roadmap.md)
+- [Phase 8 – Production Hardening](phase-08-future-roadmap.md)
 
 ## Status
 
@@ -24,4 +24,8 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 5 – REST API | Completed |
 | Phase 6 – Cloud Deployment | Completed |
 | Phase 7 – Observability | Completed |
-| Phase 8 – Future Roadmap | In progress |
+| Phase 8 – Production Hardening | Completed |
+
+Next: Phase 9 — Persistence & Multi-Tenant/User-Associated Data. Phase 9 files are not created in this phase.
+
+Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation.

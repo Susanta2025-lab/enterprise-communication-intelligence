@@ -24,10 +24,19 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-006](ADR-006-azure-ai-foundry.md) | Microsoft Foundry Provider | Accepted |
 | [ADR-007](ADR-007-amazon-bedrock.md) | Amazon Bedrock Provider | Accepted |
 | [ADR-008](ADR-008-observability.md) | Portable Structured Observability | Accepted |
+| [ADR-009](ADR-009-application-user-authentication.md) | Application-User Authentication and Authorization | Accepted |
+| [ADR-010](ADR-010-multi-cloud-ingress.md) | Multi-Cloud Production Ingress Strategy | Accepted |
+| [ADR-011](ADR-011-github-actions-oidc-cicd.md) | Secretless GitHub Actions Multi-Cloud CI/CD | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
 ADR-008 records the Phase 7 observability decision: portable structured logs with request correlation, plus native Azure and AWS log retention and platform metrics. Tracing and custom metric infrastructure remain deferred.
+
+ADR-009 records provider-independent OIDC JWT validation and permission `communications:analyze`. Live Entra is the first IdP. Azure real-bearer requests are verified; AWS real bearer is deferred until TLS.
+
+ADR-010 records Azure Container Apps managed HTTPS as live ingress, and AWS ALB as verified then torn down. Direct AWS task HTTP is verification-only.
+
+ADR-011 records automatic tests-only CI and manual multi-cloud CD with GitHub OIDC. First verified deploy is commit `dd55327` with identical ACR and ECR digests.
 
 ## Template
 

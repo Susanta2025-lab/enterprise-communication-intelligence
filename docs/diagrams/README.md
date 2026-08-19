@@ -14,6 +14,9 @@ Mermaid source files for ECI Platform.
 | [`observability-application.mmd`](observability-application.mmd) | Common application telemetry: HTTP → request_id middleware → API → service → provider → structlog JSON → stdout |
 | [`observability-azure.mmd`](observability-azure.mmd) | Azure observability: stdout JSON → Container Apps → Log Analytics, plus native Azure Monitor metrics (min 0 / max 1) |
 | [`observability-aws.mmd`](observability-aws.mmd) | AWS observability: stdout JSON → awslogs → CloudWatch Logs, plus standard AWS/ECS CPU and memory (desiredCount 0 when idle) |
+| [`identity.mmd`](identity.mmd) | Three identity classes: Client → Entra → JWT → ECI; ECI → Foundry UAMI / Bedrock task role; GitHub → OIDC → Azure deploy UAMI / AWS deploy IAM role |
+| [`cicd.mmd`](cicd.mmd) | GitHub Actions build-once → artifact → ACR → Azure Container Apps and ECR → ECS |
+| [`ingress.mmd`](ingress.mmd) | Azure HTTPS → Container Apps → ECI; AWS current operator `/32` HTTP (verification-only); AWS ALB HTTPS verified then torn down |
 
 ## Implemented vs. Placeholder
 
@@ -22,6 +25,8 @@ Mermaid source files for ECI Platform.
 `deployment-azure.mmd` and `deployment-aws.mmd` describe the Phase 6C hosting paths. Direct Fargate public-IP ingress is verification-only. See [`docs/cloud/deployment.md`](../cloud/deployment.md).
 
 `observability-application.mmd`, `observability-azure.mmd`, and `observability-aws.mmd` describe the Phase 7 telemetry paths. See [`docs/cloud/observability.md`](../cloud/observability.md).
+
+`identity.mmd`, `cicd.mmd`, and `ingress.mmd` describe Phase 8 identity, CI/CD, and ingress. Azure HTTPS and GitHub OIDC CD are live. AWS ALB HTTPS is verified-not-retained. AWS real-bearer traffic remains deferred until domain/ACM TLS. See [`docs/cloud/authentication.md`](../cloud/authentication.md) and [`docs/cloud/deployment.md`](../cloud/deployment.md).
 
 ## Embedding Mermaid in Markdown
 
