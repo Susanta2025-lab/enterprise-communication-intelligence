@@ -34,6 +34,7 @@ _SETTINGS_ENV_VARS = (
     "OIDC_AUDIENCE",
     "OIDC_JWKS_URL",
     "OIDC_REQUIRED_PERMISSION",
+    "DATABASE_URL",
 )
 
 _ANALYZE_URL = "/api/v1/communications/analyze"

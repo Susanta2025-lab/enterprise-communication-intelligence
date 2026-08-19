@@ -56,6 +56,7 @@ def client(monkeypatch: pytest.MonkeyPatch, log_events: list[dict]) -> Iterator[
         "OIDC_AUDIENCE",
         "OIDC_JWKS_URL",
         "OIDC_REQUIRED_PERMISSION",
+        "DATABASE_URL",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AI_PROVIDER", "mock")

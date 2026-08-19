@@ -5,7 +5,11 @@ from abc import ABC
 import pytest
 
 from app.domain.enums import PriorityLevel, SourceType
-from app.domain.interfaces import AIProvider
+from app.domain.interfaces import (
+    AIProvider,
+    AnalysisRepository,
+    IdentityRepository,
+)
 from app.domain.models import (
     CommunicationAnalysis,
     CommunicationMessage,
@@ -58,10 +62,22 @@ def test_ai_provider_contract_with_stub() -> None:
     assert result.analysis.priority.level is PriorityLevel.LOW
 
 
+def test_repository_interfaces_are_abstract() -> None:
+    """Persistence ports must not be instantiable without implementations."""
+    assert issubclass(IdentityRepository, ABC)
+    assert issubclass(AnalysisRepository, ABC)
+    with pytest.raises(TypeError):
+        IdentityRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        AnalysisRepository()  # type: ignore[abstract]
+
+
 def test_domain_package_has_no_fastapi_dependency() -> None:
     """Domain modules must remain independent of FastAPI."""
     import app.domain.enums as enums
     import app.domain.interfaces.ai_provider as ai_provider
+    import app.domain.interfaces.analysis_repository as analysis_repository
+    import app.domain.interfaces.identity_repository as identity_repository
     import app.domain.models.analysis as analysis_models
     import app.domain.models.message as message_models
     import app.domain.schemas.analysis as analysis_schemas
@@ -69,10 +85,14 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     for module in (
         enums,
         ai_provider,
+        analysis_repository,
+        identity_repository,
         analysis_models,
         message_models,
         analysis_schemas,
     ):
         module_globals = set(module.__dict__)
         assert "fastapi" not in module_globals
+        assert "sqlalchemy" not in module_globals
         assert not any(name.startswith("fastapi") for name in module_globals)
+        assert not any(name.startswith("sqlalchemy") for name in module_globals)

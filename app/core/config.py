@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from typing import Literal, Self
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,6 +10,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 AppEnvironment = Literal["development", "staging", "production"]
 AuthMode = Literal["disabled", "oidc"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+_PRODUCTION_DATABASE_SCHEME = "postgresql+psycopg"
+_ALLOWED_DATABASE_SCHEMES = frozenset(
+    {
+        "postgresql+psycopg",
+        "sqlite",
+        "sqlite+pysqlite",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -23,6 +33,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     app_name: str = "Enterprise Communication Intelligence Platform"
@@ -42,6 +53,7 @@ class Settings(BaseSettings):
     oidc_audience: str | None = None
     oidc_jwks_url: str | None = None
     oidc_required_permission: str = "communications:analyze"
+    database_url: str | None = None
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -170,6 +182,31 @@ class Settings(BaseSettings):
             raise ValueError("OIDC_JWKS_URL must be an https URL.")
         return value
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: object) -> object:
+        """Treat blank database URLs as unset. Never invent a local file path."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: str | None) -> str | None:
+        """Accept only supported database URL forms. Do not connect."""
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        scheme = parsed.scheme.lower()
+        if not scheme or scheme not in _ALLOWED_DATABASE_SCHEMES:
+            raise ValueError("DATABASE_URL scheme is not supported.")
+        if scheme == _PRODUCTION_DATABASE_SCHEME and not parsed.netloc:
+            raise ValueError("DATABASE_URL is malformed.")
+        if scheme.startswith("sqlite") and not parsed.path:
+            raise ValueError("DATABASE_URL is malformed.")
+        return value
+
     @model_validator(mode="after")
     def validate_foundry_settings_when_selected(self) -> Self:
         """Require Foundry settings only when that provider is selected."""
@@ -223,6 +260,22 @@ class Settings(BaseSettings):
             raise ValueError(f"{names} must be set when AUTH_MODE=oidc.")
         if not self.oidc_required_permission:
             raise ValueError("OIDC_REQUIRED_PERMISSION must be set when AUTH_MODE=oidc.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_database_settings(self) -> Self:
+        """Fail closed in production: PostgreSQL via psycopg is required."""
+        if self.app_env != "production":
+            return self
+
+        if not self.database_url:
+            raise ValueError("DATABASE_URL must be set when APP_ENV=production.")
+
+        scheme = urlparse(self.database_url).scheme.lower()
+        if scheme.startswith("sqlite"):
+            raise ValueError("DATABASE_URL must use postgresql+psycopg when APP_ENV=production.")
+        if scheme != _PRODUCTION_DATABASE_SCHEME:
+            raise ValueError("DATABASE_URL must use postgresql+psycopg when APP_ENV=production.")
         return self
 
 

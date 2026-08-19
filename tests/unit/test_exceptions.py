@@ -3,6 +3,7 @@
 from app.core.exceptions import (
     ConfigurationError,
     ECIPlatformError,
+    PersistenceError,
     ServiceUnavailableError,
 )
 
@@ -11,6 +12,7 @@ def test_exception_hierarchy() -> None:
     """Application exceptions should share a common base type."""
     assert issubclass(ConfigurationError, ECIPlatformError)
     assert issubclass(ServiceUnavailableError, ECIPlatformError)
+    assert issubclass(PersistenceError, ECIPlatformError)
 
 
 def test_exception_message_is_preserved() -> None:

@@ -12,6 +12,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 6 – Cloud Deployment](phase-06-cloud-deployment.md)
 - [Phase 7 – Observability](phase-07-observability.md)
 - [Phase 8 – Production Hardening](phase-08-future-roadmap.md)
+- [Phase 9 – Persistence & Multi-Tenant/User-Associated Data](phase-09-persistence.md)
 
 ## Status
 
@@ -25,7 +26,8 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 6 – Cloud Deployment | Completed |
 | Phase 7 – Observability | Completed |
 | Phase 8 – Production Hardening | Completed |
+| Phase 9 – Persistence & Multi-Tenant/User-Associated Data | In progress |
 
-Next: Phase 9 — Persistence & Multi-Tenant/User-Associated Data. Phase 9 files are not created in this phase.
+Phase 9A — Persistence Foundation is completed. Phases 9B–9D are not started.
 
 Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation.

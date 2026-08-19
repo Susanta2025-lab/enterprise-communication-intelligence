@@ -15,3 +15,7 @@ class ConfigurationError(ECIPlatformError):
 
 class ServiceUnavailableError(ECIPlatformError):
     """Raised when a required service dependency is unavailable."""
+
+
+class PersistenceError(ECIPlatformError):
+    """Raised when a persistence operation fails without a more specific type."""

@@ -10,6 +10,9 @@ azure-identity
 openai
 boto3[crt]
 PyJWT[crypto]
+sqlalchemy
+alembic
+psycopg[binary]
 
 pytest
 pytest-asyncio

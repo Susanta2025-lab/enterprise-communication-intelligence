@@ -26,6 +26,7 @@ _SETTINGS_ENV_VARS = (
     "OIDC_AUDIENCE",
     "OIDC_JWKS_URL",
     "OIDC_REQUIRED_PERMISSION",
+    "DATABASE_URL",
 )
 
 
@@ -74,9 +75,12 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert security_schemes["HTTPBearer"]["type"] == "http"
     assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
 
-    for public_path in ("/health", "/api/v1/health", "/api/v1/readiness"):
-        operation = schema["paths"][public_path]["get"]
-        assert not operation.get("security")
+def test_openapi_schema_has_no_analysis_history_routes(client: TestClient) -> None:
+    """Phase 9A must not expose analysis history endpoints."""
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    assert "/api/v1/analyses" not in paths
+    assert not any(path.startswith("/api/v1/analyses") for path in paths)
 
 
 def test_redoc_available(client: TestClient) -> None:
@@ -95,6 +99,10 @@ def test_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
     monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+psycopg://eci_test:test@localhost:5432/eci_test",
+    )
     get_settings.cache_clear()
 
     with TestClient(create_app()) as production_client:

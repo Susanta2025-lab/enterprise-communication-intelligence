@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
 
+_TEST_POSTGRES_URL = "postgresql+psycopg://eci_test:test@localhost:5432/eci_test"
 _SETTINGS_ENV_VARS = (
     "APP_NAME",
     "APP_VERSION",
@@ -25,6 +26,7 @@ _SETTINGS_ENV_VARS = (
     "OIDC_AUDIENCE",
     "OIDC_JWKS_URL",
     "OIDC_REQUIRED_PERMISSION",
+    "DATABASE_URL",
 )
 
 
@@ -57,6 +59,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.oidc_audience is None
     assert settings.oidc_jwks_url is None
     assert settings.oidc_required_permission == "communications:analyze"
+    assert settings.database_url is None
 
 
 def test_get_settings_returns_cached_instance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -395,6 +398,7 @@ def test_production_with_auth_disabled_is_rejected(
     """Production must not start with AUTH_MODE=disabled."""
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("AUTH_MODE", "disabled")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
 
@@ -405,6 +409,7 @@ def test_production_with_incomplete_oidc_config_is_rejected(
     """Production OIDC mode still requires issuer, audience, and JWKS URL."""
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
     monkeypatch.delenv("OIDC_ISSUER", raising=False)
     monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
     monkeypatch.delenv("OIDC_JWKS_URL", raising=False)
@@ -418,9 +423,11 @@ def test_production_oidc_with_complete_configuration_is_allowed(
     """APP_ENV=production is valid when AUTH_MODE=oidc and OIDC settings are complete."""
     monkeypatch.setenv("APP_ENV", "PRODUCTION")
     _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
     settings = Settings(_env_file=None)
     assert settings.app_env == "production"
     assert settings.auth_mode == "oidc"
+    assert settings.database_url == _TEST_POSTGRES_URL
 
 
 def test_blank_oidc_settings_do_not_satisfy_oidc_mode(
@@ -457,3 +464,94 @@ def test_invalid_auth_mode_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AUTH_MODE", "entra")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_development_may_omit_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Development startup does not require DATABASE_URL and creates no DB file."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.database_url is None
+
+
+def test_development_explicit_sqlite_url_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit SQLite URL is allowed outside production."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    settings = Settings(_env_file=None)
+    assert settings.database_url == "sqlite+pysqlite:///:memory:"
+
+
+def test_production_missing_database_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production must not start without DATABASE_URL."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    assert "DATABASE_URL" in str(exc_info.value)
+
+
+def test_production_sqlite_url_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production must reject SQLite database URLs."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    assert "DATABASE_URL" in str(exc_info.value)
+
+
+def test_production_postgres_psycopg_url_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production accepts a postgresql+psycopg URL without connecting."""
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    settings = Settings(_env_file=None)
+    assert settings.database_url == _TEST_POSTGRES_URL
+
+
+def test_unsupported_database_url_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unsupported schemes are rejected in any environment."""
+    monkeypatch.setenv("DATABASE_URL", "mysql://eci_test:test@localhost:3306/eci_test")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://eci_test:test@localhost:5432/eci_test")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_malformed_database_url_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Malformed DATABASE_URL values are rejected without connecting."""
+    monkeypatch.setenv("DATABASE_URL", "not-a-url")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_blank_database_url_is_treated_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Blank DATABASE_URL should be equivalent to omitting it."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "   ")
+    settings = Settings(_env_file=None)
+    assert settings.database_url is None
+
+
+def test_database_url_validation_error_does_not_include_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rejected DATABASE_URL values must not echo credentials in ValidationError."""
+    secret = "eci-db-password-sentinel"
+    monkeypatch.setenv("DATABASE_URL", f"mysql://eci:{secret}@localhost:3306/eci")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    assert "DATABASE_URL" in str(exc_info.value)
+    assert secret not in str(exc_info.value)
