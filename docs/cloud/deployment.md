@@ -126,6 +126,8 @@ DefaultAzureCredential
 → Microsoft Foundry
 ```
 
+GitHub Actions Azure deploy identity `eci-github-deploy-dev` is a separate UAMI. It has AcrPush and ACR Reader on `eciacrdev6c`, and Container Apps Contributor on `eci-api-dev` only. It does not have Foundry User.
+
 AWS:
 
 ```text
@@ -137,9 +139,66 @@ boto3 standard credential chain
 
 AWS Task Execution Role is not the application identity. It only pulls images and writes logs. The application identity is the Task Role.
 
+GitHub Actions AWS deploy identity `eci-github-deploy-dev` is a separate IAM role. It must not be `eci-developer`, `eci-bedrock-task-role-dev`, or `eci-ecs-execution-role-dev`.
+
 Fargate credentials are not EC2 instance metadata.
 
 Neither cloud path stores static cloud credentials in the image or in container configuration.
+
+## GitHub Actions
+
+Workflows:
+
+- `.github/workflows/ci.yml` — pull_request and push to `master`; Python 3.12; `pip check`, `ruff`, `pytest`; `contents: read` only
+- `.github/workflows/deploy.yml` — `workflow_dispatch` with target `azure` | `aws` | `both`; build once; SHA and `stable` tags; concurrency group `eci-dev-deploy`
+
+GitHub Environments:
+
+| Environment | OIDC subject | Deploy identity |
+|---|---|---|
+| `azure` | `repo:Susanta2025-lab@238117232/enterprise-communication-intelligence@1320232309:environment:azure` | Azure UAMI `eci-github-deploy-dev` |
+| `aws` | `repo:Susanta2025-lab@238117232/enterprise-communication-intelligence@1320232309:environment:aws` | IAM role `eci-github-deploy-dev` |
+
+Required non-secret environment variables (no passwords or access keys):
+
+Azure environment: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` (`rg-eci-deploy-dev`), `AZURE_ACR_NAME` (`eciacrdev6c`), `AZURE_CONTAINER_APP_NAME` (`eci-api-dev`)
+
+AWS environment: `AWS_REGION` (`eu-south-2`), `AWS_ROLE_ARN`, `AWS_ECR_REPOSITORY` (`eci-api-dev`), `AWS_ECS_CLUSTER` (`eci-cluster-dev`), `AWS_ECS_SERVICE` (`eci-api-dev`), `AWS_CONTAINER_NAME` (`eci-api`)
+
+`AZURE_CLIENT_ID` is the client ID of `eci-github-deploy-dev`. `AWS_ROLE_ARN` is the ARN of IAM role `eci-github-deploy-dev`.
+
+GitHub Environments `azure` and `aws` exist with the non-secret identifier variables listed above. Do not store Azure client secrets or AWS access keys in GitHub.
+
+Do not run Deploy until live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` are configured. Current runtime image remains `phase7a-5f4f5f8`.
+
+### AWS GitHub OIDC (created)
+
+An IAM administrator created the GitHub OIDC provider and role `eci-github-deploy-dev`. `eci-developer` still cannot inspect those IAM objects (`iam:GetOpenIDConnectProvider`, `iam:GetRole`, `iam:GetRolePolicy` denied). Operator-attested trust:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:Susanta2025-lab@238117232/enterprise-communication-intelligence@1320232309:environment:aws"
+        }
+      }
+    }
+  ]
+}
+```
+
+Intended inline policy `ECIPhase8CDeploymentPolicy`: ECR authorization token (`Resource=*`, unavoidable); ECR push/read on repository `eci-api-dev`; ECS describe/update on `eci-cluster-dev` / `eci-api-dev`; `ecs:RegisterTaskDefinition` and `ecs:DescribeTaskDefinition`; `iam:PassRole` only for `eci-ecs-execution-role-dev` and `eci-bedrock-task-role-dev` with `iam:PassedToService=ecs-tasks.amazonaws.com`. Do not grant `bedrock:InvokeModel`, `AdministratorAccess`, or IAM role-creation APIs.
+
+GitHub Environment `aws` variable `AWS_ROLE_ARN` points at that role. Future CD describes the current task definition, strips response-only fields, and registers a new revision with only the application image changed.
 
 ## Security (verified)
 
@@ -179,7 +238,7 @@ See [Observability](observability.md).
 
 ## CI/CD
 
-CI/CD automation is intentionally deferred until the manually validated Azure and AWS deployment paths are stable. GitHub Actions is not implemented.
+See [GitHub Actions](#github-actions).
 
 ## Not implemented
 
@@ -187,6 +246,7 @@ CI/CD automation is intentionally deferred until the manually validated Azure an
 - Azure Key Vault / AWS Secrets Manager
 - Azure Monitor / Amazon CloudWatch tracing, dashboards, and custom metrics (native log retention and platform metrics are in Phase 7)
 - production networking beyond operator-restricted verification ingress
-- CI/CD deployment pipelines
+- automatic (push/tag) cloud deployment
+- live application-user OIDC issuer/audience/JWKS (required before CD in Phase 8D)
 
 See [Cloud Roadmap](roadmap.md), [Authentication](authentication.md), and [Provider comparison](comparison.md).

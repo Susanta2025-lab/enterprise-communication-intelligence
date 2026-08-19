@@ -20,7 +20,7 @@ Phase 6C deployment foundation is implemented:
 
 See [Deployment](deployment.md).
 
-CI/CD automation is intentionally deferred until the manually validated Azure and AWS deployment paths are stable.
+GitHub Actions CI (tests only) and manual `workflow_dispatch` CD are implemented. Automatic cloud deployment is not enabled. Azure and AWS GitHub OIDC deploy identities exist; live CD is deferred until application-user OIDC is provisioned.
 
 ## Secrets and identity
 
@@ -36,4 +36,4 @@ See [Observability](observability.md).
 
 ## Later enterprise deployment
 
-Production-hardened ingress, private networking, and CI/CD remain later work. Phase 6C validated the manual Azure and AWS paths first.
+Private networking, AWS domain-gated HTTPS, and live authenticated application deployment remain later work. Phase 6C validated the manual Azure and AWS paths first.

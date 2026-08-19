@@ -1,12 +1,14 @@
 # Authentication
 
-ECI has two separate identity concerns.
+ECI has three separate identity classes. They must not be mixed.
 
-**Application-user authentication** (`Client → ECI API`) is implemented as provider-independent JWT bearer validation. See [API Overview](../api/overview.md). This is not Microsoft Entra Easy Auth, Cognito SDK integration, or a user database.
+1. **Application-user identity** (`Client → ECI API`) is provider-independent JWT bearer validation. See [API Overview](../api/overview.md). This is not Microsoft Entra Easy Auth, Cognito SDK integration, or a user database. Live issuer registration (`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`) remains pending before the Phase 8A image can be deployed.
 
-**Cloud/provider authentication** (`ECI → Microsoft Foundry / Amazon Bedrock`) uses each cloud's standard workload identity chain. The application does not store static cloud keys.
+2. **Runtime workload identity** (`ECI → Microsoft Foundry / Amazon Bedrock`) uses each cloud's standard workload identity chain. Azure uses user-assigned identity `eci-ca-identity-dev`. AWS uses task role `eci-bedrock-task-role-dev`. The application does not store static cloud keys.
 
-The rest of this document describes cloud/provider authentication only.
+3. **Deployment identity** (`GitHub Actions → Azure / AWS`) is GitHub OIDC federation to dedicated deploy identities. Azure uses UAMI `eci-github-deploy-dev`. AWS uses IAM role `eci-github-deploy-dev`. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
+
+The rest of this document describes cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
 
 ## Microsoft Foundry
 

@@ -1,0 +1,186 @@
+# Manual multi-cloud deploy for ECI.
+#
+# Do not run until application-user OIDC (OIDC_ISSUER, OIDC_AUDIENCE,
+# OIDC_JWKS_URL) is provisioned on the target runtime. Phase 8A fail-closed
+# authentication will refuse production startup without those values.
+#
+# Build-once: a single GitHub-hosted job builds the repository Dockerfile,
+# saves the image, and later jobs load that same artifact. Azure and AWS
+# therefore receive identical image content when target=both.
+#
+# AWS CD describes the live task definition, strips DescribeTaskDefinition
+# response-only fields, and changes only the container image so CPU, memory,
+# environment, task/execution roles, logging, and port mappings are preserved.
+#
+# Trigger: workflow_dispatch only. No push/PR/tag deployment.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Cloud deployment target
+        required: true
+        type: choice
+        options:
+          - azure
+          - aws
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eci-dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record immutable image tag
+        id: meta
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build application image
+        run: docker build -t "eci-api:${{ steps.meta.outputs.short_sha }}" .
+
+      - name: Save image artifact
+        run: docker save "eci-api:${{ steps.meta.outputs.short_sha }}" | gzip > eci-api.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eci-api-image
+          path: eci-api.tar.gz
+          retention-days: 1
+
+  azure:
+    name: Azure ACR and Container Apps
+    needs: build
+    if: ${{ inputs.target == 'azure' || inputs.target == 'both' }}
+    runs-on: ubuntu-latest
+    environment: azure
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+      ACR_IMAGE: ${{ vars.AZURE_ACR_NAME }}.azurecr.io/eci-api
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eci-api-image
+
+      - name: Load image
+        run: gzip -dc eci-api.tar.gz | docker load
+
+      - name: Azure OIDC login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name "${{ vars.AZURE_ACR_NAME }}"
+
+      - name: Tag and push SHA and stable
+        run: |
+          docker tag "eci-api:${SHORT_SHA}" "${ACR_IMAGE}:${SHORT_SHA}"
+          docker tag "eci-api:${SHORT_SHA}" "${ACR_IMAGE}:stable"
+          docker push "${ACR_IMAGE}:${SHORT_SHA}"
+          docker push "${ACR_IMAGE}:stable"
+
+      - name: Update Container App image
+        run: |
+          az containerapp update \
+            --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "${ACR_IMAGE}:${SHORT_SHA}"
+
+  aws:
+    name: AWS ECR and ECS
+    needs: build
+    if: ${{ inputs.target == 'aws' || inputs.target == 'both' }}
+    runs-on: ubuntu-latest
+    environment: aws
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eci-api-image
+
+      - name: Load image
+        run: gzip -dc eci-api.tar.gz | docker load
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Amazon ECR login
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push SHA and stable
+        env:
+          ECR_IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_ECR_REPOSITORY }}
+        run: |
+          docker tag "eci-api:${SHORT_SHA}" "${ECR_IMAGE}:${SHORT_SHA}"
+          docker tag "eci-api:${SHORT_SHA}" "${ECR_IMAGE}:stable"
+          docker push "${ECR_IMAGE}:${SHORT_SHA}"
+          docker push "${ECR_IMAGE}:stable"
+
+      - name: Fetch current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ vars.AWS_ECS_SERVICE }}" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      - name: Strip response-only task-definition fields
+        run: |
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy,
+            .deregisteredAt
+          )' task-definition.json > task-definition.clean.json
+          mv task-definition.clean.json task-definition.json
+
+      - name: Render task definition with new image
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ vars.AWS_CONTAINER_NAME }}
+          image: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_ECR_REPOSITORY }}:${{ env.SHORT_SHA }}
+
+      - name: Register revision and update ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ vars.AWS_ECS_SERVICE }}
+          cluster: ${{ vars.AWS_ECS_CLUSTER }}
+          wait-for-service-stability: true
