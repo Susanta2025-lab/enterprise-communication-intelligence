@@ -18,17 +18,17 @@ Phase 10 is **In progress**.
 - **10A is Completed:** domain connector contract, connector-neutral errors, ingestion service, offline fake adapter, unit and boundary tests. No API, OAuth, or vendor SDKs.
 - **10B is Completed:** `connector_accounts` persistence, user ownership isolation, opaque `credential_ref`, `ConnectorAccountService`, Alembic revision `10b0001`, SQLite and PostgreSQL tests. No OAuth, token storage, Gmail, Microsoft Graph, or connector API routes.
 - **10C is Completed:** mocked/offline tests plus a controlled local live verification passed. The repository still contains only the Gmail API v1 REST adapter, MIME normalization, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Gmail SDK, or connector HTTP routes were added to ECI. The live mailbox check was a separate local verification, not GitHub Actions.
-- **10D is pending.**
+- **10D is focused review complete / commit pending:** mocked/offline Microsoft Graph REST adapter, JSON normalization, nextLink validation, mocked HTTP tests, and a mocked ingestion-boundary test. No live Graph call, Microsoft login, Entra app registration, OAuth implementation, token persistence, Graph SDK, or connector HTTP routes were added to ECI.
 - **10E is pending.**
 
-Phase 10 overall remains in progress. Phase 10D (Microsoft Graph Read-Only Adapter) may now begin; it is not implemented in this checkpoint.
+Phase 10 overall remains in progress. Phase 10D is not fully completed until commit, push, CI, and any separately approved live verification checkpoint are done.
 
 ## Deliverables
 
 - [x] Phase 10A — Connector Architecture & Domain Contracts (completed)
 - [x] Phase 10B — Connector Accounts & Credential References (completed)
 - [x] Phase 10C — Gmail Read-Only Adapter (mocked/offline tests + controlled local live verification passed)
-- [ ] Phase 10D — Microsoft Graph Read-Only Adapter (pending)
+- [x] Phase 10D — Microsoft Graph Read-Only Adapter (focused review complete / commit pending)
 - [ ] Phase 10E — pending
 
 ## Phase 10A Architecture
@@ -316,6 +316,103 @@ Phase 10C implementation commit:
 
 The controlled local live verification did not run in GitHub Actions. It was a separate local verification. CI proves the mocked/offline suite for that commit; it does not prove the live mailbox check.
 
-## Phase 10D Readiness
+## Phase 10D Architecture
 
-Phase 10D may now begin: Microsoft Graph Read-Only Adapter. It should remain a sibling infrastructure adapter implementing the unchanged `CommunicationConnector` contract. Phase 10D is not implemented in this documentation checkpoint.
+```text
+Microsoft Graph REST v1.0
+        ↓
+MicrosoftGraphCommunicationConnector (infrastructure.connectors.microsoft_graph)
+        ↓
+CommunicationMessage
+        ↓
+CommunicationIngestionService
+        ↓
+CommunicationAnalysisWorkflowService (existing)
+```
+
+- `MicrosoftGraphCommunicationConnector` is a sibling of `GmailCommunicationConnector`. It implements the unchanged `CommunicationConnector` contract: `provider`, `list_messages(ConnectorMessageQuery) -> MessagePage`, `fetch_message(provider_message_id) -> CommunicationMessage`.
+- Connector provider identity is `microsoft_graph`. Normalized messages still use `SourceType.EMAIL`. There is no `SourceType.OUTLOOK`, `SourceType.GRAPH`, or `SourceType.MICROSOFT`.
+- Direct REST against `https://graph.microsoft.com/v1.0` with an injected `httpx.Client`. No Microsoft Graph SDK, MSAL, or Azure Identity inside this adapter.
+- The caller owns client lifecycle. Construction makes no network call.
+- Access tokens are supplied in memory by `Callable[[], str]` (`AccessTokenProvider`). The adapter does not implement OAuth, refresh, PKCE, callbacks, secret-store lookup, or `credential_ref` resolution.
+- 10B remains compatible: `provider="microsoft_graph"` plus opaque `external_account_id` and `credential_ref` can later compose with a credential resolver without schema changes. 10D does not call `ConnectorAccountService`.
+- Existing Phase 8 Entra apps (`eci-api-auth-dev`, `eci-auth-verifier-dev`, `eci-github-deploy-dev`, runtime managed identities) are not reused for Graph mailbox OAuth. A future live Graph client registration is out of scope for 10D.
+
+### Future authorization context (not implemented)
+
+Intended delegated Microsoft Graph permission for a later live mailbox checkpoint:
+
+- `Mail.Read` — required because ECI analyzes message bodies.
+- `Mail.ReadBasic` is insufficient: it excludes `body` / `bodyPreview` / attachments.
+
+10D does not request consent, create an Entra app registration, or claim that a tenant will permit user self-consent. Tenant consent policies may differ. `Mail.ReadWrite`, `Mail.Send`, `Mail.ReadWrite.Shared`, and application `Mail.Read` are not in scope.
+
+### List and fetch
+
+- List: `GET /v1.0/me/messages` with `$top=query.limit` and `$select=id`. No `$filter`, `$orderby`, `$search`, folder, read-state, sender, or date filtering.
+- The mailbox is the signed-in user (`/me`). Shared and `/users/{id}` mailboxes are out of scope.
+- Graph collection pages return id stubs. Because `MessagePage.items` is `list[CommunicationMessage]`, list performs 1 collection request plus N sequential `GET /me/messages/{id}` fetches. This N+1 cost is accepted for the bounded Phase 10 MVP (`limit` already max 100).
+- One `list_messages` call returns exactly one Graph page. The adapter does not follow `@odata.nextLink` automatically.
+- Fetch: `GET /v1.0/me/messages/{id}` with `$select` limited to `id`, `conversationId`, `subject`, `body`, `from`, `sender`, `toRecipients`, `ccRecipients`, `bccRecipients`, `sentDateTime`, `receivedDateTime`, `categories`. Provider message id is quoted into the path segment so a malicious id cannot change scheme, host, or query target. Redirects are not followed.
+- Fetch sends `Prefer: outlook.body-content-type="text"` so Graph can return `body.contentType=text`.
+- Individual fetch failure fails the list operation. There is no retry, backoff, batching, or concurrent fan-out.
+
+### Pagination
+
+- Graph `@odata.nextLink` is copied unchanged to `MessagePage.next_cursor`. The domain cursor remains opaque.
+- A subsequent `ConnectorMessageQuery(cursor=next_link)` GETs that complete URL. `$top` / `$select` / `query.limit` are not rewritten onto the continuation. `$skip` and `$skiptoken` are not parsed or incremented.
+- Because the bearer token is attached to every request, a cursor is validated before HTTP and before token resolution. Accepted nextLinks must be `https`, host `graph.microsoft.com`, no userinfo, no unexpected port, no fragment, and path `/v1.0/me/messages` (optional trailing slash). Other hosts, `http`, `/users/...`, `/me/drive`, `/beta`, relative URLs, and scheme-relative URLs become `ConnectorInvalidCursorError` with zero HTTP calls and zero token-provider calls.
+- Hostname comparison is case-insensitive, so `https://GRAPH.MICROSOFT.COM/v1.0/me/messages` is accepted. `urlparse`/`httpx` may emit the canonical lowercase host on the request.
+- Port `443` is accepted in addition to the omitted default HTTPS port. `httpx` may omit `:443` from the request URL. Other ports are rejected. A trailing-dot hostname (`graph.microsoft.com.`) is rejected.
+- Path comparison uses the parsed path without decoding `%2F`/`%2e` or resolving `..`. Encoded separators, `..` segments, and `/v1.0/me/messages/anything` are rejected. The original cursor string is then sent unchanged so the query remains opaque (percent encoding and parameter order are not rewritten by the adapter).
+- The full nextLink is not logged, persisted, or included in exception text.
+
+### Normalization
+
+- Graph JSON is normalized directly. `GET /me/messages/{id}/$value` (MIME) is not used.
+- Text `body.content` maps to `CommunicationMessage.body`. HTML `contentType` is converted with the existing stdlib `html_to_plain_text` helper. `contentType` comparison is case-insensitive for `text` and `html` only; unknown values remain a content error. Script/style content is dropped. `CommunicationMessage.body` never receives raw HTML. Empty visible text is `ConnectorMessageContentError`.
+- `bodyPreview` is never used as a body fallback. It is partial and must not be analyzed.
+- Sender prefers Graph `from.emailAddress.address`. When `from` is missing or unusable, `sender.emailAddress.address` is a narrow fallback for delegate/send-as scenarios. Display names are ignored. Neither usable address is a content error.
+- Recipients combine `toRecipients`, then `ccRecipients`, then `bccRecipients`. Display names are ignored. Blank/malformed addresses are skipped. Duplicates are dropped, first-seen order preserved. An empty recipient list is valid.
+- Blank/whitespace/missing `subject` is `None`. No synthetic `(no subject)`. Non-string subject is treated as missing (`None`).
+- `sentDateTime` → `sent_at`, `receivedDateTime` → `received_at`. ISO-8601 values including `Z` and explicit offsets become timezone-aware UTC. Naive values are interpreted as UTC, not local time. Missing/malformed timestamps are `None`. Current time is never invented.
+- `CommunicationMessage.message_id` and `MessageMetadata.source_id` are the Graph message resource `id`, not `internetMessageId`. `thread_id` is `conversationId` when present.
+- Graph `categories` map to existing `MessageMetadata.labels` when they are non-empty strings. Malformed entries are skipped.
+- Attachments are ignored: they are not selected, downloaded, or parsed.
+
+### Errors, logging, and privacy
+
+- 401 → `ConnectorAuthenticationError`
+- 403 → `ConnectorPermissionError`
+- 404 on fetch → `ConnectorMessageNotFoundError`. List 404, including continuation 404, is `ConnectorUnavailableError`, not message-not-found.
+- 429 → `ConnectorRateLimitError`. No retry, sleep, or `Retry-After` handling.
+- 5xx, timeout, and transport errors → `ConnectorUnavailableError`
+- List `400` with a supplied cursor → `ConnectorInvalidCursorError`. Locally rejected unsafe cursors also use this error before HTTP. List `400` without a cursor is a generic `ConnectorError`.
+- Unexpected 3xx, including `302` to another host, is a generic `ConnectorError`. Redirects are not followed, so the bearer token is not forwarded.
+- Malformed Graph JSON bodies / missing sender / empty body / unknown `contentType` → `ConnectorMessageContentError`
+- Malformed list envelopes or non-JSON success responses → `ConnectorUnavailableError`
+- Graph `error.message`, `innerError`, and request ids are not copied into exceptions or logs.
+- No retry for 401/403/429/5xx/timeout.
+- Adapter logging is omitted; ingestion already emits `connector_fetch_started|completed|failed` with bounded fields (`provider`, `duration_ms`, `result_count`, `error_class`). Tokens, Authorization, subjects, senders, bodies, message ids, conversation ids, categories, Graph JSON, and nextLinks are not logged.
+- Raw Graph JSON exists only in memory during the request, is normalized immediately, and is not written to filesystem, database, or cache.
+
+### Out of scope for 10D implementation
+
+The 10D adapter in ECI does not include:
+
+- Live Microsoft Graph calls, Microsoft/Entra login, or real mailbox verification
+- Entra app registration, tenant consent, or OAuth lifecycle (authorization code, PKCE, refresh, device code, client credentials, On-Behalf-Of)
+- Token columns, Settings tokens, `.env` tokens, schema/migrations
+- Connector-account composition or credential resolver
+- Shared/delegated mailboxes, application permissions, `/users/{id}`
+- Attachments, MIME `$value`, send, modify, delete
+- Webhooks, delta query, background sync, raw-message persistence
+- Connector HTTP/API routes, connector factory, Graph SDK, MSAL
+
+Phase 10D is mocked/offline only. Live Microsoft Graph verification is a separate explicit checkpoint after commit, push, and green CI. Do not mark Phase 10D completed until that remaining checkpoint path is decided.
+
+ADR-015 and credential-store ADRs remain deferred until Phase 10E or a focused connector architecture review.
+
+## Phase 10E Readiness
+
+Phase 10E (final verification/documentation) remains pending until Phase 10D commit, push, and CI are complete. Live Microsoft Graph verification is not part of this implementation checkpoint.
