@@ -60,6 +60,17 @@ def test_session_is_closed_after_context(session_factory: sessionmaker) -> None:
     assert session.get_transaction() is None
 
 
+def test_repositories_share_the_same_session(session_factory: sessionmaker) -> None:
+    """Identity, analysis, and connector account repositories share one Session."""
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        identity_session = uow.identity_repository._session  # type: ignore[attr-defined]
+        analysis_session = uow.analysis_repository._session  # type: ignore[attr-defined]
+        connector_session = uow.connector_accounts._session  # type: ignore[attr-defined]
+        assert identity_session is analysis_session
+        assert analysis_session is connector_session
+        assert identity_session is uow._session
+
+
 def test_commit_failure_becomes_persistence_error(session_factory: sessionmaker) -> None:
     """Driver commit failures must become PersistenceError without leaking SQL."""
     sentinel = "password=supersecret host=db.internal.sqlalchemy-test"

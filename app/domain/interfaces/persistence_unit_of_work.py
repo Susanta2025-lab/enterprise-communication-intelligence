@@ -4,11 +4,12 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 
 from app.domain.interfaces.analysis_repository import AnalysisRepository
+from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 
 
 class PersistenceUnitOfWork(ABC):
-    """Caller-owned transaction boundary around identity and analysis repositories.
+    """Caller-owned transaction boundary around persistence repositories.
 
     Implementations create one session per unit of work. Repositories do not commit.
     """
@@ -22,6 +23,11 @@ class PersistenceUnitOfWork(ABC):
     @abstractmethod
     def analysis_repository(self) -> AnalysisRepository:
         """Analysis history repository bound to this unit of work."""
+
+    @property
+    @abstractmethod
+    def connector_accounts(self) -> ConnectorAccountRepository:
+        """Connector account repository bound to this unit of work."""
 
     @abstractmethod
     def commit(self) -> None:

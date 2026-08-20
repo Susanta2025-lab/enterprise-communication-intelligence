@@ -9,6 +9,7 @@ from app.domain.interfaces import (
     AIProvider,
     AnalysisRepository,
     CommunicationConnector,
+    ConnectorAccountRepository,
     IdentityRepository,
     PersistenceUnitOfWork,
 )
@@ -68,11 +69,14 @@ def test_repository_interfaces_are_abstract() -> None:
     """Persistence ports must not be instantiable without implementations."""
     assert issubclass(IdentityRepository, ABC)
     assert issubclass(AnalysisRepository, ABC)
+    assert issubclass(ConnectorAccountRepository, ABC)
     assert issubclass(PersistenceUnitOfWork, ABC)
     with pytest.raises(TypeError):
         IdentityRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         AnalysisRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        ConnectorAccountRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         PersistenceUnitOfWork()  # type: ignore[abstract]
 
@@ -90,6 +94,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
     import app.domain.interfaces.communication_connector as communication_connector
+    import app.domain.interfaces.connector_account_repository as connector_account_repository
     import app.domain.interfaces.identity_repository as identity_repository
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
     import app.domain.models.analysis as analysis_models
@@ -101,6 +106,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         ai_provider,
         analysis_repository,
         communication_connector,
+        connector_account_repository,
         identity_repository,
         persistence_unit_of_work,
         analysis_models,

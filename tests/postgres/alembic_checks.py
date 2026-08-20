@@ -12,9 +12,10 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect
 
 _ROOT = Path(__file__).resolve().parents[2]
-APPLICATION_TABLES = frozenset({"users", "external_identities", "analyses"})
+APPLICATION_TABLES = frozenset(
+    {"users", "external_identities", "analyses", "connector_accounts"}
+)
 ALLOWED_TABLES = APPLICATION_TABLES | {"alembic_version"}
-EXPECTED_HEAD = "9a0001"
 
 
 def _safe_url() -> str:
@@ -38,7 +39,14 @@ def _safe_url() -> str:
 
 
 def current_and_head_revisions(url: str) -> tuple[str | None, str | None]:
-    """Return (current revision, head revision) without logging the URL."""
+    """Return (database revision, script-directory head) without logging the URL.
+
+    Head is always ``ScriptDirectory.get_current_head()`` from migration files.
+    Current is always ``MigrationContext.get_current_revision()`` from the
+    database. These sources must stay independent so a database that is one
+    revision behind cannot satisfy ``assert_at_head``. Multiple Alembic heads
+    cause ``get_current_head()`` to raise.
+    """
     config = Config(str(_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
     head = script.get_current_head()
@@ -65,8 +73,8 @@ def assert_at_head(url: str) -> None:
     current, head = current_and_head_revisions(url)
     if current != head:
         raise SystemExit("Alembic current revision does not match head.")
-    if current != EXPECTED_HEAD:
-        raise SystemExit("Alembic current revision is not the expected Phase 9A head.")
+    if current is None:
+        raise SystemExit("Alembic current revision is empty after upgrade.")
     tables = application_tables(url)
     missing = APPLICATION_TABLES - tables
     if missing:

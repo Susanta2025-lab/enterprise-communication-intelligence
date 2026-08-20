@@ -11,6 +11,11 @@ from app.domain.interfaces.communication_connector import (
     ConnectorMessageQuery,
     MessagePage,
 )
+from app.domain.interfaces.connector_account_repository import (
+    ConnectorAccountRecord,
+    ConnectorAccountRepository,
+    NewConnectorAccount,
+)
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 
@@ -19,9 +24,12 @@ __all__ = [
     "AnalysisRecord",
     "AnalysisRepository",
     "CommunicationConnector",
+    "ConnectorAccountRecord",
+    "ConnectorAccountRepository",
     "ConnectorMessageQuery",
     "IdentityRepository",
     "MessagePage",
     "NewAnalysis",
+    "NewConnectorAccount",
     "PersistenceUnitOfWork",
 ]

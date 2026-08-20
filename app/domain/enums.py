@@ -36,3 +36,13 @@ class MessageCategory(StrEnum):
     NOTIFICATION = "notification"
     INQUIRY = "inquiry"
     OTHER = "other"
+
+
+class ConnectorAccountStatus(StrEnum):
+    """Lifecycle of a user-owned connector account.
+
+    Stored as portable text. This is not a PostgreSQL enum and is not SourceType.
+    """
+
+    ACTIVE = "active"
+    DISCONNECTED = "disconnected"

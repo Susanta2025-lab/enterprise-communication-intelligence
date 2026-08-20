@@ -8,7 +8,6 @@ from sqlalchemy.engine import Engine
 from tests.postgres.alembic_checks import (
     ALLOWED_TABLES,
     APPLICATION_TABLES,
-    EXPECTED_HEAD,
     current_and_head_revisions,
 )
 
@@ -30,16 +29,19 @@ _FORBIDDEN_COLUMNS = frozenset(
         "refresh_token",
         "jwt",
         "authorization_header",
+        "token",
+        "authorization_code",
+        "client_secret",
     }
 )
 
 
 def test_alembic_current_revision_matches_head(postgres_test_url: str) -> None:
-    """After upgrade, current and head must both be the Phase 9A revision."""
+    """After upgrade, current must equal the Alembic script head."""
     current, head = current_and_head_revisions(postgres_test_url)
     assert current == head
-    assert current == EXPECTED_HEAD
-    assert head == EXPECTED_HEAD
+    assert current is not None
+    assert head is not None
 
 
 def test_expected_tables_only(postgres_engine: Engine) -> None:
@@ -52,7 +54,7 @@ def test_expected_tables_only(postgres_engine: Engine) -> None:
 def test_primary_keys(postgres_engine: Engine) -> None:
     """Each application table has a UUID primary key on id."""
     inspector = inspect(postgres_engine)
-    for table in ("users", "external_identities", "analyses"):
+    for table in ("users", "external_identities", "analyses", "connector_accounts"):
         pk = inspector.get_pk_constraint(table)
         assert pk["constrained_columns"] == ["id"]
 

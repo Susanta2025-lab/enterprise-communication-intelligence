@@ -8,11 +8,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.core.exceptions import PersistenceError
+from app.domain.enums import ConnectorAccountStatus
 from app.domain.interfaces.analysis_repository import AnalysisRecord, NewAnalysis
+from app.domain.interfaces.connector_account_repository import (
+    ConnectorAccountRecord,
+    ConnectorAccountRepository,
+    NewConnectorAccount,
+)
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 
 _DUPLICATE_IDENTITY = "External identity is already registered."
+_DUPLICATE_CONNECTOR_ACCOUNT = "Connector account is already registered."
 
 
 class InMemoryIdentityRepository(IdentityRepository):
@@ -85,6 +92,120 @@ class InMemoryAnalysisRepository:
         return True
 
 
+class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
+    """Dict-backed connector account store used by unit tests."""
+
+    def __init__(self, accounts: dict[UUID, ConnectorAccountRecord]) -> None:
+        self._accounts = accounts
+        self.create_calls = 0
+
+    def create(self, account: NewConnectorAccount) -> ConnectorAccountRecord:
+        self.create_calls += 1
+        if self._find_key(account.user_id, account.provider, account.external_account_id):
+            raise PersistenceError(_DUPLICATE_CONNECTOR_ACCOUNT)
+        now = datetime.now(UTC)
+        record = ConnectorAccountRecord(
+            id=uuid4(),
+            user_id=account.user_id,
+            provider=account.provider,
+            external_account_id=account.external_account_id,
+            credential_ref=account.credential_ref,
+            status=ConnectorAccountStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        self._accounts[record.id] = record
+        return record
+
+    def find_by_owner_provider_external_account(
+        self,
+        user_id: UUID,
+        provider: str,
+        external_account_id: str,
+    ) -> ConnectorAccountRecord | None:
+        return self._find_key(user_id, provider, external_account_id)
+
+    def get_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+    ) -> ConnectorAccountRecord | None:
+        record = self._accounts.get(connector_account_id)
+        if record is None or record.user_id != user_id:
+            return None
+        return record
+
+    def list_owned(
+        self,
+        user_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> list[ConnectorAccountRecord]:
+        owned = [item for item in self._accounts.values() if item.user_id == user_id]
+        owned.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        if limit < 1 or offset < 0:
+            return []
+        return owned[offset : offset + min(limit, 100)]
+
+    def disconnect_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+    ) -> ConnectorAccountRecord | None:
+        record = self.get_owned(connector_account_id, user_id)
+        if record is None:
+            return None
+        updated = ConnectorAccountRecord(
+            id=record.id,
+            user_id=record.user_id,
+            provider=record.provider,
+            external_account_id=record.external_account_id,
+            credential_ref=None,
+            status=ConnectorAccountStatus.DISCONNECTED,
+            created_at=record.created_at,
+            updated_at=datetime.now(UTC),
+        )
+        self._accounts[record.id] = updated
+        return updated
+
+    def reactivate_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+        credential_ref: str | None,
+    ) -> ConnectorAccountRecord | None:
+        record = self.get_owned(connector_account_id, user_id)
+        if record is None:
+            return None
+        updated = ConnectorAccountRecord(
+            id=record.id,
+            user_id=record.user_id,
+            provider=record.provider,
+            external_account_id=record.external_account_id,
+            credential_ref=credential_ref,
+            status=ConnectorAccountStatus.ACTIVE,
+            created_at=record.created_at,
+            updated_at=datetime.now(UTC),
+        )
+        self._accounts[record.id] = updated
+        return updated
+
+    def _find_key(
+        self,
+        user_id: UUID,
+        provider: str,
+        external_account_id: str,
+    ) -> ConnectorAccountRecord | None:
+        for record in self._accounts.values():
+            if (
+                record.user_id == user_id
+                and record.provider == provider
+                and record.external_account_id == external_account_id
+            ):
+                return record
+        return None
+
+
 class InMemoryUnitOfWork(PersistenceUnitOfWork):
     """Minimal unit of work that records commit/rollback/close."""
 
@@ -93,14 +214,21 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         *,
         identities: dict[tuple[str, str], UUID] | None = None,
         analyses: dict[UUID, AnalysisRecord] | None = None,
+        connector_accounts: dict[UUID, ConnectorAccountRecord] | None = None,
         fail_commit: bool = False,
         fail_on_enter: Exception | None = None,
         commit_error: Exception | None = None,
     ) -> None:
         self.identities = identities if identities is not None else {}
         self.analyses = analyses if analyses is not None else {}
+        self.connector_account_store = (
+            connector_accounts if connector_accounts is not None else {}
+        )
         self._identity_repository = InMemoryIdentityRepository(self.identities)
         self._analysis_repository = InMemoryAnalysisRepository(self.analyses)
+        self._connector_accounts = InMemoryConnectorAccountRepository(
+            self.connector_account_store
+        )
         self.fail_commit = fail_commit
         self.fail_on_enter = fail_on_enter
         self.commit_error = commit_error
@@ -116,6 +244,10 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     @property
     def analysis_repository(self) -> InMemoryAnalysisRepository:
         return self._analysis_repository
+
+    @property
+    def connector_accounts(self) -> InMemoryConnectorAccountRepository:
+        return self._connector_accounts
 
     def commit(self) -> None:
         self.commit_calls += 1

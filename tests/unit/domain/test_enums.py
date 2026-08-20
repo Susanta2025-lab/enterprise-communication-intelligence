@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.domain.enums import MessageCategory, PriorityLevel, SourceType
+from app.domain.enums import ConnectorAccountStatus, MessageCategory, PriorityLevel, SourceType
 
 
 def test_source_type_includes_email_and_future_channels() -> None:
@@ -21,6 +21,24 @@ def test_source_type_includes_email_and_future_channels() -> None:
         "calendar",
         "other",
     }
+
+
+def test_source_type_does_not_include_vendor_connectors() -> None:
+    """Provider identity is not SourceType. Vendor mailboxes stay out of the enum."""
+    values = {member.value for member in SourceType}
+    assert "gmail" not in values
+    assert "outlook" not in values
+    assert "microsoft_graph" not in values
+
+
+def test_connector_account_status_values() -> None:
+    """Connector account lifecycle is portable text, not a PostgreSQL enum."""
+    assert list(ConnectorAccountStatus) == [
+        ConnectorAccountStatus.ACTIVE,
+        ConnectorAccountStatus.DISCONNECTED,
+    ]
+    assert ConnectorAccountStatus.ACTIVE == "active"
+    assert ConnectorAccountStatus.DISCONNECTED == "disconnected"
 
 
 def test_priority_level_values() -> None:

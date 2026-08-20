@@ -46,7 +46,7 @@ def _upgrade_head(url: str) -> None:
 def _truncate(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
-            text("TRUNCATE TABLE analyses, external_identities, users CASCADE")
+            text("TRUNCATE TABLE analyses, external_identities, connector_accounts, users CASCADE")
         )
 
 

@@ -8,7 +8,16 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON, TypeEngine
@@ -22,7 +31,7 @@ def utc_now() -> datetime:
 
 
 class Base(DeclarativeBase):
-    """Declarative base for Phase 9 persistence models."""
+    """Declarative base for application persistence models."""
 
 
 class User(Base):
@@ -48,6 +57,10 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     analyses: Mapped[list["Analysis"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    connector_accounts: Mapped[list["ConnectorAccount"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -118,3 +131,51 @@ class Analysis(Base):
     draft_reply: Mapped[dict[str, Any] | None] = mapped_column(PORTABLE_JSON, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="analyses")
+
+
+class ConnectorAccount(Base):
+    """User-owned connector account. Stores an opaque credential reference only."""
+
+    __tablename__ = "connector_accounts"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "external_account_id",
+            name="uq_connector_accounts_user_provider_external_account",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disconnected')",
+            name="ck_connector_accounts_status",
+        ),
+        Index(
+            "ix_connector_accounts_user_id_created_at_id",
+            "user_id",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    external_account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    credential_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    user: Mapped[User] = relationship(back_populates="connector_accounts")

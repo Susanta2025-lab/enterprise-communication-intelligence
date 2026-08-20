@@ -11,9 +11,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.exceptions import PersistenceError
 from app.domain.interfaces.analysis_repository import AnalysisRepository
+from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.infrastructure.storage.repositories.analysis import SqlAlchemyAnalysisRepository
+from app.infrastructure.storage.repositories.connector_account import (
+    SqlAlchemyConnectorAccountRepository,
+)
 from app.infrastructure.storage.repositories.identity import SqlAlchemyIdentityRepository
 
 _GENERIC_COMMIT_FAILURE = "Could not commit persistence changes."
@@ -22,13 +26,14 @@ _INACTIVE = "Persistence unit of work is not active."
 
 
 class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
-    """Bind identity and analysis repositories to a single SQLAlchemy Session."""
+    """Bind persistence repositories to a single SQLAlchemy Session."""
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
         self._session: Session | None = None
         self._identity_repository: IdentityRepository | None = None
         self._analysis_repository: AnalysisRepository | None = None
+        self._connector_accounts: ConnectorAccountRepository | None = None
 
     @property
     def identity_repository(self) -> IdentityRepository:
@@ -43,6 +48,13 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         if self._analysis_repository is None:
             raise PersistenceError(_INACTIVE)
         return self._analysis_repository
+
+    @property
+    def connector_accounts(self) -> ConnectorAccountRepository:
+        """Connector account repository bound to this unit of work."""
+        if self._connector_accounts is None:
+            raise PersistenceError(_INACTIVE)
+        return self._connector_accounts
 
     def commit(self) -> None:
         """Commit the current unit of work."""
@@ -73,6 +85,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._session = session
             self._identity_repository = SqlAlchemyIdentityRepository(session)
             self._analysis_repository = SqlAlchemyAnalysisRepository(session)
+            self._connector_accounts = SqlAlchemyConnectorAccountRepository(session)
             return self
         except SQLAlchemyError:
             if session is not None:
@@ -83,6 +96,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._session = None
             self._identity_repository = None
             self._analysis_repository = None
+            self._connector_accounts = None
             raise PersistenceError(_GENERIC_OPERATION_FAILURE) from None
 
     def __exit__(
@@ -109,6 +123,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._session = None
         self._identity_repository = None
         self._analysis_repository = None
+        self._connector_accounts = None
         if session is None:
             return
         session.close()
