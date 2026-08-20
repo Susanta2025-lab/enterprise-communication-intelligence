@@ -26,21 +26,26 @@ class ServiceUnavailableError(ECIPlatformError):
     """Raised when a required service dependency is unavailable."""
 ```
 
-`app/application/exceptions.py` adds one application-layer exception:
+`app/application/exceptions.py` adds application-layer exceptions:
 
 ```python
 class AnalysisFailedError(ECIPlatformError):
     """Raised when an AI provider fails to analyze a communication."""
+
+class AnalysisNotFoundError(ECIPlatformError):
+    """Raised when an analysis is unknown or not owned by the caller."""
 ```
 
-All of these carry a plain `.message: str` and no additional context, stack trace, or provider internals.
+`PersistenceError` is also defined on `app/core/exceptions.py`. All of these carry a plain `.message: str` and no additional context, stack trace, or provider internals.
 
 ## Registered Exception Handlers (`app/main.py`)
 
-Two handlers are registered on the FastAPI app:
+Two handlers plus persistence-specific handlers are registered on the FastAPI app:
 
 | Exception type | Status code | Response body | Logged event |
 |---|---|---|---|
+| `AnalysisNotFoundError` | `404` | `{"detail": "Analysis not found."}` | `analysis_not_found` (info) |
+| `PersistenceError` | `503` | `{"detail": "Persistence is currently unavailable."}` | `persistence_unavailable` (warning) |
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
 | `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
 
@@ -50,13 +55,14 @@ Authentication and authorization failures are raised as FastAPI `HTTPException` 
 
 ## Authentication and Authorization Errors
 
-When `AUTH_MODE=oidc`, `POST /api/v1/communications/analyze` requires a bearer token. Responses:
+When `AUTH_MODE=oidc`, analyze requires a bearer token. History routes always require an authenticated principal; `AUTH_MODE=disabled` returns `401` for history. Responses:
 
 | Condition | Status | `WWW-Authenticate` | Body |
 |---|---|---|---|
 | Missing bearer token | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
 | Invalid, expired, wrong issuer/audience, or bad signature | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
 | Valid token without `communications:analyze` | `403` | not set | `{"detail": "Not authorized"}` |
+| Unknown or cross-user `analysis_id` | `404` | not set | `{"detail": "Analysis not found."}` |
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -81,6 +87,16 @@ The HTTP `detail` still uses the provider's Python class name (for example `Mock
 
 This is translated by the `ECIPlatformError` handler into a `500` response.
 
+## Persistence Failures
+
+Identity or database failure before AI is translated to `503` with `{"detail": "Persistence is currently unavailable."}` and does not call the AI provider.
+
+AI success plus history save failure returns HTTP `200` with the analysis and omits `analysis_id`. The provider is not retried.
+
+History get/delete of an unknown or cross-user id returns `404` with `{"detail": "Analysis not found."}`, not `403`.
+
+Readiness returns the same generic `503` body when persistence is configured and the database probe fails. Database host, driver, and SQL details are not returned.
+
 ## Safe Error-Response Behavior
 
 - Responses only ever contain `{"detail": "<message>"}` for application exceptions — no stack traces, no exception class names, no provider SDK details.
@@ -91,9 +107,11 @@ This is translated by the `ECIPlatformError` handler into a `500` response.
 
 | Status | Meaning | Source |
 |---|---|---|
-| `200` | Successful request | Normal route return |
-| `401` | Missing or invalid bearer token | `require_communications_analyze` when `AUTH_MODE=oidc` |
+| `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. |
+| `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
+| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history always (`AUTH_MODE=disabled` included) |
 | `403` | Authenticated token lacks `communications:analyze` | `require_communications_analyze` when `AUTH_MODE=oidc` |
+| `404` | Analysis unknown or not owned by the caller | `AnalysisNotFoundError` |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
-| `503` | A required service dependency is unavailable (`ServiceUnavailableError`) | `app/main.py` exception handler; documented on `POST /api/v1/communications/analyze` in OpenAPI, but not currently raised by any implemented code path |
+| `503` | Persistence unavailable (`ServiceUnavailableError` / `PersistenceError`), including readiness probe failure | `app/main.py` exception handlers |

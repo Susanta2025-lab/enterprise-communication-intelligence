@@ -151,7 +151,7 @@ Neither cloud path stores static cloud credentials in the image or in container 
 
 Workflows:
 
-- `.github/workflows/ci.yml` — pull_request and push to `master`; Python 3.12; `pip check`, `ruff`, `pytest`; `contents: read` only
+- `.github/workflows/ci.yml` — pull_request and push to `master`; Python 3.12; `pip check`, `ruff`, `pytest`; plus job `PostgreSQL integration` with ephemeral `postgres:16`, Alembic upgrade/downgrade/upgrade, and 34 PostgreSQL tests; `contents: read` only
 - `.github/workflows/deploy.yml` — `workflow_dispatch` with target `azure` | `aws` | `both`; build once; SHA and `stable` tags; concurrency group `eci-dev-deploy`
 
 GitHub Environments:
@@ -172,6 +172,8 @@ AWS environment: `AWS_REGION` (`eu-south-2`), `AWS_ROLE_ARN`, `AWS_ECR_REPOSITOR
 GitHub Environments `azure` and `aws` exist with the non-secret identifier variables listed above. Do not store Azure client secrets or AWS access keys in GitHub.
 
 Phase 8D executed Deploy after live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` were configured. Run `dd55327` used `target=both`. GitHub OIDC token exchange succeeded on Azure and AWS. The workflow built once and tagged `dd55327` and `stable`. ACR and ECR received the same digest `sha256:0590bf6f7b2ae5614dd35af0307763cb0303e98948531bab2352258e6773ed70`. Azure currently runs `eci-api:dd55327`. AWS currently uses task definition `eci-api-dev:4`. CD remains `workflow_dispatch` only.
+
+Phase 9C verified PostgreSQL on GitHub Actions run `32336909759` (Lint and test success; PostgreSQL integration success; 34 tests; Alembic round-trip to revision `9a0001`). That job does not deploy and does not use a managed cloud database. Phase 9D does not run `deploy.yml`. Current Azure and AWS runtimes still do not have Phase 9 `DATABASE_URL`. Do not deploy the Phase 9 image until a colocated PostgreSQL database exists.
 
 ### AWS GitHub OIDC (created)
 
@@ -272,5 +274,9 @@ See [GitHub Actions](#github-actions).
 - AWS persistent HTTPS / custom domain (domain and ACM deferred)
 - automatic (push/tag) cloud deployment
 - Phase 8B temporary IAM policy cleanup (`ECIPhase8BIngressVerificationPolicy`), if still attached — IAM-admin follow-up
+- Azure Database for PostgreSQL / Amazon RDS (not provisioned; see [PostgreSQL persistence](persistence.md))
+- Key Vault / Secrets Manager injection of `DATABASE_URL`
+- Entra or RDS IAM database authentication
+- automatic schema migration from application startup or from every replica
 
 See [Cloud Roadmap](roadmap.md), [Authentication](authentication.md), and [Provider comparison](comparison.md).

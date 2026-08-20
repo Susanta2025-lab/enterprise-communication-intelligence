@@ -1,0 +1,19 @@
+flowchart TD
+    Principal["OIDC Principal<br/>issuer + subject"]
+    Resolver["IdentityResolver"]
+    Users["users / external_identities"]
+    Workflow["CommunicationAnalysisWorkflowService"]
+    AIService["CommunicationAnalysisService"]
+    Provider["AIProvider"]
+    History["AnalysisHistoryService"]
+    Repo["AnalysisRepository"]
+    PG["PostgreSQL"]
+
+    Principal --> Resolver
+    Resolver --> Users
+    Principal --> Workflow
+    Workflow --> AIService
+    AIService --> Provider
+    Workflow --> History
+    History --> Repo
+    Repo --> PG

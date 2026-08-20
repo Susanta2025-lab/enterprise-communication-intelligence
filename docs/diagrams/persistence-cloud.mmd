@@ -1,0 +1,30 @@
+flowchart TD
+    App["Same ECI application<br/>ORM, Alembic, repositories"]
+
+    subgraph AzureCompute["Azure compute"]
+        ACA["Azure Container Apps"]
+    end
+
+    subgraph AzureDb["Azure PostgreSQL — NOT provisioned in Phase 9"]
+        AzPG["Azure-local PostgreSQL-compatible<br/>managed database"]
+    end
+
+    subgraph AwsCompute["AWS compute"]
+        ECS["ECS Fargate"]
+    end
+
+    subgraph AwsDb["AWS RDS — NOT provisioned in Phase 9"]
+        RdsPG["AWS-local RDS PostgreSQL"]
+    end
+
+    subgraph CiProof["Phase 9 proof"]
+        GHA["GitHub Actions"]
+        Ephemeral["ephemeral postgres:16<br/>does not persist after the job"]
+        GHA --> Ephemeral
+    end
+
+    App --> ACA
+    App --> ECS
+    App --> GHA
+    ACA -.-> AzPG
+    ECS -.-> RdsPG

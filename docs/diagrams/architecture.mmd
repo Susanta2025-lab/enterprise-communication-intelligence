@@ -1,31 +1,38 @@
 graph TB
     Client[Client]
 
-    subgraph Implemented["Implemented (Phase 1-6B)"]
+    subgraph Implemented["Implemented (Phase 1-9)"]
         API["FastAPI REST API<br/>app/api"]
-        App["CommunicationAnalysisService<br/>app/application"]
+        Workflow["CommunicationAnalysisWorkflowService<br/>app/application"]
+        App["CommunicationAnalysisService<br/>AI-only"]
         Iface["AIProvider interface<br/>app/domain/interfaces"]
         Mock["MockAIProvider<br/>app/providers/mock"]
         Foundry["MicrosoftFoundryProvider<br/>app/providers/microsoft_foundry"]
         Bedrock["AmazonBedrockProvider<br/>app/providers/amazon_bedrock"]
         Common["Shared LLM analysis contract<br/>app/providers/common"]
+        Repos["Identity and Analysis repositories"]
+        Storage["SQLAlchemy storage<br/>app/infrastructure/storage"]
         Core["Core: Config, Logging, Exceptions<br/>app/core"]
     end
 
     Client --> API
-    API --> App
+    API --> Workflow
+    Workflow --> App
     App --> Iface
     Iface --> Mock
     Iface --> Foundry
     Iface --> Bedrock
     Foundry --> Common
     Bedrock --> Common
+    Workflow --> Repos
+    Repos --> Storage
     API --> Core
     App --> Core
     Mock --> Core
     Foundry --> Core
     Bedrock --> Core
+    Storage --> Core
 
     classDef implemented fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:1px
 
-    class API,App,Iface,Mock,Foundry,Bedrock,Common,Core implemented
+    class API,Workflow,App,Iface,Mock,Foundry,Bedrock,Common,Repos,Storage,Core implemented

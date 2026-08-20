@@ -1,9 +1,11 @@
 sequenceDiagram
     participant Client
     participant Route as FastAPI Route
+    participant Workflow as CommunicationAnalysisWorkflowService
+    participant Identity as IdentityResolver
     participant Service as CommunicationAnalysisService
     participant Provider as AIProvider
-    participant Mock as MockAIProvider
+    participant History as AnalysisHistoryService
     participant Handler as Exception Handler
 
     Client->>Route: POST /api/v1/communications/analyze
@@ -11,23 +13,43 @@ sequenceDiagram
 
     alt Validation fails
         Route-->>Client: 422 Unprocessable Entity
-    else Validation succeeds
-        Route->>Service: analyze(request)
-        Service->>Provider: analyze(request)
-        Provider->>Mock: analyze(request)
-
-        alt Provider succeeds
-            Mock-->>Provider: CommunicationAnalysisResult
-            Provider-->>Service: CommunicationAnalysisResult
-            Service-->>Route: CommunicationAnalysisResult
-            Route-->>Client: 200 OK
-        else Provider raises exception
-            Mock--xProvider: Exception
-            Provider--xService: Exception
-            Service->>Service: log communication_analysis_failed
-            Service--xRoute: AnalysisFailedError
-            Route--xHandler: propagate ECIPlatformError
-            Handler->>Handler: log application_error
-            Handler-->>Client: 500 with safe detail message
+    else Persistence configured and authenticated
+        Route->>Workflow: analyze(request)
+        Workflow->>Identity: resolve_or_create (short TX)
+        alt Identity or DB fails before AI
+            Identity--xWorkflow: ServiceUnavailableError
+            Workflow--xHandler: propagate
+            Handler-->>Client: 503 Persistence is currently unavailable
+        else Identity succeeds
+            Identity-->>Workflow: user_id
+            Workflow->>Service: analyze(request)
+            Service->>Provider: analyze(request)
+            alt Provider succeeds
+                Provider-->>Service: CommunicationAnalysisResult
+                Service-->>Workflow: CommunicationAnalysisResult
+                Workflow->>History: save (new short TX)
+                alt Save succeeds
+                    History-->>Workflow: analysis_id
+                    Workflow-->>Route: result plus analysis_id
+                    Route-->>Client: 200 OK
+                else Save fails
+                    History--xWorkflow: PersistenceError
+                    Workflow-->>Route: result without analysis_id
+                    Route-->>Client: 200 OK
+                end
+            else Provider raises exception
+                Provider--xService: Exception
+                Service--xWorkflow: AnalysisFailedError
+                Workflow--xHandler: propagate ECIPlatformError
+                Handler-->>Client: 500 with safe detail message
+            end
         end
+    else Analyze-only (no persistence or no principal)
+        Route->>Workflow: analyze(request)
+        Workflow->>Service: analyze(request)
+        Service->>Provider: analyze(request)
+        Provider-->>Service: CommunicationAnalysisResult
+        Service-->>Workflow: CommunicationAnalysisResult
+        Workflow-->>Route: result without analysis_id
+        Route-->>Client: 200 OK
     end

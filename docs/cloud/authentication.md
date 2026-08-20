@@ -1,11 +1,12 @@
 # Authentication
 
-ECI has four identity paths. They must not be mixed.
+ECI has five identity paths. They must not be mixed.
 
-1. **Application user → Microsoft Entra ID → JWT → ECI API.** Provider-independent OIDC JWT validation at the API boundary. The first live identity provider is a single-tenant Microsoft Entra ID resource application. ECI does not use Easy Auth, a Cognito SDK, or a user database. See [API Overview](../api/overview.md) and [ADR-009](../decisions/ADR-009-application-user-authentication.md).
+1. **Application user → Microsoft Entra ID → JWT → ECI API.** Provider-independent OIDC JWT validation at the API boundary. The first live identity provider is a single-tenant Microsoft Entra ID resource application. ECI does not use Easy Auth or a Cognito SDK. Phase 9 maps verified `(issuer, subject)` to an opaque internal user UUID for ownership only; that is not a login user database and not SaaS tenancy. The caller's OIDC token does not authenticate to PostgreSQL. See [API Overview](../api/overview.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), and [ADR-013](../decisions/ADR-013-external-identity-mapping-and-user-owned-data.md).
 2. **Azure workload → Microsoft Foundry.** Container Apps user-assigned identity `eci-ca-identity-dev` through `DefaultAzureCredential`.
 3. **AWS workload → Amazon Bedrock.** ECS Task Role `eci-bedrock-task-role-dev` through boto3's standard credential chain.
 4. **GitHub Actions → Azure / AWS deploy identities.** GitHub OIDC federation to Azure user-assigned managed identity `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`. Same display name, different cloud object types. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
+5. **ECI runtime → PostgreSQL database identity.** Application contract is `DATABASE_URL` when persistence is configured. Runtime DML credentials should be separate from migration DDL credentials. No managed Azure or AWS database is provisioned in Phase 9, so this cloud identity remains future until a colocated database exists. See [PostgreSQL persistence](persistence.md).
 
 The rest of this document describes application-user OIDC and cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
 
@@ -131,7 +132,7 @@ Key Vault, Secrets Manager, and production secret management are not implemented
 ## What is not implemented
 
 - API-key authentication for Foundry
-- A user database, password login, or session store for the REST API
+- Password login or a session store for the REST API. Phase 9 stores opaque `users.id` plus `issuer`/`subject` for ownership only.
 - Storing or caching Entra tokens or AWS credentials in application code
 - Hard-coded AWS profile selection
 - AWS real-bearer authorized requests over TLS (deferred until domain/ACM)

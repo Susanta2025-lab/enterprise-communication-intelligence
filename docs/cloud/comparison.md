@@ -58,7 +58,7 @@ GitHub Actions CI is automatic and tests-only. Manual `workflow_dispatch` CD dep
 | Deploy identity | user-assigned managed identity `eci-github-deploy-dev` | IAM role `eci-github-deploy-dev` |
 | Workload identity | user-assigned managed identity `eci-ca-identity-dev` | Task Role `eci-bedrock-task-role-dev` |
 
-See [Authentication](authentication.md), [Deployment](deployment.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), [ADR-010](../decisions/ADR-010-multi-cloud-ingress.md), and [ADR-011](../decisions/ADR-011-github-actions-oidc-cicd.md).
+See [Authentication](authentication.md), [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), [ADR-010](../decisions/ADR-010-multi-cloud-ingress.md), [ADR-011](../decisions/ADR-011-github-actions-oidc-cicd.md), [ADR-012](../decisions/ADR-012-postgresql-persistence-architecture.md), [ADR-013](../decisions/ADR-013-external-identity-mapping-and-user-owned-data.md), and [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
 
 ## Observability comparison (Phase 7)
 
@@ -72,6 +72,19 @@ Application telemetry is the same on both clouds: structlog JSON on stdout, `req
 | Not enabled | Application Insights, OpenTelemetry | Container Insights, ADOT, X-Ray |
 
 See [Observability](observability.md).
+
+## Persistence comparison (Phase 9)
+
+The persistence implementation is the same on both clouds: PostgreSQL via SQLAlchemy, Alembic, and `DATABASE_URL`. Phase 9 does not provision a managed database in either cloud and does not replicate data across clouds.
+
+| Concern | Azure | AWS |
+|---|---|---|
+| Production dialect | PostgreSQL | PostgreSQL |
+| Managed database in Phase 9 | not provisioned | not provisioned |
+| Preferred future colocated DB | Azure Database for PostgreSQL Flexible Server | Amazon RDS for PostgreSQL |
+| Phase 9 proof | GitHub Actions `postgres:16` | GitHub Actions `postgres:16` |
+
+See [PostgreSQL persistence](persistence.md).
 
 See [Deployment](deployment.md).
 

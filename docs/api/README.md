@@ -1,10 +1,10 @@
 # ECI Platform API Documentation
 
-This directory documents the REST API implemented through Phase 5 of the ECI Platform roadmap.
+This directory documents the REST API implemented through Phase 9 of the ECI Platform roadmap.
 
 ## Contents
 
-- [Overview](overview.md) — purpose, base URL, versioning, and request flow
+- [Overview](overview.md) — purpose, base URL, versioning, authentication, and request flow
 - [Endpoints](endpoints.md) — all implemented routes and their behavior
 - [Request/Response Models](request-response-models.md) — field-level schema reference
 - [Error Handling](error-handling.md) — validation, exception translation, and status codes
@@ -16,4 +16,4 @@ The API currently defaults to `AI_PROVIDER=mock` (see `.env.example`). `Microsof
 
 ## Scope
 
-This documentation reflects the REST API plus the Phase 6 cloud AI providers. Responses include `X-Request-ID` for operational correlation; see [Overview](overview.md) and [Observability](../cloud/observability.md). Application-user JWT authentication is implemented; persistence remains future work. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.
+This documentation reflects the REST API plus Phase 6 cloud AI providers, Phase 8 application-user OIDC, and Phase 9 user-owned analysis history. Responses include `X-Request-ID` for operational correlation. Persistence details stay behind the API: callers see optional `analysis_id` and history resources, not SQLAlchemy or PostgreSQL types. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). Persistence strategy is documented in [`docs/cloud/persistence.md`](../cloud/persistence.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.

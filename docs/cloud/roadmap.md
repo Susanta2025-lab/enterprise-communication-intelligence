@@ -1,6 +1,6 @@
 # Cloud Roadmap
 
-This is the cloud-integration view of Phase 6 through Phase 8. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+This is the cloud-integration view of Phase 6 through Phase 9. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
 
 ## Provider integration
 
@@ -37,6 +37,10 @@ Cloud AI authentication uses platform identity rather than application-stored st
 
 See [Authentication](authentication.md).
 
+## Persistence
+
+Phase 9 selects cloud-portable PostgreSQL with ephemeral CI proof. Azure Database for PostgreSQL and Amazon RDS are not provisioned. Shared cross-cloud databases and dual standing managed databases are rejected for this phase. See [PostgreSQL persistence](persistence.md) and [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
+
 ## Observability
 
 Phase 7 is implemented: portable structured logs, Azure Log Analytics plus native Container Apps metrics, and AWS CloudWatch Logs plus standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, alerts, Application Insights, Container Insights, and OpenTelemetry remain deferred.
@@ -45,4 +49,4 @@ See [Observability](observability.md).
 
 ## Later enterprise deployment
 
-Phase 8 is complete. Next is Phase 9 — Persistence & Multi-Tenant/User-Associated Data. Do not implement Phase 9 here. Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, and advanced observability remain later work.
+Phase 8 is complete. Phase 9 persistence is complete at the application and CI-proof level. Next is Phase 10 — Communication Connectors. Do not implement Phase 10 here. Later: Phase 11 — Workflow Automation. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.

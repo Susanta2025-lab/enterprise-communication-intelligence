@@ -65,7 +65,28 @@ curl -sS -X POST http://localhost:8000/api/v1/communications/analyze \
   }'
 ```
 
-Returns a `medium` priority, `general` category analysis with no action items, since no urgent or action-oriented keywords are present (see `app/providers/mock/provider.py`).
+Returns a `medium` priority, `general` category analysis with no action items, since no urgent or action-oriented keywords are present (see `app/providers/mock/provider.py`). With default local configuration (`DATABASE_URL` omitted), `analysis_id` is not present.
+
+## Analysis History
+
+History endpoints always require an authenticated principal (`AUTH_MODE=disabled` returns `401`). They return structured results only; they never return the original communication body. Without `DATABASE_URL`, history returns `503`.
+
+```bash
+curl -sS http://localhost:8000/api/v1/analyses \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -sS http://localhost:8000/api/v1/analyses/<analysis-id> \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -sS -X DELETE http://localhost:8000/api/v1/analyses/<analysis-id> \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Unknown and cross-user ids both return `404`. Do not send real bearer tokens in committed documentation or over AWS HTTP.
 
 ## Urgent Communication
 

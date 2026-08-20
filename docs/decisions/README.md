@@ -27,6 +27,9 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-009](ADR-009-application-user-authentication.md) | Application-User Authentication and Authorization | Accepted |
 | [ADR-010](ADR-010-multi-cloud-ingress.md) | Multi-Cloud Production Ingress Strategy | Accepted |
 | [ADR-011](ADR-011-github-actions-oidc-cicd.md) | Secretless GitHub Actions Multi-Cloud CI/CD | Accepted |
+| [ADR-012](ADR-012-postgresql-persistence-architecture.md) | PostgreSQL Persistence Architecture | Accepted |
+| [ADR-013](ADR-013-external-identity-mapping-and-user-owned-data.md) | External Identity Mapping and User-Owned Data | Accepted |
+| [ADR-014](ADR-014-cloud-postgresql-deployment-strategy.md) | Cloud PostgreSQL Deployment Strategy | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -37,6 +40,12 @@ ADR-009 records provider-independent OIDC JWT validation and permission `communi
 ADR-010 records Azure Container Apps managed HTTPS as live ingress, and AWS ALB as verified then torn down. Direct AWS task HTTP is verification-only.
 
 ADR-011 records automatic tests-only CI and manual multi-cloud CD with GitHub OIDC. First verified deploy is commit `dd55327` with identical ACR and ECR digests.
+
+ADR-012 records PostgreSQL as the production system of record, with SQLAlchemy 2.x, Alembic, and SQLite only for local/test use.
+
+ADR-013 records OIDC `(issuer, subject)` mapping onto an opaque internal user UUID and user-associated ownership isolation. That is not SaaS tenancy.
+
+ADR-014 records Option C: cloud-portable PostgreSQL plus ephemeral CI proof. Shared cross-cloud databases and dual standing managed databases are rejected for this phase. No Azure PostgreSQL or Amazon RDS is provisioned.
 
 ## Template
 

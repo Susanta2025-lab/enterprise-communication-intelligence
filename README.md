@@ -73,7 +73,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 
 ### CI/CD
 
-* GitHub Actions CI (automatic tests-only: pip check, ruff, pytest)
+* GitHub Actions CI (automatic: pip check, ruff, pytest, plus PostgreSQL integration)
 * Manual multi-cloud CD (`workflow_dispatch` target `azure` | `aws` | `both`)
 * GitHub OIDC federation (no long-lived deploy secrets)
 * Build-once SHA and `stable` image tags
@@ -90,10 +90,21 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 
 * Versioned REST API
 * `POST /api/v1/communications/analyze`
+* Optional `analysis_id` when authenticated history storage succeeds
+* `GET /api/v1/analyses` and `GET/DELETE /api/v1/analyses/{analysis_id}`
 * Request validation
 * Structured error handling
 * Reusable domain schemas
 * OpenAPI documentation
+
+### Persistence
+
+* PostgreSQL production persistence architecture (SQLAlchemy 2.x, Alembic, psycopg 3)
+* Authenticated user ownership via OIDC `issuer` + `subject` → internal user UUID
+* Analysis history with SQL-scoped ownership isolation
+* Raw communication body is not stored
+* PostgreSQL CI validation (ephemeral `postgres:16`; run `32336909759`)
+* SQLite for default local tests only
 
 ### Engineering
 
@@ -128,6 +139,11 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 8C – GitHub Actions CI/CD
 * ✅ Phase 8D – Cross-Cloud Verification
 * ✅ Phase 8 – Production Hardening
+* ✅ Phase 9A – Persistence Foundation
+* ✅ Phase 9B – User Ownership & Analysis History
+* ✅ Phase 9C – PostgreSQL Integration & CI
+* ✅ Phase 9D – Cloud Strategy & Final Documentation
+* ✅ Phase 9 – Persistence & User-Associated Data
 
 ---
 
@@ -140,29 +156,22 @@ The project is being developed as a practical demonstration of **AI Solution Arc
                FastAPI REST API
                       │
                       ▼
-       CommunicationAnalysisService
-                      │
-                      ▼
-              AIProvider Interface
-                      │
-        ┌─────────────┼─────────────────┐
-        │             │                 │
-        ▼             ▼                 ▼
- MockAIProvider  MicrosoftFoundryProvider AmazonBedrockProvider
-                      │                 │
-                      └────────┬────────┘
-                               ▼
-                    providers/common
-              (ECI structured-analysis contract)
-                      │                 │
-                      ▼                 ▼
-               Microsoft Foundry    Amazon Bedrock
-                  GPT-5.4-mini     Claude Haiku 4.5
+     CommunicationAnalysisWorkflowService
+           │                      │
+           ▼                      ▼
+CommunicationAnalysisService   AnalysisHistoryService
+           │                      │
+           ▼                      ▼
+    AIProvider Interface     PostgreSQL repositories
+           │
+     ┌─────┼──────────────┐
+     ▼     ▼              ▼
+   Mock  Foundry       Bedrock
 ```
 
-The application and business layers depend only on the `AIProvider` interface. Provider selection is configuration-driven through `AI_PROVIDER`. `MockAIProvider` remains a deterministic offline path. `MicrosoftFoundryProvider` and `AmazonBedrockProvider` reuse the shared ECI structured-analysis contract in `app/providers/common/` while keeping Azure and AWS SDKs inside their own packages.
+The application and business layers depend only on the `AIProvider` interface and persistence repository interfaces. Provider selection is configuration-driven through `AI_PROVIDER`. Persistence is configuration-driven through `DATABASE_URL`. `MockAIProvider` remains a deterministic offline path. `CommunicationAnalysisService` remains AI-only.
 
-Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings.
+Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, AI workload identity, and GitHub deploy identity.
 
 The same Docker image runs locally with the mock provider, on Azure Container Apps with Foundry, and on Amazon ECS Fargate with Bedrock. Cloud differences are environment variables and workload identity, not separate applications.
 
@@ -207,11 +216,18 @@ Amazon Bedrock is implemented, covered by offline tests, and live-verified throu
 Application users authenticate with a Microsoft Entra ID JWT. Runtime Foundry/Bedrock identities and GitHub deploy identities stay separate. GitHub Actions builds the image once and deploys it through OIDC to Azure Container Apps and Amazon ECS.
 
 ```text
-APPLICATION USER          DEPLOYMENT                         INGRESS
-Entra ID → JWT → ECI      GitHub → OIDC                      Azure: HTTPS → ACA → ECI
-ECI → Foundry UAMI        → Azure deploy UAMI → ACR → ACA    AWS current: /32 HTTP (verification-only)
-ECI → Bedrock task role   → AWS deploy IAM role → ECR → ECS  AWS ALB HTTPS: verified, not retained
+APPLICATION USER          RUNTIME AI                    DATABASE
+Entra ID → JWT → ECI      ECI → Foundry UAMI            ECI → PostgreSQL
+issuer+subject → users.id ECI → Bedrock task role       CI-proven; managed DB
+                                                        not provisioned in Phase 9
+
+DEPLOYMENT                INGRESS
+GitHub → OIDC             Azure: HTTPS → ACA → ECI
+→ Azure deploy UAMI       AWS current: /32 HTTP (verification-only)
+→ AWS deploy IAM role     AWS ALB HTTPS: verified, not retained
 ```
+
+Persistence is cloud-portable and PostgreSQL-compatible. It is not active-active multi-cloud replication. Details: [`docs/architecture/persistence.md`](docs/architecture/persistence.md), [`docs/cloud/persistence.md`](docs/cloud/persistence.md), [ADR-012](docs/decisions/ADR-012-postgresql-persistence-architecture.md), [ADR-013](docs/decisions/ADR-013-external-identity-mapping-and-user-owned-data.md), [ADR-014](docs/decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
 
 ---
 
@@ -256,6 +272,10 @@ deployment/
 * FastAPI
 * Pydantic v2
 * Uvicorn
+* SQLAlchemy 2.x
+* Alembic
+* psycopg 3
+* PostgreSQL (production dialect; CI-proven)
 
 ### Quality & Testing
 
@@ -290,11 +310,13 @@ deployment/
 * Amazon CloudWatch Logs and standard ECS metrics
 * GitHub Actions CI/CD
 * GitHub OIDC federation
+* PostgreSQL persistence (SQLAlchemy / Alembic; CI `postgres:16`)
 
 **Later**
 
 * Azure Key Vault
 * AWS Secrets Manager
+* Managed Azure PostgreSQL / Amazon RDS
 * Distributed tracing / OpenTelemetry
 * Custom metrics, dashboards, and alerts
 
@@ -384,8 +406,13 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 8B – Production Ingress          | ✅ Completed   |
 | ↳ Phase 8C – GitHub Actions CI/CD        | ✅ Completed   |
 | ↳ Phase 8D – Cross-Cloud Verification    | ✅ Completed   |
+| Phase 9 – Persistence                    | ✅ Completed   |
+| ↳ Phase 9A – Persistence Foundation      | ✅ Completed   |
+| ↳ Phase 9B – User Ownership & History    | ✅ Completed   |
+| ↳ Phase 9C – PostgreSQL Integration & CI | ✅ Completed   |
+| ↳ Phase 9D – Cloud Strategy & Final Docs | ✅ Completed   |
 
-Next: Phase 9 — Persistence & Multi-Tenant/User-Associated Data (not implemented).
+Next: Phase 10 — Communication Connectors (not implemented).
 
 ---
 
@@ -409,15 +436,16 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Persistent storage (Phase 9)
-* Enterprise communication integrations / connectors (Phase 10)
+* Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
+* Communication Connectors (Phase 10)
 * Workflow automation (Phase 11)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached
 * Distributed tracing, custom metrics, dashboards, alerts, and SLOs
+* Database backup, PITR, HA, and cross-region DR
 
-AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only.
+AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only. Current cloud application environments do not have Phase 9 database configuration.
 
 ---
 

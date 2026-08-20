@@ -1,12 +1,16 @@
 flowchart TD
     GitHub["GitHub Actions"]
-    Build["Build once"]
+    Quality["Lint and test<br/>pip check, ruff, pytest"]
+    Postgres["PostgreSQL integration<br/>ephemeral postgres:16<br/>does not persist after the job"]
+    Build["CD build once<br/>workflow_dispatch only"]
     Artifact["Image artifact SHA + stable"]
     ACR["Azure Container Registry"]
     ACA["Azure Container Apps"]
     ECR["Amazon ECR"]
     ECS["Amazon ECS"]
 
+    GitHub --> Quality
+    GitHub --> Postgres
     GitHub --> Build
     Build --> Artifact
     Artifact --> ACR

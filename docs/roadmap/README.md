@@ -26,8 +26,8 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 6 – Cloud Deployment | Completed |
 | Phase 7 – Observability | Completed |
 | Phase 8 – Production Hardening | Completed |
-| Phase 9 – Persistence & Multi-Tenant/User-Associated Data | In progress |
+| Phase 9 – Persistence & Multi-Tenant/User-Associated Data | Completed |
 
-Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C is implementation complete — remote PostgreSQL CI verification pending. Phase 9D is not started.
+Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
-Later: Phase 10 — Enterprise Communication Integrations; Phase 11 — Workflow Automation.
+Next: Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.

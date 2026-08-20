@@ -5,6 +5,7 @@ flowchart TD
     ECI["ECI API"]
     FoundryUAMI["Azure Foundry UAMI"]
     BedrockRole["AWS Bedrock task role"]
+    Database["PostgreSQL identity<br/>managed DB not provisioned"]
     GitHub["GitHub Actions"]
     GHOidc["GitHub OIDC"]
     AzDeploy["Azure deploy UAMI"]
@@ -15,6 +16,7 @@ flowchart TD
     JWT --> ECI
     ECI --> FoundryUAMI
     ECI --> BedrockRole
+    ECI -.-> Database
     GitHub --> GHOidc
     GHOidc --> AzDeploy
     GHOidc --> AwsDeploy

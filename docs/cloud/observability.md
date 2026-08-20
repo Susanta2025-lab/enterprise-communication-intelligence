@@ -19,7 +19,7 @@ Incoming HTTP request
 → stdout
 ```
 
-The application remains cloud-independent, provider-independent, and stateless.
+The application remains cloud-independent and provider-independent. Phase 7 telemetry does not introduce a second observability stack. Phase 9 persistence is documented separately; it does not change stdout JSON telemetry.
 
 ```mermaid
 flowchart TD

@@ -17,6 +17,7 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | Application-user OIDC JWT | Implemented (`AUTH_MODE=oidc`; live Entra is the first IdP) |
 | GitHub Actions CI/CD | Implemented (automatic tests-only CI; manual `workflow_dispatch` CD) |
 | GitHub OIDC deploy federation | Implemented (Azure UAMI and AWS IAM role `eci-github-deploy-dev`) |
+| PostgreSQL persistence architecture | Implemented and CI-proven; no managed cloud database provisioned |
 
 See:
 
@@ -27,6 +28,7 @@ See:
 - [Cloud roadmap](roadmap.md)
 - [Deployment](deployment.md)
 - [Observability](observability.md)
+- [PostgreSQL persistence](persistence.md)
 
 ## Microsoft Foundry (implemented)
 
@@ -88,4 +90,4 @@ Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI promp
 
 One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
 
-GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Key Vault and Secrets Manager remain later work. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. See [Deployment](deployment.md) and [Observability](observability.md).
+GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Key Vault and Secrets Manager remain later work. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`; Azure Database for PostgreSQL and Amazon RDS are not provisioned. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), and [Observability](observability.md).
