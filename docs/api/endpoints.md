@@ -1,6 +1,6 @@
 # Endpoints
 
-All endpoints implemented in the repository as of Phase 9.
+All HTTP endpoints implemented in the repository as of Phase 10. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow).
 
 ## `GET /health`
 

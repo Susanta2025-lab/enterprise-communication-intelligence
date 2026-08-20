@@ -28,10 +28,12 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 7 – Observability | Completed |
 | Phase 8 – Production Hardening | Completed |
 | Phase 9 – Persistence & Multi-Tenant/User-Associated Data | Completed |
-| Phase 10 – Communication Connectors | In progress |
+| Phase 10 – Communication Connectors | Completed |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
-Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is completed. Phase 10C — Gmail Read-Only Adapter is completed (mocked/offline tests + controlled local live verification passed; implementation CI run `32351444028` PASS; live Gmail check was local, not GitHub Actions). Phase 10D — Microsoft Graph Read-Only Adapter is completed (mocked/offline tests + controlled local live Microsoft Graph verification passed; implementation CI run `32372699620` PASS; live Graph check was local, not GitHub Actions). Phase 10E is pending.
+Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is completed. Phase 10C — Gmail Read-Only Adapter is completed. Phase 10D — Microsoft Graph Read-Only Adapter is completed. Phase 10E — Documentation finalization is completed.
 
-Next: complete Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.
+Phase 10 closed the vendor-neutral connector path through Gmail and Microsoft Graph read-only adapters, user-owned `connector_accounts`, and controlled local live adapter checks. Production OAuth, credential resolver, connector HTTP APIs, synchronization, and send/reply remain deferred. Details: [Phase 10](phase-10-communication-connectors.md).
+
+Next: Phase 11 — Workflow Automation.

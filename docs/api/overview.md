@@ -105,4 +105,4 @@ CommunicationAnalysisWorkflowService (app/application/services)
   └── AnalysisHistoryService → PostgreSQL repositories (when configured)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints; Gmail and Graph adapters are not reachable through this API surface. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

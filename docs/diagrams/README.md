@@ -6,7 +6,7 @@ Mermaid source files for ECI Platform.
 
 | File | Represents |
 |---|---|
-| [`architecture.mmd`](architecture.mmd) | The implemented layered system: client → FastAPI API → analysis workflow → AI-only service / history repositories → `AIProvider` and PostgreSQL |
+| [`architecture.mmd`](architecture.mmd) | The implemented layered system: HTTP analyze path plus Gmail/Graph → `CommunicationConnector` → `CommunicationMessage` → `CommunicationIngestionService` → existing analysis workflow → `AIProvider` and PostgreSQL. `ConnectorAccountService` is shown off the HTTP path. |
 | [`request-flow.mmd`](request-flow.mmd) | Sequence diagram of analyze: validation, identity TX, AI inference, history save, and failure paths including 503-before-AI |
 | [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider`, and the configuration-driven factory |
 | [`deployment-azure.mmd`](deployment-azure.mmd) | Azure Container Apps path: same image → ACR → Container Apps → user-assigned Managed Identity → Microsoft Foundry |
@@ -22,7 +22,7 @@ Mermaid source files for ECI Platform.
 
 ## Implemented vs. Placeholder
 
-`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the application as it exists today.
+`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the application as it exists today. `architecture.mmd` includes the Phase 10 connector path below the HTTP product surface. It does not depict production OAuth, token storage, send/reply, or background workers. The connector-to-workflow edges are the implemented composition path; they are not a claim that a live mailbox has been passed through Foundry or Bedrock.
 
 `deployment-azure.mmd` and `deployment-aws.mmd` describe the Phase 6C hosting paths. Direct Fargate public-IP ingress is verification-only. See [`docs/cloud/deployment.md`](../cloud/deployment.md).
 

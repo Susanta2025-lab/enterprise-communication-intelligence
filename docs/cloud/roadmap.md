@@ -1,6 +1,6 @@
 # Cloud Roadmap
 
-This is the cloud-integration view of Phase 6 through Phase 9. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+This is the cloud-integration view of Phase 6 through Phase 10. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
 
 ## Provider integration
 
@@ -49,4 +49,18 @@ See [Observability](observability.md).
 
 ## Later enterprise deployment
 
-Phase 8 is complete. Phase 9 persistence is complete at the application and CI-proof level. Next is Phase 10 — Communication Connectors. Do not implement Phase 10 here. Later: Phase 11 — Workflow Automation. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.
+Phase 8 is complete. Phase 9 persistence is complete at the application and CI-proof level. Phase 10 communication connectors are complete on the local/application side: vendor-neutral `CommunicationConnector`, Gmail and Microsoft Graph read-only REST adapters, user-owned `connector_accounts`, and controlled local live adapter checks that stopped at `CommunicationMessage`.
+
+Cloud runtimes still do **not** provide:
+
+- production Gmail OAuth
+- production Microsoft Graph OAuth
+- credential resolver
+- cloud mailbox onboarding
+- connector HTTP APIs
+- background mailbox sync
+- send/reply from cloud-hosted ECI
+
+Controlled live adapter verification was local. This document does not claim Azure or AWS connector deployment verification.
+
+Next: Phase 11 — Workflow Automation. Do not implement Phase 11 here. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.

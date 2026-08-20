@@ -1,17 +1,17 @@
 # ECI Platform Architecture Documentation
 
-This directory documents the architecture implemented through **Phase 9 – Persistence**. Provider adapters, cloud hosting, portable structured telemetry, application-user OIDC, GitHub OIDC CI/CD, and user-owned PostgreSQL persistence are implemented. No managed cloud database is provisioned.
+This directory documents the architecture implemented through **Phase 10 – Communication Connectors**. Provider adapters, cloud hosting, portable structured telemetry, application-user OIDC, GitHub OIDC CI/CD, user-owned PostgreSQL persistence, and vendor-neutral communication connectors are implemented. No managed cloud database is provisioned. Production mailbox OAuth, credential resolver, connector HTTP APIs, synchronization, and send/reply are not implemented.
 
 ## Contents
 
 - [Overview](overview.md) — the implemented layered architecture end to end
 - [Clean Architecture](clean-architecture.md) — how dependency direction and layering are applied
 - [Dependency Flow](dependency-flow.md) — allowed and forbidden imports between layers
-- [Application Layer](application-layer.md) — analysis, workflow, identity, and history services
-- [Persistence](persistence.md) — PostgreSQL architecture, ownership, migrations, and proof level
+- [Application Layer](application-layer.md) — analysis, workflow, identity, history, ingestion, and connector-account services
+- [Persistence](persistence.md) — PostgreSQL architecture, ownership, connector accounts, migrations, and proof level
 - [Provider Abstraction](provider-abstraction.md) — `AIProvider`, mock, Foundry, Bedrock, the common LLM contract, and the factory
 - [Project Structure](project-structure.md) — the actual repository layout and the role of each package
-- [Sequence Diagrams](sequence-diagrams.md) — request-level walkthroughs
+- [Sequence Diagrams](sequence-diagrams.md) — request-level walkthroughs, including connector ingestion
 
 ## Diagrams
 
@@ -33,4 +33,6 @@ Mermaid source files live in [`docs/diagrams/`](../diagrams/README.md):
 
 ## Scope
 
-This documentation describes what is implemented in the repository as of Phase 9. Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Application-user authentication is provider-independent OIDC JWT; live Entra is the first IdP. Persistence is PostgreSQL-compatible and proven in CI; managed Azure/AWS databases are not provisioned. Azure real-bearer requests are verified over managed HTTPS. AWS real-bearer TLS verification is not claimed. Observability uses the same stdout JSON on both clouds — see [`docs/cloud/`](../cloud/README.md), [`docs/cloud/authentication.md`](../cloud/authentication.md), [`docs/cloud/persistence.md`](../cloud/persistence.md), [`docs/cloud/observability.md`](../cloud/observability.md), and [`docs/roadmap/README.md`](../roadmap/README.md).
+This documentation describes what is implemented in the repository as of Phase 10. Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Application-user authentication is provider-independent OIDC JWT; live Entra is the first IdP. Persistence is PostgreSQL-compatible and proven in CI; managed Azure/AWS databases are not provisioned. Azure real-bearer requests are verified over managed HTTPS. AWS real-bearer TLS verification is not claimed. Observability uses the same stdout JSON on both clouds.
+
+Phase 10 added a domain `CommunicationConnector` contract, `CommunicationIngestionService`, user-owned `connector_accounts`, and infrastructure adapters for fake, Gmail REST, and Microsoft Graph REST. Connector capability currently exists below the HTTP product surface. There is no connector HTTP API, production mailbox OAuth, credential resolver, background sync, or send/reply path. Controlled local live Gmail and Graph checks stopped at `CommunicationMessage`. See [`docs/cloud/`](../cloud/README.md), [`docs/cloud/authentication.md`](../cloud/authentication.md), [`docs/cloud/persistence.md`](../cloud/persistence.md), [`docs/cloud/observability.md`](../cloud/observability.md), [`docs/roadmap/phase-10-communication-connectors.md`](../roadmap/phase-10-communication-connectors.md), and [`docs/roadmap/README.md`](../roadmap/README.md).

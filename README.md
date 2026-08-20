@@ -106,6 +106,17 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * PostgreSQL CI validation (ephemeral `postgres:16`; run `32336909759`)
 * SQLite for default local tests only
 
+### Communication Connectors
+
+* Vendor-neutral `CommunicationConnector` contract
+* Gmail read-only REST adapter (no Gmail SDK)
+* Microsoft Graph read-only REST adapter (no Graph SDK / MSAL inside ECI)
+* User-owned connector accounts with opaque `credential_ref`
+* Connector ingestion into the existing analysis workflow (below the HTTP surface)
+* Controlled local live adapter verification for Gmail and Microsoft Graph, stopping at `CommunicationMessage`
+
+Phase 10 does not include production OAuth, connector HTTP APIs, background synchronization, sending, or automatic replies.
+
 ### Engineering
 
 * Clean Architecture
@@ -144,6 +155,12 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * ✅ Phase 9C – PostgreSQL Integration & CI
 * ✅ Phase 9D – Cloud Strategy & Final Documentation
 * ✅ Phase 9 – Persistence & User-Associated Data
+* ✅ Phase 10A – Connector Architecture & Domain Contracts
+* ✅ Phase 10B – Connector Accounts & Credential References
+* ✅ Phase 10C – Gmail Read-Only Adapter
+* ✅ Phase 10D – Microsoft Graph Read-Only Adapter
+* ✅ Phase 10E – Documentation Finalization
+* ✅ Phase 10 – Communication Connectors
 
 ---
 
@@ -170,6 +187,26 @@ CommunicationAnalysisService   AnalysisHistoryService
 ```
 
 The application and business layers depend only on the `AIProvider` interface and persistence repository interfaces. Provider selection is configuration-driven through `AI_PROVIDER`. Persistence is configuration-driven through `DATABASE_URL`. `MockAIProvider` remains a deterministic offline path. `CommunicationAnalysisService` remains AI-only.
+
+Phase 10 adds a vendor-neutral connector path below the HTTP product surface:
+
+```text
+CommunicationConnector
+        ↑
+vendor adapter (gmail | microsoft_graph)
+        ↓
+CommunicationMessage
+        ↓
+CommunicationIngestionService
+        ↓
+CommunicationAnalysisWorkflowService
+        ↓
+CommunicationAnalysisService
+        ↓
+AIProvider
+```
+
+Controlled local live Gmail and Graph checks stopped at `CommunicationMessage` and did not call Foundry, Bedrock, or PostgreSQL.
 
 Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, AI workload identity, and GitHub deploy identity.
 
@@ -411,8 +448,14 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 9B – User Ownership & History    | ✅ Completed   |
 | ↳ Phase 9C – PostgreSQL Integration & CI | ✅ Completed   |
 | ↳ Phase 9D – Cloud Strategy & Final Docs | ✅ Completed   |
+| Phase 10 – Communication Connectors      | ✅ Completed   |
+| ↳ Phase 10A – Connector Architecture     | ✅ Completed   |
+| ↳ Phase 10B – Connector Accounts         | ✅ Completed   |
+| ↳ Phase 10C – Gmail Read-Only Adapter    | ✅ Completed   |
+| ↳ Phase 10D – Microsoft Graph Adapter    | ✅ Completed   |
+| ↳ Phase 10E – Documentation Finalization | ✅ Completed   |
 
-Next: Phase 10 — Communication Connectors (not implemented).
+Next: Phase 11 — Workflow Automation.
 
 ---
 
@@ -437,7 +480,8 @@ The current implementation intentionally focuses on architecture and application
 Not yet implemented:
 
 * Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
-* Communication Connectors (Phase 10)
+* Production Gmail/Microsoft OAuth, credential resolver, and connector HTTP APIs
+* Mailbox synchronization, webhooks, attachments, sending, and automatic replies
 * Workflow automation (Phase 11)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)

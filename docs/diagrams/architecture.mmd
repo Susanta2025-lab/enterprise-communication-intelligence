@@ -1,8 +1,17 @@
 graph TB
     Client[Client]
+    GmailAPI[Gmail API]
+    GraphAPI[Microsoft Graph]
 
-    subgraph Implemented["Implemented (Phase 1-9)"]
+    subgraph Implemented["Implemented (Phase 1-10)"]
         API["FastAPI REST API<br/>app/api"]
+        Connector["CommunicationConnector"]
+        GmailC["Gmail REST adapter"]
+        GraphC["Microsoft Graph REST adapter"]
+        FakeC["Fake adapter"]
+        Message["CommunicationMessage"]
+        Ingestion["CommunicationIngestionService"]
+        AccountSvc["ConnectorAccountService"]
         Workflow["CommunicationAnalysisWorkflowService<br/>app/application"]
         App["CommunicationAnalysisService<br/>AI-only"]
         Iface["AIProvider interface<br/>app/domain/interfaces"]
@@ -11,12 +20,22 @@ graph TB
         Bedrock["AmazonBedrockProvider<br/>app/providers/amazon_bedrock"]
         Common["Shared LLM analysis contract<br/>app/providers/common"]
         Repos["Identity and Analysis repositories"]
+        AccountRepos["ConnectorAccount repository"]
         Storage["SQLAlchemy storage<br/>app/infrastructure/storage"]
         Core["Core: Config, Logging, Exceptions<br/>app/core"]
     end
 
     Client --> API
     API --> Workflow
+    GmailAPI --> GmailC
+    GraphAPI --> GraphC
+    GmailC --> Connector
+    GraphC --> Connector
+    FakeC --> Connector
+    Connector --> Message
+    Message --> Ingestion
+    Ingestion --> Workflow
+    AccountSvc --> AccountRepos
     Workflow --> App
     App --> Iface
     Iface --> Mock
@@ -26,6 +45,7 @@ graph TB
     Bedrock --> Common
     Workflow --> Repos
     Repos --> Storage
+    AccountRepos --> Storage
     API --> Core
     App --> Core
     Mock --> Core
@@ -35,4 +55,4 @@ graph TB
 
     classDef implemented fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:1px
 
-    class API,Workflow,App,Iface,Mock,Foundry,Bedrock,Common,Repos,Storage,Core implemented
+    class API,Connector,GmailC,GraphC,FakeC,Message,Ingestion,AccountSvc,Workflow,App,Iface,Mock,Foundry,Bedrock,Common,Repos,AccountRepos,Storage,Core implemented

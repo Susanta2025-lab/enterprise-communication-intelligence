@@ -1,6 +1,6 @@
 # Application Layer
 
-The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer.
+The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer.
 
 ## Role of `CommunicationAnalysisService`
 
@@ -64,6 +64,39 @@ See [Persistence](persistence.md).
 - `AnalysisHistoryService` saves, lists, gets, and deletes analyses through `AnalysisRepository`. Every query is SQL-scoped by `user_id`. Unknown and cross-user resources raise `AnalysisNotFoundError` (`404`).
 
 These services depend on `PersistenceUnitOfWork` and repository interfaces in `app/domain/interfaces/`, not on SQLAlchemy models.
+
+## Communication ingestion
+
+`CommunicationIngestionService` is the application entry for a connector-supplied message. It:
+
+```text
+CommunicationConnector.fetch_message
+→ CommunicationMessage
+→ CommunicationRequest
+→ CommunicationAnalysisWorkflowService.analyze
+```
+
+It does **not**:
+
+- own OAuth, refresh tokens, or consent
+- call `AIProvider` directly
+- persist raw mail
+- resolve `credential_ref`
+- interpret vendor cursors or pagination tokens
+- import Gmail or Microsoft Graph types
+
+Identity, optional analysis persistence, and AI orchestration remain on `CommunicationAnalysisWorkflowService` and `CommunicationAnalysisService`. Connector HTTP routes are not present; callers construct a connector and this service below the API.
+
+## Connector accounts
+
+`ConnectorAccountService` (`app/application/services/connector_accounts.py`) manages the user-owned connector-account lifecycle:
+
+- bind an authenticated principal to an internal `users.id`
+- register, list, retrieve, and disconnect accounts
+- store provider identity and opaque `external_account_id`
+- accept optional opaque `credential_ref` without treating it as token material
+
+It does **not** store access tokens, refresh tokens, authorization codes, or secrets. It does not call Gmail, Microsoft Graph, or `AIProvider`. Application-facing `ConnectorAccountResult` omits `user_id` and `credential_ref`. There is no credential resolver joining `credential_ref` to `AccessTokenProvider`.
 
 ## Provider Failure Translation
 

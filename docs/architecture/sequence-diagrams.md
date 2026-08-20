@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 9. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected.
+These diagrams describe the request flows implemented as of Phase 10. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -48,6 +48,52 @@ sequenceDiagram
 ```
 
 If save fails after a successful AI call, the workflow still returns HTTP 200 with the analysis and omits `analysis_id`. The provider is not retried.
+
+## Connector ingestion → analysis (not an HTTP endpoint)
+
+Phase 10 added no connector HTTP routes. This path exists below the product API. `CommunicationIngestionService` fetches one already-normalized message and reuses the existing workflow. Mailbox HTTP happens first, before workflow identity or history transactions. No database transaction is held open across the mailbox request or AI inference. When the workflow is constructed with an authenticated principal and persistence, it may persist a derived analysis (not raw mail) using the same short-transaction rules as HTTP analyze. Raw mailbox payloads are not persisted.
+
+```mermaid
+sequenceDiagram
+    participant Mailbox as External mailbox API
+    participant Connector as CommunicationConnector
+    participant Ingestion as CommunicationIngestionService
+    participant Workflow as CommunicationAnalysisWorkflowService
+    participant Service as CommunicationAnalysisService
+    participant Provider as AIProvider
+
+    Ingestion->>Connector: fetch_message(provider_message_id)
+    Connector->>Mailbox: vendor REST fetch
+    Mailbox-->>Connector: vendor payload
+    Connector-->>Ingestion: CommunicationMessage
+    Ingestion->>Workflow: analyze(CommunicationRequest)
+    Workflow->>Service: analyze(request)
+    Service->>Provider: analyze(request)
+    Provider-->>Service: CommunicationAnalysisResult
+    Service-->>Workflow: CommunicationAnalysisResult
+    Workflow-->>Ingestion: PersistedAnalysisOutcome
+```
+
+Vendor adapters (fake, Gmail REST, Microsoft Graph REST) implement `CommunicationConnector`. Application code never sees Gmail JSON, MIME, or Graph JSON.
+
+This application path is covered by mocked ingestion-boundary tests. It is **not** a product-facing live-mailbox summary API.
+
+### Controlled live adapter checks (not the application workflow)
+
+Controlled local Gmail and Microsoft Graph verifications stopped at the connector/domain boundary:
+
+```text
+Gmail API / Microsoft Graph REST
+        ↓
+vendor CommunicationConnector adapter
+        ↓
+CommunicationMessage
+        STOP
+```
+
+Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, background-sync, or credential-resolver sequences.
+
+The following are **not implemented** and are not shown as current flows: OAuth callback, credential resolver, background sync, automatic replies, sending.
 
 ## Identity failure before AI
 

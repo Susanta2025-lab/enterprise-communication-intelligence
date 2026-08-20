@@ -13,15 +13,15 @@ Introduce a vendor-neutral communication connector boundary so external adapters
 
 ## Status
 
-Phase 10 is **In progress**.
+Phase 10 is **Completed**.
 
 - **10A is Completed:** domain connector contract, connector-neutral errors, ingestion service, offline fake adapter, unit and boundary tests. No API, OAuth, or vendor SDKs.
-- **10B is Completed:** `connector_accounts` persistence, user ownership isolation, opaque `credential_ref`, `ConnectorAccountService`, Alembic revision `10b0001`, SQLite and PostgreSQL tests. No OAuth, token storage, Gmail, Microsoft Graph, or connector API routes.
+- **10B is Completed:** `connector_accounts` persistence, user ownership isolation, opaque `credential_ref`, `ConnectorAccountService`, Alembic revision `10b0001`, SQLite and PostgreSQL tests. No OAuth, token storage, or connector API routes.
 - **10C is Completed:** mocked/offline tests plus a controlled local live verification passed. The repository still contains only the Gmail API v1 REST adapter, MIME normalization, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Gmail SDK, or connector HTTP routes were added to ECI. The live mailbox check was a separate local verification, not GitHub Actions.
 - **10D is Completed:** mocked/offline tests plus a controlled local live Microsoft Graph verification passed. The repository still contains only the Microsoft Graph REST v1.0 adapter, JSON normalization, nextLink validation, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Graph SDK, MSAL, or connector HTTP routes were added to ECI. The live Graph check was a separate local verification, not GitHub Actions.
-- **10E is pending.**
+- **10E is Completed:** architecture consistency review, shared documentation alignment, and full offline regression. No application code, runtime dependencies, or new tests.
 
-Phase 10 overall remains in progress.
+Phase 10 overall is completed. Next: Phase 11 — Workflow Automation.
 
 ## Deliverables
 
@@ -29,7 +29,7 @@ Phase 10 overall remains in progress.
 - [x] Phase 10B — Connector Accounts & Credential References (completed)
 - [x] Phase 10C — Gmail Read-Only Adapter (mocked/offline tests + controlled local live verification passed)
 - [x] Phase 10D — Microsoft Graph Read-Only Adapter (mocked/offline tests + controlled local live Microsoft Graph verification passed)
-- [ ] Phase 10E — pending
+- [x] Phase 10E — Documentation finalization and Phase 10 closure (completed)
 
 ## Phase 10A Architecture
 
@@ -165,7 +165,7 @@ A controlled local live verification was performed after 10C implementation. It 
 
 `https://www.googleapis.com/auth/gmail.readonly` is currently treated as a restricted Gmail scope. The controlled local live verification does not constitute Google app verification, production authorization approval, restricted-scope compliance approval, or security-assessment completion. Future production or public use must separately evaluate Google's then-current authorization, verification, and restricted-scope requirements. Phase 10C does not add OAuth to ECI and does not make legal or compliance guarantees.
 
-ADR-015 and credential-store ADRs remain deferred until Phase 10E or a focused connector architecture review.
+ADR-015 and credential-store ADRs remain deferred until a focused connector architecture review. Phase 10E did not create them.
 
 ## Controlled Live Gmail Verification
 
@@ -423,7 +423,7 @@ The 10D adapter in ECI still does not include:
 
 A controlled local live verification was performed after 10D implementation. It did not add OAuth, credentials, MSAL, or Graph SDK to ECI. See [Controlled Live Microsoft Graph Verification](#controlled-live-microsoft-graph-verification).
 
-ADR-015 and credential-store ADRs remain deferred until Phase 10E or a focused connector architecture review.
+ADR-015 and credential-store ADRs remain deferred until a focused connector architecture review. Phase 10E did not create them.
 
 ## Controlled Live Microsoft Graph Verification
 
@@ -672,15 +672,152 @@ Phase 10D implementation commit:
 
 CI proves the mocked/offline committed code and tests. The controlled local live Microsoft Graph verification was a separate local execution. The live Graph call did not run in GitHub Actions.
 
-## Phase 10E Readiness
+## Phase 10E Finalization
 
-Phase 10E (final verification/documentation) may now begin after this documentation checkpoint is reviewed, committed, pushed, and green CI.
+Phase 10E closed Phase 10 with documentation alignment and offline regression only.
 
-Phase 10E should focus on:
+It:
 
-- final connector verification
-- architecture consistency
-- final Phase 10 documentation
-- remaining integration/deferred-work boundaries
+- introduced no application code
+- introduced no new runtime dependencies
+- introduced no new tests
+- performed an architecture consistency review against the committed 10A–10D code
+- aligned shared architecture, API, diagram, cloud, and root README documentation
+- reran complete offline regression
+- formally closed Phase 10
 
-Phase 10E is not implemented in this checkpoint. Phase 10 overall remains in progress.
+No new runtime capability was introduced. Controlled Gmail and Graph live-verification records from 10C and 10D remain the authoritative live-check documentation; they are not repeated here.
+
+### Authoritative implemented architecture
+
+```text
+CommunicationConnector
+        ↑
+vendor adapter
+(fake / Gmail / Microsoft Graph)
+        ↓
+CommunicationMessage
+        ↓
+CommunicationIngestionService
+        ↓
+CommunicationAnalysisWorkflowService
+        ↓
+CommunicationAnalysisService
+        ↓
+AIProvider
+```
+
+Key boundaries after Phase 10:
+
+- Domain owns the `CommunicationConnector` contract.
+- Application depends on the connector interface, not vendor types.
+- Gmail and Microsoft Graph adapters live in infrastructure.
+- Both normalize email to `SourceType.EMAIL`.
+- Provider identity remains separate (`gmail`, `microsoft_graph`).
+- `AIProvider` is unchanged.
+- Connector adapters do not persist raw mail, call `AIProvider`, own OAuth, resolve connector accounts, or expose HTTP routes.
+
+There is no connector factory in the repository. The API does not import concrete connectors.
+
+### Phase 10 closure
+
+Phase 10 now proves:
+
+```text
+External communication provider
+        ↓
+vendor-neutral CommunicationConnector
+        ↓
+normalized CommunicationMessage
+        ↓
+existing ECI analysis workflow boundary
+```
+
+plus:
+
+- user-owned connector account persistence
+- opaque credential references
+- Gmail REST v1 read-only adapter
+- Microsoft Graph REST v1.0 read-only adapter
+- provider-neutral domain contract
+- controlled local live adapter compatibility checks (stop at `CommunicationMessage`)
+- security and privacy boundaries
+- full automated offline regression
+
+This does not make ECI a complete production email product.
+
+### Deferred production capabilities
+
+The following remain deliberately deferred product/production capabilities, not defects:
+
+- production Gmail OAuth lifecycle
+- production Microsoft OAuth lifecycle
+- persistent refresh-token handling
+- secret manager integration
+- credential resolver implementation
+- `connector_account` → `credential_ref` → live token composition
+- user-facing connector API routes
+- production mailbox onboarding
+- multi-user provider onboarding
+- work/school Microsoft 365 onboarding
+- Google restricted-scope production verification/compliance
+- background synchronization
+- Gmail History API
+- Microsoft Graph delta query
+- sync-state persistence
+- webhooks/subscriptions
+- push notifications
+- attachments
+- raw-message persistence
+- sending
+- replying
+- `Mail.Send`
+- `Mail.ReadWrite`
+- `gmail.send`
+- `gmail.modify`
+- automatic replies
+- generated-reply execution
+- cloud-hosted mailbox OAuth
+- live mailbox → AI provider verification
+- live mailbox → PostgreSQL analysis persistence verification
+
+Future conceptual credential composition remains unimplemented:
+
+```text
+authenticated ECI user
+        ↓
+owned connector account
+        ↓
+credential_ref
+        ↓
+credential resolver
+        ↓
+AccessTokenProvider
+        ↓
+provider connector
+```
+
+`connector_accounts.credential_ref` and adapter `AccessTokenProvider` exist. A credential resolver that joins them does not.
+
+ADR-015 and credential-store ADRs remain deferred. Phase 10E did not lock down secret store, resolver, OAuth lifecycle, Gmail History vs Graph delta, connector API surface, or sync architecture.
+
+### Phase 11 boundary
+
+Next roadmap phase: **Phase 11 — Workflow Automation**.
+
+Likely future workflow capabilities include generated-reply approval, action execution, and send/reply workflows. Phase 11 is not required to absorb every remaining connector-production topic. Credential resolver, provider OAuth, synchronization, connector APIs, and production mailbox onboarding may be Phase 11+ or later focused phases.
+
+### Local final regression
+
+Recorded after Phase 10E documentation edits. Local only. Not a GitHub Actions run.
+
+| Check | Result |
+|---|---|
+| `python -m pip check` | No broken requirements found |
+| `python -m ruff check .` | All checks passed |
+| `python -m pytest` | 697 passed, 47 skipped |
+| `git diff --check` | passed (no whitespace errors) |
+
+Local final regression passed.
+
+CI: pending commit/push.

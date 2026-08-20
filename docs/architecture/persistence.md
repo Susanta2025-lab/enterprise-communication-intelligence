@@ -40,6 +40,7 @@ Internal `users.id` is an ownership key, not a login system and not a tenant.
 | `users` | Opaque UUID primary key and timestamps. No PII columns. |
 | `external_identities` | `issuer`, `subject`, unique `(issuer, subject)`, FK to `users.id` |
 | `analyses` | User-owned structured analysis results |
+| `connector_accounts` | User-owned connector account registry with opaque `credential_ref` |
 
 Identifier classes:
 
@@ -50,11 +51,11 @@ Identifier classes:
 | `message_id` | business request | Caller-supplied source message identifier |
 | `user_id` | persistence | Internal ownership UUID |
 
-`source_type` and optional `message_id` are stored so later connectors can correlate analyses. Phase 9 does not store connection records, OAuth tokens, ingested messages, or sync cursors.
+`source_type` and optional `message_id` are stored so connectors can correlate analyses. Phase 9 did not store connection records, OAuth tokens, ingested messages, or sync cursors. Phase 10 added `connector_accounts` only. It still does not store OAuth tokens, ingested messages, or sync cursors.
 
 ## Data minimization
 
-Raw communication body is not persisted. Sender, recipients, subject line, email, display name, JWT, access token, refresh token, and scope claims are not stored. This is an intentional privacy decision. Future connector ingestion requires a separate explicit retention decision.
+Raw communication body is not persisted. Sender, recipients, subject line, email, display name, JWT, access token, refresh token, and scope claims are not stored. Connector adapters do not persist raw mail. `connector_accounts.credential_ref` is an opaque locator, not token material. This is an intentional privacy decision. Raw communication body retention remains an explicit future decision.
 
 ## Transaction architecture
 
@@ -132,7 +133,7 @@ Do not auto-migrate from FastAPI startup. Do not let every Azure Container Apps 
 
 Alembic reads `DATABASE_URL` through a storage-level resolver. It does not load application Settings or OIDC configuration.
 
-Current head revision: `9a0001`.
+Current head revision: `10b0001` (follows `9a0001`).
 
 ## Rollback and expand/contract
 
@@ -187,7 +188,7 @@ Default local `python -m pytest` skips `tests/postgres/` unless `ECI_POSTGRES_TE
 
 - SQLAlchemy repository and unit-of-work architecture
 - Alembic migrations
-- `users` / `external_identities` / `analyses` schema
+- `users` / `external_identities` / `analyses` / `connector_accounts` schema
 - UUID, JSONB, and `timestamptz` behavior on PostgreSQL
 - composite issuer+subject uniqueness
 - foreign-key cascades
@@ -211,18 +212,35 @@ Default local `python -m pytest` skips `tests/postgres/` unless `ECI_POSTGRES_TE
 - cross-region disaster recovery
 - database replication across clouds
 
-## Phase 10 compatibility
+## Phase 10 persistence additions
 
-Phase 9 deliberately keeps `users.id` as a stable ownership foreign key. Existing analyses already store `source_type` and optional `message_id`.
+Phase 9 kept `users.id` as a stable ownership foreign key. Existing analyses already store `source_type` and optional `message_id`.
 
-Phase 9 does **not** contain:
+Phase 10 added `connector_accounts`:
 
-- connection records
-- OAuth token storage
-- message synchronization tables
-- sync cursors
+| Field | Purpose |
+|---|---|
+| `id` | Internal UUID |
+| `user_id` | Ownership FK to `users.id` |
+| `provider` | Connector provider identity (`gmail`, `microsoft_graph`, `fake`, …) — not `SourceType` |
+| `external_account_id` | Provider-side account identity |
+| `credential_ref` | Opaque locator for credential material stored elsewhere; nullable |
+| `status` | `active` or `disconnected` |
+| `created_at` / `updated_at` | Timestamps |
+| uniqueness | `(user_id, provider, external_account_id)` |
 
-Those remain Phase 10 — Communication Connectors.
+`credential_ref` is not an access token, refresh token, authorization code, client secret, JWT, or Authorization header. Disconnect is a soft status change that nulls `credential_ref`. Connector adapters do not write mailbox rows. If `CommunicationIngestionService` is composed with an authenticated workflow, only the derived analysis may be stored on `analyses`.
+
+Still **not** present (deliberately deferred):
+
+- `connector_credentials`
+- `oauth_tokens`
+- `sync_states`
+- raw ingested messages
+- provider refresh-token storage
+- OAuth token columns
+
+Those remain later production/connector-lifecycle work, not Phase 10 defects.
 
 ## Performance and operations (deferred)
 

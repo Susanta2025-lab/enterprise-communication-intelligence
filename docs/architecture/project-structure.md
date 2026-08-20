@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 9. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 10. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -12,19 +12,21 @@ app/
 │       ├── communications.py # POST /api/v1/communications/analyze
 │       └── analyses.py       # GET/DELETE /api/v1/analyses
 ├── application/
-│   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError
+│   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account errors
 │   └── services/
 │       ├── communication_analysis.py  # CommunicationAnalysisService (AI-only)
 │       ├── communication_analysis_workflow.py  # persist-after-analyze workflow
+│       ├── communication_ingestion.py  # CommunicationIngestionService
+│       ├── connector_accounts.py  # ConnectorAccountService
 │       ├── identity.py       # IdentityResolver
 │       └── analysis_history.py  # AnalysisHistoryService
 ├── core/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
-│   ├── exceptions.py          # ECIPlatformError, ConfigurationError, ServiceUnavailableError, PersistenceError
+│   ├── exceptions.py          # ECIPlatformError, ConfigurationError, ServiceUnavailableError, PersistenceError, connector-neutral errors
 │   └── security.py           # OIDC JWT validation and AuthenticatedPrincipal
 ├── domain/
-│   ├── enums.py               # SourceType, PriorityLevel, MessageCategory
+│   ├── enums.py               # SourceType, PriorityLevel, MessageCategory, ConnectorAccountStatus
 │   ├── models/
 │   │   ├── message.py         # CommunicationMessage, MessageMetadata
 │   │   ├── analysis.py        # Summary, Priority, ActionItem, DraftReply, CommunicationAnalysis
@@ -33,6 +35,8 @@ app/
 │   │   └── analysis.py        # CommunicationRequest, CommunicationAnalysisResult
 │   ├── interfaces/
 │   │   ├── ai_provider.py     # AIProvider abstract interface
+│   │   ├── communication_connector.py  # CommunicationConnector, ConnectorMessageQuery, MessagePage
+│   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
 │   │   ├── analysis_repository.py
 │   │   └── persistence_unit_of_work.py
@@ -53,15 +57,30 @@ app/
 │   ├── aws/                   # unused Phase 3 vendor scaffold — not an active provider
 │   └── azure/                 # unused Phase 3 vendor scaffold — not an active provider
 ├── infrastructure/
+│   ├── connectors/
+│   │   ├── common/
+│   │   │   ├── auth.py        # AccessTokenProvider callable; in-memory token injection, not credential_ref resolution
+│   │   │   └── html_text.py   # stdlib HTML → plain text
+│   │   ├── fake/
+│   │   │   └── connector.py   # FakeCommunicationConnector
+│   │   ├── gmail/
+│   │   │   ├── connector.py   # GmailCommunicationConnector (REST v1)
+│   │   │   └── normalization.py
+│   │   └── microsoft_graph/
+│   │       ├── connector.py   # MicrosoftGraphCommunicationConnector (REST v1.0)
+│   │       └── normalization.py
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
 │   └── storage/                # SQLAlchemy runtime, models, UoW, repositories
-│       ├── models.py
+│       ├── models.py           # users, external_identities, analyses, connector_accounts
 │       ├── database.py
 │       ├── unit_of_work.py
 │       ├── runtime.py
 │       ├── migration_config.py
 │       └── repositories/
+│           ├── identity.py
+│           ├── analysis.py
+│           └── connector_account.py
 ├── schemas/
 │   ├── health.py               # LivenessResponse, HealthResponse, ReadinessResponse
 │   ├── analysis.py             # CommunicationAnalysisResponse, history items
@@ -75,15 +94,21 @@ tests/
 │   ├── domain/
 │   ├── providers/
 │   ├── application/
+│   ├── infrastructure/
+│   │   ├── connectors/
+│   │   └── storage/
 │   └── ...
 ├── integration/
 │   ├── test_health.py
 │   ├── test_communications.py
-│   └── test_docs.py
+│   ├── test_docs.py
+│   ├── test_ingestion_boundary.py
+│   ├── test_gmail_ingestion_boundary.py
+│   └── test_microsoft_graph_ingestion_boundary.py
 └── postgres/                    # skipped locally unless ECI_POSTGRES_TEST_DATABASE_URL is set
 
 alembic/
-└── versions/                    # revision 9a0001
+└── versions/                    # 9a0001, 10b0001
 
 docs/
 ├── roadmap/                     # phase-by-phase roadmap
@@ -101,15 +126,15 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete provider class.
-- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path.
-- **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy.
-- **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, `AIProvider`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
-- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock.
-- **`app/infrastructure`** — Persistence runtime lives in `storage/`. `monitoring/` and `parsers/` remain empty scaffolds.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes.
+- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts.
+- **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
+- **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, `AIProvider`, `CommunicationConnector`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
+- **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
+- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
-- **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, or AWS.
+- **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. Connector ingestion-boundary tests live under `tests/integration/`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, AWS, Gmail, or Microsoft Graph network calls.
 - **`docs`** — Project documentation, split by concern (API, architecture, decisions, diagrams, roadmap, cloud).
 - **`deployment`** — Azure and AWS operator runbooks. The provider-independent `Dockerfile`, `docker-compose.yml`, and `.dockerignore` live at the repository root. `deployment/docker/` remains a `.gitkeep` placeholder.
 
