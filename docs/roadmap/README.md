@@ -13,6 +13,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 7 – Observability](phase-07-observability.md)
 - [Phase 8 – Production Hardening](phase-08-future-roadmap.md)
 - [Phase 9 – Persistence & Multi-Tenant/User-Associated Data](phase-09-persistence.md)
+- [Phase 10 – Communication Connectors](phase-10-communication-connectors.md)
 
 ## Status
 
@@ -27,7 +28,10 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 7 – Observability | Completed |
 | Phase 8 – Production Hardening | Completed |
 | Phase 9 – Persistence & Multi-Tenant/User-Associated Data | Completed |
+| Phase 10 – Communication Connectors | In progress |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
-Next: Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.
+Phase 10A — Connector Architecture & Domain Contracts is implementation complete / review pending. Phase 10B–10E are pending.
+
+Next: complete Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.

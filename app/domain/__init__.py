@@ -1,7 +1,7 @@
 """Provider-independent communication domain for ECI Platform."""
 
 from app.domain.enums import MessageCategory, PriorityLevel, SourceType
-from app.domain.interfaces import AIProvider
+from app.domain.interfaces import AIProvider, CommunicationConnector
 from app.domain.models import (
     ActionItem,
     CommunicationAnalysis,
@@ -18,6 +18,7 @@ __all__ = [
     "ActionItem",
     "CommunicationAnalysis",
     "CommunicationAnalysisResult",
+    "CommunicationConnector",
     "CommunicationMessage",
     "CommunicationRequest",
     "DraftReply",

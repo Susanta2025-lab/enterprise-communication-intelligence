@@ -19,3 +19,49 @@ class ServiceUnavailableError(ECIPlatformError):
 
 class PersistenceError(ECIPlatformError):
     """Raised when a persistence operation fails without a more specific type."""
+
+
+class ConnectorError(ECIPlatformError):
+    """Raised when a communication connector operation fails."""
+
+
+class ConnectorAuthenticationError(ConnectorError):
+    """Raised when connector credentials are missing or rejected."""
+
+    def __init__(self, message: str = "Connector authentication failed.") -> None:
+        super().__init__(message)
+
+
+class ConnectorPermissionError(ConnectorError):
+    """Raised when the connector account lacks permission for the operation."""
+
+    def __init__(self, message: str = "Connector permission denied.") -> None:
+        super().__init__(message)
+
+
+class ConnectorRateLimitError(ConnectorError):
+    """Raised when the remote connector throttles the caller."""
+
+    def __init__(self, message: str = "Connector rate limit exceeded.") -> None:
+        super().__init__(message)
+
+
+class ConnectorUnavailableError(ConnectorError):
+    """Raised when the remote connector cannot be reached."""
+
+    def __init__(self, message: str = "Connector is currently unavailable.") -> None:
+        super().__init__(message)
+
+
+class ConnectorMessageNotFoundError(ConnectorError):
+    """Raised when the requested provider message id is unknown."""
+
+    def __init__(self, message: str = "Connector message not found.") -> None:
+        super().__init__(message)
+
+
+class ConnectorInvalidCursorError(ConnectorError):
+    """Raised when a list continuation token cannot be interpreted."""
+
+    def __init__(self, message: str = "Connector cursor is invalid.") -> None:
+        super().__init__(message)
