@@ -17,18 +17,18 @@ Phase 10 is **In progress**.
 
 - **10A is Completed:** domain connector contract, connector-neutral errors, ingestion service, offline fake adapter, unit and boundary tests. No API, OAuth, or vendor SDKs.
 - **10B is Completed:** `connector_accounts` persistence, user ownership isolation, opaque `credential_ref`, `ConnectorAccountService`, Alembic revision `10b0001`, SQLite and PostgreSQL tests. No OAuth, token storage, Gmail, Microsoft Graph, or connector API routes.
-- **10C is implementation complete / review pending:** offline Gmail API v1 REST adapter, MIME normalization, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth, no real Gmail calls, no token persistence, no Gmail SDK, no connector HTTP routes.
+- **10C is Completed:** mocked/offline tests plus a controlled local live verification passed. The repository still contains only the Gmail API v1 REST adapter, MIME normalization, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Gmail SDK, or connector HTTP routes were added to ECI. The live mailbox check was a separate local verification, not GitHub Actions.
 - **10D is pending.**
 - **10E is pending.**
 
-Do not implement Microsoft Graph, OAuth, or connector API routes in 10C.
+Phase 10 overall remains in progress. Phase 10D (Microsoft Graph Read-Only Adapter) may now begin; it is not implemented in this checkpoint.
 
 ## Deliverables
 
 - [x] Phase 10A — Connector Architecture & Domain Contracts (completed)
 - [x] Phase 10B — Connector Accounts & Credential References (completed)
-- [x] Phase 10C — Gmail Read-Only Adapter (implementation complete; review pending)
-- [ ] Phase 10D — pending
+- [x] Phase 10C — Gmail Read-Only Adapter (mocked/offline tests + controlled local live verification passed)
+- [ ] Phase 10D — Microsoft Graph Read-Only Adapter (pending)
 - [ ] Phase 10E — pending
 
 ## Phase 10A Architecture
@@ -86,7 +86,7 @@ connector account → credential resolver → CommunicationConnector → Communi
 ## Phase 10C Architecture
 
 ```text
-Gmail API v1 REST (mocked HTTP in 10C)
+Gmail API v1 REST
         ↓
 GmailCommunicationConnector (infrastructure.connectors.gmail)
         ↓
@@ -96,6 +96,19 @@ CommunicationIngestionService
         ↓
 CommunicationAnalysisWorkflowService (existing)
 ```
+
+The designed path above is unchanged. Offline tests mock HTTP and cover request construction through the ingestion-boundary test. The controlled local live verification on 2026-08-20 exercised only:
+
+```text
+Gmail API v1 REST
+        ↓
+GmailCommunicationConnector
+        ↓
+CommunicationMessage
+        STOP
+```
+
+The remaining workflow was already covered by offline integration testing and was deliberately excluded from the live mailbox test.
 
 - `GmailCommunicationConnector` implements the unchanged `CommunicationConnector` contract: `provider`, `list_messages(ConnectorMessageQuery) -> MessagePage`, `fetch_message(provider_message_id) -> CommunicationMessage`.
 - Connector provider identity is `gmail`. Normalized messages still use `SourceType.EMAIL`. There is no `SourceType.GMAIL`.
@@ -136,18 +149,173 @@ CommunicationAnalysisWorkflowService (existing)
 - No retry for 401/403/429/5xx/timeout.
 - Adapter logging is omitted; ingestion already emits `connector_fetch_started|completed|failed` with bounded fields (`provider`, `duration_ms`, `result_count`, `error_class`). Tokens, Authorization, subjects, senders, bodies, snippets, message ids, and page tokens are not logged.
 
-### Out of scope for 10C
+### Out of scope for 10C implementation
 
-- OAuth consent, authorization-code exchange, PKCE, refresh-token storage, `token.json`
-- Real Gmail API calls or Google Cloud Console mutations
+The 10C adapter in ECI still does not include:
+
+- OAuth consent, token exchange, PKCE, or durable token files inside ECI
 - Token columns, Settings tokens, `.env` tokens, schema/migrations
 - Connector HTTP/API routes, connector factory, credential resolver
 - Attachments, sending, labels modification, webhooks, sync state, raw-message persistence
 - Microsoft Graph
-- Live mailbox verification
+
+A controlled local live verification was performed after 10C implementation. It did not add OAuth or credentials to ECI. See [Controlled Live Gmail Verification](#controlled-live-gmail-verification).
 
 ### Restricted Gmail scope note
 
-Future live Gmail message-body access intends to use `https://www.googleapis.com/auth/gmail.readonly`. That scope is currently classified by Google as a restricted Gmail scope. Provider authorization and compliance requirements must be reviewed before production or public release. Phase 10C does not implement OAuth and does not claim Google production approval, OAuth verification, or a completed security assessment.
+`https://www.googleapis.com/auth/gmail.readonly` is currently treated as a restricted Gmail scope. The controlled local live verification does not constitute Google app verification, production authorization approval, restricted-scope compliance approval, or security-assessment completion. Future production or public use must separately evaluate Google's then-current authorization, verification, and restricted-scope requirements. Phase 10C does not add OAuth to ECI and does not make legal or compliance guarantees.
 
 ADR-015 and credential-store ADRs remain deferred until Phase 10E or a focused connector architecture review.
+
+## Controlled Live Gmail Verification
+
+After Phase 10C implementation, focused review, commit, push, and green CI, a controlled local live verification was performed against the real Gmail API on **2026-08-20**.
+
+This is a verification checkpoint, not a new architecture decision. No ADR is recorded for it.
+
+### Verification boundary
+
+The live flow was:
+
+```text
+Google OAuth Desktop authorization
+        ↓
+temporary local OAuth credentials
+        ↓
+Gmail API v1
+        ↓
+GmailCommunicationConnector
+        ↓
+CommunicationMessage
+        STOP
+```
+
+The live verification intentionally stopped at the connector/domain boundary. It did not continue into `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider`, `MockAIProvider`, Microsoft Foundry, Amazon Bedrock, PostgreSQL, analysis persistence, or cloud deployment.
+
+### Authentication setup
+
+Non-secret architectural facts only:
+
+- Gmail API was enabled in a dedicated Google Cloud development project.
+- Google Auth Platform was configured for External testing.
+- One authorized test user was used.
+- A Desktop OAuth client was used only for local verification.
+- The requested scope was exactly `https://www.googleapis.com/auth/gmail.readonly`.
+- OAuth credentials were handled only in a temporary local workspace outside the ECI repository.
+- No OAuth credentials were committed to Git.
+- No OAuth implementation was added to ECI.
+
+### Temporary local workspace
+
+A temporary local workspace outside the repository was used for OAuth authorization and live verification. Conceptual files in that external workspace included `credentials.json`, `token.json`, an authorization helper script, and a verification helper script. None of those files are part of the ECI repository, and they were not added by this checkpoint.
+
+### Live test design
+
+The verification used the real committed `GmailCommunicationConnector` with:
+
+- a real `httpx.Client`
+- a temporary in-memory access-token callable
+- `ConnectorMessageQuery(limit=1)`
+
+The test intentionally requested only one Gmail list page and one message. Expected network pattern:
+
+1. 1 × Gmail `users.messages.list`
+2. 1 × Gmail `users.messages.get`
+
+No automatic pagination. No attachment request. No additional Gmail API operations.
+
+### Synthetic test message
+
+A synthetic test message was placed in the authorized mailbox before verification. It contained no meaningful personal or business data. The live script did not print message content.
+
+### Successful verification result
+
+Validated outcomes:
+
+- Google OAuth authorization succeeded
+- `gmail.readonly` authorization succeeded
+- Gmail API authentication succeeded
+- real `users.messages.list` succeeded
+- real `users.messages.get` succeeded
+- `GmailCommunicationConnector` successfully normalized the Gmail message
+- exactly one `CommunicationMessage` was produced
+- normalized `source_type == SourceType.EMAIL`
+- normalized body was non-empty
+- message content was not printed by the verification script
+
+Terminal result:
+
+```text
+Live Gmail connector verification: PASS
+```
+
+No credentials or mailbox content are recorded here.
+
+### What this proves
+
+Phase 10C has now been validated at two levels.
+
+**Automated/offline verification.** `MockTransport`-based tests prove request construction, one-page pagination, message fetching, MIME traversal, HTML fallback, attachment exclusion, header normalization, timestamp mapping, error mapping, privacy boundaries, and the ingestion boundary.
+
+**Controlled live verification.** Real Gmail API verification proves:
+
+- Google OAuth credentials can supply the adapter's existing in-memory token interface
+- the committed adapter can authenticate to the real Gmail API
+- the real Gmail list endpoint is compatible with the adapter
+- the real Gmail message fetch endpoint is compatible with the adapter
+- a real Gmail `format=full` response can be normalized into the existing ECI `CommunicationMessage` model
+
+This checkpoint does not claim more than those facts.
+
+### What is not proven
+
+The live test does not prove or implement:
+
+- production OAuth lifecycle
+- OAuth callback API routes
+- refresh-token management inside ECI
+- credential resolver integration
+- secret-manager integration
+- connector-account → credential_ref → credential resolver composition
+- production Gmail onboarding
+- multi-user Gmail OAuth management
+- Gmail synchronization/history API
+- background synchronization
+- webhook/push notifications
+- attachments
+- Gmail send/modify/delete
+- production restricted-scope verification
+- Google security assessment completion
+- AI analysis of live Gmail content, including Microsoft Foundry, Amazon Bedrock, and `MockAIProvider`
+- persistence of live Gmail-derived analyses
+- live multi-page Gmail pagination or N+1 fetch behavior at scale
+- live Gmail error paths (`401`/`403`/`404`/`429`/`5xx`, timeouts, invalid cursors)
+- large mailboxes, large messages, or exhaustive MIME/label/quota coverage
+- Azure-hosted Gmail OAuth
+- AWS-hosted Gmail OAuth
+
+### Privacy and data minimization
+
+- Raw Gmail JSON/MIME existed only transiently during the request.
+- The live verification did not persist the fetched Gmail message. The designed workflow may persist derived analysis later; that path was not exercised live.
+- No Gmail message content was sent to Microsoft Foundry, Amazon Bedrock, or `MockAIProvider`.
+- No Gmail message content was written to PostgreSQL.
+- No Gmail message content was intentionally logged.
+- No OAuth token was intentionally logged.
+- Verification output contained only bounded pass/fail metadata.
+
+These statements describe the verification procedure and the adapter's existing bounded logging. They are not stronger guarantees than the implementation supports.
+
+### Implementation CI checkpoint
+
+Phase 10C implementation commit:
+
+- `2f79840` — `feat: add Gmail read-only connector`
+- GitHub Actions run `32351444028`
+- Result: PASS
+
+The controlled local live verification did not run in GitHub Actions. It was a separate local verification. CI proves the mocked/offline suite for that commit; it does not prove the live mailbox check.
+
+## Phase 10D Readiness
+
+Phase 10D may now begin: Microsoft Graph Read-Only Adapter. It should remain a sibling infrastructure adapter implementing the unchanged `CommunicationConnector` contract. Phase 10D is not implemented in this documentation checkpoint.
