@@ -234,3 +234,44 @@ sequenceDiagram
         Route-->>Client: 200 AnalysisHistoryItem
     end
 ```
+
+## Workflow action lifecycle (Phase 11A, no HTTP)
+
+Phase 11A has no workflow routes. The domain state machine is:
+
+```text
+PENDING → APPROVED → EXECUTING → EXECUTED
+PENDING → REJECTED
+EXECUTING → FAILED
+```
+
+```mermaid
+sequenceDiagram
+    participant Analysis as CommunicationAnalysis
+    participant Draft as DraftReply
+    participant Action as WorkflowAction
+
+    Note over Analysis,Draft: Analyze produces suggestions only
+    Analysis->>Draft: draft_reply body
+    Note over Action: Explicit later construction; not created by analyze
+    Action->>Action: PENDING
+    alt Human approves
+        Action->>Action: APPROVED (reply snapshot)
+        Action->>Action: EXECUTING
+        alt Later execution success
+            Action->>Action: EXECUTED
+        else Later execution failure
+            Action->>Action: FAILED
+        end
+    else Human rejects
+        Action->>Action: REJECTED
+    end
+```
+
+Authorization is capability-specific after JWT authentication:
+
+```text
+authenticate JWT → AuthenticatedPrincipal → required permission
+communications:analyze     (existing analyze / history)
+communications:workflow    (future workflow HTTP; checkable in 11A)
+```

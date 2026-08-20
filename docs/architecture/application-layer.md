@@ -1,6 +1,6 @@
 # Application Layer
 
-The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer.
+The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer. Phase 11A does not add a business-workflow application service; `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration.
 
 ## Role of `CommunicationAnalysisService`
 
@@ -42,7 +42,7 @@ There is no branching on provider type, no retry logic, and no additional busine
 
 ## Persistence-aware workflow
 
-`CommunicationAnalysisWorkflowService` wraps the AI service when persistence and an authenticated principal are present:
+`CommunicationAnalysisWorkflowService` wraps the AI service when persistence and an authenticated principal are present. That name predates Phase 11. It is **not** the approval-gated `WorkflowAction` service.
 
 ```text
 authenticate / authorize
@@ -129,3 +129,4 @@ Three structured log events are emitted by the AI service, all via `app.core.log
 - **No environment or configuration access.** It never calls `get_settings()` or reads an environment variable; provider selection happens entirely upstream, in `app/api/dependencies.py` and `app/providers/factory.py`.
 - **No provider instantiation.** It never calls `create_ai_provider()` or imports a concrete provider class.
 - **No persistence.** Results are stored by `AnalysisHistoryService` after the AI call returns. The AI service remains a request/response orchestrator.
+- **No workflow actions.** Analyze does not create `WorkflowAction` records. `DraftReply` stays suggestion output.

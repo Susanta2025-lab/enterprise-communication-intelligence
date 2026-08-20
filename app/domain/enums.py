@@ -46,3 +46,27 @@ class ConnectorAccountStatus(StrEnum):
 
     ACTIVE = "active"
     DISCONNECTED = "disconnected"
+
+
+class WorkflowActionType(StrEnum):
+    """Kind of approval-gated workflow action.
+
+    Distinct from ``ActionItem``, which is AI-extracted analysis output.
+    Phase 11 supports ``REPLY`` only.
+    """
+
+    REPLY = "reply"
+
+
+class WorkflowActionStatus(StrEnum):
+    """Lifecycle of a ``WorkflowAction``.
+
+    Terminal in Phase 11: ``REJECTED``, ``EXECUTED``, ``FAILED``.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTING = "executing"
+    EXECUTED = "executed"
+    FAILED = "failed"

@@ -19,6 +19,7 @@ from jwt.exceptions import (
 from app.core.config import Settings
 
 ALLOWED_JWT_ALGORITHMS = ("RS256",)
+COMMUNICATIONS_WORKFLOW_PERMISSION = "communications:workflow"
 _PERMISSION_CLAIMS = ("scp", "scope", "roles")
 
 
@@ -189,9 +190,23 @@ class TokenValidator:
             permissions=_extract_permissions(payload),
         )
 
-    def authorize(self, principal: AuthenticatedPrincipal) -> None:
-        """Require the configured analyze permission."""
-        if self._required_permission not in principal.permissions:
+    def authorize(
+        self,
+        principal: AuthenticatedPrincipal,
+        required_permission: str | None = None,
+    ) -> None:
+        """Require a capability-specific permission.
+
+        When ``required_permission`` is omitted, the configured analyze
+        permission (``OIDC_REQUIRED_PERMISSION``) is used so existing callers
+        remain unchanged.
+        """
+        permission = (
+            required_permission
+            if required_permission is not None
+            else self._required_permission
+        )
+        if not permission.strip() or permission not in principal.permissions:
             raise AuthorizationFailedError("insufficient_permission")
 
 

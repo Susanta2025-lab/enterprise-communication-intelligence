@@ -28,7 +28,7 @@ This matches the direction required by `.cursor/rules/enterprise-communication-i
 
 `app/domain` is the most stable part of the codebase:
 
-- It defines enums, Pydantic models, schemas, the `AIProvider` interface, and the `CommunicationConnector` contract.
+- It defines enums, Pydantic models (including `WorkflowAction`), schemas, the `AIProvider` interface, and the `CommunicationConnector` contract.
 - It imports only Pydantic and the Python standard library — never `fastapi`, `httpx` (as an HTTP client), or any cloud SDK.
 - Nothing in `app/domain` changes when a new provider, route, or deployment target is added.
 
@@ -51,8 +51,8 @@ Framework and infrastructure concerns live at the outer edges:
 
 ## Trade-offs (Current State)
 
-- **Not full DDD:** ECI Platform borrows clean architecture's *layering and dependency direction*, but does not implement full Domain-Driven Design — there are no aggregates, domain events, or a ubiquitous-language modeling process. Phase 9 adds repository and unit-of-work interfaces for persistence. Phase 10 adds `CommunicationConnector` as another inverted port.
-- **Application services remain few and focused:** `CommunicationAnalysisService` stays AI-only. Workflow, identity, and history services orchestrate persistence around it. Ingestion and connector-account services orchestrate connector fetch and account lifecycle. No generic use-case base class or command/query separation has been introduced.
+- **Not full DDD:** ECI Platform borrows clean architecture's *layering and dependency direction*, but does not implement full Domain-Driven Design — there are no aggregates, domain events, or a ubiquitous-language modeling process. Phase 9 adds repository and unit-of-work interfaces for persistence. Phase 10 adds `CommunicationConnector` as another inverted port. Phase 11A adds `WorkflowAction` and an explicit domain state machine without persistence or an execution port.
+- **Application services remain few and focused:** `CommunicationAnalysisService` stays AI-only. `CommunicationAnalysisWorkflowService` orchestrates persist-after-analyze; it is not the Phase 11 business-workflow service. Ingestion and connector-account services orchestrate connector fetch and account lifecycle. No generic use-case base class or command/query separation has been introduced.
 - **Framework coupling still exists at the edges by design:** `app/api` necessarily depends on FastAPI (`Depends`, `APIRouter`), `app/providers/microsoft_foundry` depends on Azure SDKs, `app/providers/amazon_bedrock` depends on boto3, `app/infrastructure/storage` depends on SQLAlchemy, and `app/infrastructure/connectors` depends on `httpx`. This is intentional — clean architecture pushes volatility to the edges rather than eliminating it.
 - **Core is shared, not layered further:** `app/core` (config, logging, exceptions, security) is used by every layer. It is deliberately minimal and framework-agnostic (aside from being read by FastAPI's lifespan hook in `app/main.py`), rather than being split into its own strict sub-layers.
 - **Outer implementations are not storage-only:** persistence adapters live in `app/infrastructure/storage`, AI provider adapters in `app/providers`, and communication connector adapters in `app/infrastructure/connectors`. Outer layers implement ports defined inward.

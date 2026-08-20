@@ -2,7 +2,14 @@
 
 import pytest
 
-from app.domain.enums import ConnectorAccountStatus, MessageCategory, PriorityLevel, SourceType
+from app.domain.enums import (
+    ConnectorAccountStatus,
+    MessageCategory,
+    PriorityLevel,
+    SourceType,
+    WorkflowActionStatus,
+    WorkflowActionType,
+)
 
 
 def test_source_type_includes_email_and_future_channels() -> None:
@@ -41,6 +48,34 @@ def test_connector_account_status_values() -> None:
     assert ConnectorAccountStatus.DISCONNECTED == "disconnected"
 
 
+def test_workflow_action_type_is_reply_only() -> None:
+    """Phase 11 supports REPLY only; this is not a generic workflow engine."""
+    assert list(WorkflowActionType) == [WorkflowActionType.REPLY]
+    assert WorkflowActionType.REPLY == "reply"
+    assert not hasattr(WorkflowActionType, "CALENDAR_EVENT")
+    assert not hasattr(WorkflowActionType, "TASK")
+    assert not hasattr(WorkflowActionType, "SLACK_MESSAGE")
+    assert not hasattr(WorkflowActionType, "TEAMS_MESSAGE")
+    assert not hasattr(WorkflowActionType, "CRM_UPDATE")
+    assert not hasattr(WorkflowActionType, "WEBHOOK")
+    assert not hasattr(WorkflowActionType, "DOCUMENT_ACTION")
+    assert not hasattr(WorkflowActionType, "GENERIC_ACTION")
+
+
+def test_workflow_action_status_values() -> None:
+    """WorkflowActionStatus covers the Phase 11 lifecycle without EXECUTION_UNKNOWN."""
+    assert list(WorkflowActionStatus) == [
+        WorkflowActionStatus.PENDING,
+        WorkflowActionStatus.APPROVED,
+        WorkflowActionStatus.REJECTED,
+        WorkflowActionStatus.EXECUTING,
+        WorkflowActionStatus.EXECUTED,
+        WorkflowActionStatus.FAILED,
+    ]
+    assert not hasattr(WorkflowActionStatus, "EXECUTION_UNKNOWN")
+    assert WorkflowActionStatus.PENDING == "pending"
+
+
 def test_priority_level_values() -> None:
     """PriorityLevel should expose the supported business priorities."""
     assert list(PriorityLevel) == [
@@ -64,6 +99,8 @@ def test_message_category_values() -> None:
         (SourceType, "fax"),
         (PriorityLevel, "urgent"),
         (MessageCategory, "spam"),
+        (WorkflowActionType, "calendar_event"),
+        (WorkflowActionStatus, "execution_unknown"),
     ],
 )
 def test_invalid_enum_values_raise(enum_cls: type, invalid_value: str) -> None:
@@ -77,3 +114,5 @@ def test_enums_are_string_compatible() -> None:
     assert SourceType("email") is SourceType.EMAIL
     assert PriorityLevel("high") is PriorityLevel.HIGH
     assert MessageCategory("inquiry") is MessageCategory.INQUIRY
+    assert WorkflowActionType("reply") is WorkflowActionType.REPLY
+    assert WorkflowActionStatus("pending") is WorkflowActionStatus.PENDING

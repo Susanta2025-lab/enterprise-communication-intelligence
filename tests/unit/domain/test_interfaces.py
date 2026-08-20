@@ -91,6 +91,7 @@ def test_communication_connector_interface_is_abstract() -> None:
 def test_domain_package_has_no_fastapi_dependency() -> None:
     """Domain modules must remain independent of FastAPI."""
     import app.domain.enums as enums
+    import app.domain.exceptions as domain_exceptions
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
     import app.domain.interfaces.communication_connector as communication_connector
@@ -99,10 +100,12 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
     import app.domain.models.analysis as analysis_models
     import app.domain.models.message as message_models
+    import app.domain.models.workflow as workflow_models
     import app.domain.schemas.analysis as analysis_schemas
 
     for module in (
         enums,
+        domain_exceptions,
         ai_provider,
         analysis_repository,
         communication_connector,
@@ -111,6 +114,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         persistence_unit_of_work,
         analysis_models,
         message_models,
+        workflow_models,
         analysis_schemas,
     ):
         module_globals = set(module.__dict__)

@@ -8,6 +8,7 @@ from app.domain.models.analysis import (
     Summary,
 )
 from app.domain.models.message import CommunicationMessage, MessageMetadata
+from app.domain.models.workflow import WorkflowAction
 
 __all__ = [
     "ActionItem",
@@ -17,4 +18,5 @@ __all__ = [
     "MessageMetadata",
     "Priority",
     "Summary",
+    "WorkflowAction",
 ]

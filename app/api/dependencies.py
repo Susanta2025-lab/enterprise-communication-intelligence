@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import (
+    COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
     AuthenticationFailedError,
     AuthorizationFailedError,
@@ -49,18 +50,19 @@ def get_token_validator() -> TokenValidator | None:
     return TokenValidator.from_settings(settings)
 
 
-def require_communications_analyze(
+def authenticate_caller(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,
         Depends(bearer_scheme),
     ],
     validator: Annotated[TokenValidator | None, Depends(get_token_validator)],
 ) -> AuthenticatedPrincipal | None:
-    """Authenticate the caller and require ``communications:analyze``.
+    """Authenticate the caller without checking a capability permission.
 
     When ``AUTH_MODE=disabled`` this returns ``None`` without contacting an
-    identity provider. When ``AUTH_MODE=oidc``, a valid bearer token with the
-    configured permission is required before analysis dependencies run.
+    identity provider. When ``AUTH_MODE=oidc``, a valid bearer token is
+    required. Permission checks happen in ``require_permission`` and
+    ``require_communications_analyze``.
     """
     if validator is None:
         return None
@@ -84,14 +86,33 @@ def require_communications_analyze(
         ) from None
 
     logger.info("authentication_succeeded")
+    return principal
+
+
+def _enforce_permission(
+    principal: AuthenticatedPrincipal | None,
+    validator: TokenValidator | None,
+    required_permission: str,
+) -> AuthenticatedPrincipal | None:
+    """Require ``required_permission`` after authentication."""
+    if validator is None:
+        return None
+
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
 
     try:
-        validator.authorize(principal)
+        validator.authorize(principal, required_permission)
     except AuthorizationFailedError as exc:
         logger.warning(
             "authorization_failed",
             reason=exc.reason,
-            required_permission=get_settings().oidc_required_permission,
+            required_permission=required_permission,
         )
         raise HTTPException(
             status_code=403,
@@ -99,6 +120,55 @@ def require_communications_analyze(
         ) from None
 
     return principal
+
+
+def require_permission(
+    required_permission: str,
+) -> Callable[..., AuthenticatedPrincipal | None]:
+    """Return a dependency that authenticates and requires a specific permission."""
+    if not required_permission.strip():
+        raise ValueError("required_permission must not be empty")
+
+    def require_named_permission(
+        principal: Annotated[
+            AuthenticatedPrincipal | None,
+            Depends(authenticate_caller),
+        ],
+        validator: Annotated[TokenValidator | None, Depends(get_token_validator)],
+    ) -> AuthenticatedPrincipal | None:
+        return _enforce_permission(principal, validator, required_permission)
+
+    require_named_permission.__name__ = (
+        f"require_permission_{required_permission.replace(':', '_')}"
+    )
+    require_named_permission.__doc__ = (
+        f"Authenticate the caller and require ``{required_permission}``."
+    )
+    return require_named_permission
+
+
+def require_communications_analyze(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(authenticate_caller),
+    ],
+    validator: Annotated[TokenValidator | None, Depends(get_token_validator)],
+) -> AuthenticatedPrincipal | None:
+    """Authenticate the caller and require ``communications:analyze``.
+
+    When ``AUTH_MODE=disabled`` this returns ``None`` without contacting an
+    identity provider. When ``AUTH_MODE=oidc``, a valid bearer token with the
+    configured permission (``OIDC_REQUIRED_PERMISSION``) is required before
+    analysis dependencies run.
+    """
+    return _enforce_permission(
+        principal,
+        validator,
+        get_settings().oidc_required_permission,
+    )
+
+
+require_communications_workflow = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
 
 
 def require_authenticated_communications_analyze(

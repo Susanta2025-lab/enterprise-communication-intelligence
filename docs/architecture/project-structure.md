@@ -1,12 +1,12 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 10. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 11A. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
 ├── api/
 │   ├── router.py            # assembles the versioned API router (health + communications + analyses)
-│   ├── dependencies.py       # FastAPI dependency providers (AI, workflow, identity, history)
+│   ├── dependencies.py       # FastAPI dependency providers (AI, workflow, identity, history, require_permission)
 │   └── routes/
 │       ├── health.py         # GET /health, GET /api/v1/health, GET /api/v1/readiness
 │       ├── communications.py # POST /api/v1/communications/analyze
@@ -24,12 +24,14 @@ app/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
 │   ├── exceptions.py          # ECIPlatformError, ConfigurationError, ServiceUnavailableError, PersistenceError, connector-neutral errors
-│   └── security.py           # OIDC JWT validation and AuthenticatedPrincipal
+│   └── security.py           # OIDC JWT validation, AuthenticatedPrincipal, capability-specific authorize()
 ├── domain/
-│   ├── enums.py               # SourceType, PriorityLevel, MessageCategory, ConnectorAccountStatus
+│   ├── enums.py               # SourceType, PriorityLevel, MessageCategory, ConnectorAccountStatus, WorkflowActionType, WorkflowActionStatus
+│   ├── exceptions.py          # InvalidWorkflowTransitionError
 │   ├── models/
 │   │   ├── message.py         # CommunicationMessage, MessageMetadata
 │   │   ├── analysis.py        # Summary, Priority, ActionItem, DraftReply, CommunicationAnalysis
+│   │   ├── workflow.py        # WorkflowAction (approval-gated; not ActionItem)
 │   │   └── validation.py      # shared field-validation helper
 │   ├── schemas/
 │   │   └── analysis.py        # CommunicationRequest, CommunicationAnalysisResult
@@ -126,10 +128,10 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes.
-- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes. Phase 11A added no workflow routes; `require_permission` generalizes authorization while `require_communications_analyze` remains the analyze/history dependency.
+- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
-- **`app/domain`** — Provider-independent business vocabulary: enums, models, schemas, `AIProvider`, `CommunicationConnector`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
+- **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
 - **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.

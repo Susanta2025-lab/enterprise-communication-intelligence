@@ -7,6 +7,7 @@ import pytest
 from jwt.exceptions import PyJWKClientConnectionError
 
 from app.core.security import (
+    COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticationFailedError,
     AuthorizationFailedError,
     JwksSigningKeyResolver,
@@ -203,6 +204,99 @@ def test_unrelated_permission_is_forbidden(private_key, validator: TokenValidato
     with pytest.raises(AuthorizationFailedError) as exc_info:
         validator.authorize(principal)
     assert exc_info.value.reason == "insufficient_permission"
+
+
+def test_workflow_permission_does_not_satisfy_analyze(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:workflow must not implicitly grant communications:analyze."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_WORKFLOW_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    assert COMMUNICATIONS_WORKFLOW_PERMISSION in principal.permissions
+    assert TEST_PERMISSION not in principal.permissions
+    with pytest.raises(AuthorizationFailedError) as exc_info:
+        validator.authorize(principal)
+    assert exc_info.value.reason == "insufficient_permission"
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, TEST_PERMISSION)
+    validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+
+
+def test_analyze_permission_does_not_satisfy_workflow(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:analyze must not implicitly grant communications:workflow."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": TEST_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    validator.authorize(principal)
+    with pytest.raises(AuthorizationFailedError) as exc_info:
+        validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+    assert exc_info.value.reason == "insufficient_permission"
+
+
+def test_principal_with_both_permissions_satisfies_either_check(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """A principal may hold analyze and workflow permissions independently."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": f"{TEST_PERMISSION} {COMMUNICATIONS_WORKFLOW_PERMISSION}"},
+    )
+    principal = validator.authenticate(token)
+    assert TEST_PERMISSION in principal.permissions
+    assert COMMUNICATIONS_WORKFLOW_PERMISSION in principal.permissions
+    validator.authorize(principal)
+    validator.authorize(principal, TEST_PERMISSION)
+    validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+
+
+def test_permission_matching_is_exact(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """Authorization must not treat prefixes, suffixes, or substrings as grants."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": TEST_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    for required in (
+        "communications",
+        "analyze",
+        "communications:anal",
+        f"{TEST_PERMISSION}:extra",
+        f"prefix:{TEST_PERMISSION}",
+    ):
+        with pytest.raises(AuthorizationFailedError) as exc_info:
+            validator.authorize(principal, required)
+        assert exc_info.value.reason == "insufficient_permission"
+    validator.authorize(principal, TEST_PERMISSION)
+
+
+def test_blank_required_permission_does_not_authorize(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """An empty or whitespace permission argument must fail closed."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": TEST_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    for required in ("", "   "):
+        with pytest.raises(AuthorizationFailedError) as exc_info:
+            validator.authorize(principal, required)
+        assert exc_info.value.reason == "insufficient_permission"
+    validator.authorize(principal)
 
 
 def test_arbitrary_claim_is_not_used_for_authorization(

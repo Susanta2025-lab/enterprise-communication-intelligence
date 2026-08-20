@@ -14,6 +14,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 8 – Production Hardening](phase-08-future-roadmap.md)
 - [Phase 9 – Persistence & Multi-Tenant/User-Associated Data](phase-09-persistence.md)
 - [Phase 10 – Communication Connectors](phase-10-communication-connectors.md)
+- [Phase 11 – Workflow Automation](phase-11-workflow-automation.md)
 
 ## Status
 
@@ -29,6 +30,7 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 8 – Production Hardening | Completed |
 | Phase 9 – Persistence & Multi-Tenant/User-Associated Data | Completed |
 | Phase 10 – Communication Connectors | Completed |
+| Phase 11 – Workflow Automation | In progress |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
@@ -36,4 +38,4 @@ Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B 
 
 Phase 10 closed the vendor-neutral connector path through Gmail and Microsoft Graph read-only adapters, user-owned `connector_accounts`, and controlled local live adapter checks. Production OAuth, credential resolver, connector HTTP APIs, synchronization, and send/reply remain deferred. Details: [Phase 10](phase-10-communication-connectors.md).
 
-Next: Phase 11 — Workflow Automation.
+Phase 11A — Workflow Domain, State Machine & Authorization Foundation is completed. `WorkflowAction`, the reply-only state machine, and capability-specific permissions exist. Workflow persistence, REST API, execution, Gmail/Graph send/reply, production workflow automation, and automatic replies remain unavailable. Phase 11 overall is not completed. Details: [Phase 11](phase-11-workflow-automation.md).

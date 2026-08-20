@@ -20,6 +20,7 @@ from app.core.exceptions import (
     PersistenceError,
     ServiceUnavailableError,
 )
+from app.domain.exceptions import InvalidWorkflowTransitionError
 
 
 def test_exception_hierarchy() -> None:
@@ -88,3 +89,12 @@ def test_connector_errors_use_generic_messages() -> None:
         assert "google" not in lowered
         assert "graph" not in lowered
         assert "httpx" not in lowered
+
+
+def test_invalid_workflow_transition_has_generic_message() -> None:
+    """Illegal workflow transitions must not expose internal from/to status text."""
+    error = InvalidWorkflowTransitionError()
+    assert error.message == "Invalid workflow state transition."
+    assert str(error) == "Invalid workflow state transition."
+    assert "pending" not in error.message.lower()
+    assert "approved" not in error.message.lower()

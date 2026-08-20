@@ -1,14 +1,32 @@
 """Unit tests for API dependency providers."""
 
 import pytest
+from fastapi import HTTPException
 
-from app.api.dependencies import get_ai_provider, get_communication_analysis_service
+from app.api.dependencies import (
+    get_ai_provider,
+    get_communication_analysis_service,
+    require_communications_analyze,
+    require_communications_workflow,
+    require_permission,
+)
 from app.application.services.communication_analysis import CommunicationAnalysisService
 from app.core.config import get_settings
+from app.core.security import (
+    COMMUNICATIONS_WORKFLOW_PERMISSION,
+    AuthenticatedPrincipal,
+)
 from app.domain.interfaces import AIProvider
 from app.providers.amazon_bedrock.provider import AmazonBedrockProvider
 from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
 from app.providers.mock.provider import MockAIProvider
+from tests.support.jwt_tokens import (
+    TEST_ISSUER,
+    TEST_PERMISSION,
+    TEST_SUBJECT,
+    generate_test_rsa_private_key,
+    make_test_validator,
+)
 
 _FOUNDRY_ENDPOINT = (
     "https://eci-foundry-dev-susanta.services.ai.azure.com/api/projects/eci-project-dev"
@@ -125,3 +143,75 @@ def test_get_communication_analysis_service_accepts_amazon_bedrock_provider(
     service = get_communication_analysis_service(get_ai_provider())
 
     assert isinstance(service, CommunicationAnalysisService)
+
+
+def _principal(*permissions: str) -> AuthenticatedPrincipal:
+    return AuthenticatedPrincipal(
+        issuer=TEST_ISSUER,
+        subject=TEST_SUBJECT,
+        permissions=frozenset(permissions),
+    )
+
+
+@pytest.fixture
+def permission_validator():
+    return make_test_validator(generate_test_rsa_private_key())
+
+
+def test_require_communications_analyze_accepts_analyze_permission(
+    permission_validator,
+) -> None:
+    """Existing analysis authorization still requires communications:analyze."""
+    principal = _principal(TEST_PERMISSION)
+    result = require_communications_analyze(principal, permission_validator)
+    assert result is principal
+
+
+def test_analyze_only_principal_is_denied_workflow_permission(
+    permission_validator,
+) -> None:
+    """communications:analyze does not satisfy communications:workflow."""
+    principal = _principal(TEST_PERMISSION)
+    require_communications_analyze(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_workflow(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not authorized"
+
+
+def test_workflow_only_principal_is_denied_analyze_permission(
+    permission_validator,
+) -> None:
+    """communications:workflow does not satisfy communications:analyze."""
+    principal = _principal(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    require_communications_workflow(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not authorized"
+
+
+def test_principal_with_both_permissions_passes_either_dependency(
+    permission_validator,
+) -> None:
+    """A principal with both capabilities satisfies analyze and workflow checks."""
+    principal = _principal(TEST_PERMISSION, COMMUNICATIONS_WORKFLOW_PERMISSION)
+    assert require_communications_analyze(principal, permission_validator) is principal
+    assert require_communications_workflow(principal, permission_validator) is principal
+    workflow_dep = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    assert workflow_dep(principal, permission_validator) is principal
+
+
+def test_require_permission_skips_checks_when_auth_disabled() -> None:
+    """AUTH_MODE=disabled returns None without requiring a permission."""
+    workflow_dep = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    assert require_communications_analyze(None, None) is None
+    assert workflow_dep(None, None) is None
+
+
+def test_require_permission_rejects_blank_permission() -> None:
+    """A blank required permission is a programming error, not a grant."""
+    with pytest.raises(ValueError, match="required_permission must not be empty"):
+        require_permission("")
+    with pytest.raises(ValueError, match="required_permission must not be empty"):
+        require_permission("   ")

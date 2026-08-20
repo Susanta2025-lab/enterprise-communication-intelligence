@@ -30,6 +30,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-012](ADR-012-postgresql-persistence-architecture.md) | PostgreSQL Persistence Architecture | Accepted |
 | [ADR-013](ADR-013-external-identity-mapping-and-user-owned-data.md) | External Identity Mapping and User-Owned Data | Accepted |
 | [ADR-014](ADR-014-cloud-postgresql-deployment-strategy.md) | Cloud PostgreSQL Deployment Strategy | Accepted |
+| [ADR-015](ADR-015-approval-gated-workflow-actions.md) | Approval-Gated Workflow Actions | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -46,6 +47,8 @@ ADR-012 records PostgreSQL as the production system of record, with SQLAlchemy 2
 ADR-013 records OIDC `(issuer, subject)` mapping onto an opaque internal user UUID and user-associated ownership isolation. That is not SaaS tenancy.
 
 ADR-014 records Option C: cloud-portable PostgreSQL plus ephemeral CI proof. Shared cross-cloud databases and dual standing managed databases are rejected for this phase. No Azure PostgreSQL or Amazon RDS is provisioned.
+
+ADR-015 records that AI suggestions are not authorized external actions. `WorkflowAction` requires an explicit proposal and human approval. `CommunicationConnector` stays read-only; a future write executor is separate. Authorization checks capability-specific permissions (`communications:analyze` vs `communications:workflow`). Future execution must not hold a database transaction across a provider call. Persistence, HTTP, and execution are later Phase 11 slices.
 
 ## Template
 

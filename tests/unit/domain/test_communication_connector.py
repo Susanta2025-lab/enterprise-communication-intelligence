@@ -127,3 +127,14 @@ def test_source_type_has_no_vendor_email_members() -> None:
     assert not hasattr(SourceType, "GMAIL")
     assert not hasattr(SourceType, "OUTLOOK")
     assert not hasattr(SourceType, "MICROSOFT_GRAPH")
+
+
+def test_connector_contract_is_read_only() -> None:
+    """CommunicationConnector must not grow send, reply, or modify operations."""
+    assert not hasattr(CommunicationConnector, "send")
+    assert not hasattr(CommunicationConnector, "reply")
+    assert not hasattr(CommunicationConnector, "modify")
+    assert not hasattr(CommunicationConnector, "delete")
+    assert not hasattr(CommunicationConnector, "execute")
+    assert hasattr(CommunicationConnector, "list_messages")
+    assert hasattr(CommunicationConnector, "fetch_message")

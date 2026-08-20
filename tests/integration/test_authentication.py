@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_ai_provider, get_token_validator
 from app.core.config import get_settings
+from app.core.security import COMMUNICATIONS_WORKFLOW_PERMISSION
 from app.domain.interfaces import AIProvider
 from app.main import create_app
 from tests.support.jwt_tokens import (
@@ -190,6 +191,42 @@ def test_analyze_with_authorized_token_returns_existing_analysis(
     assert payload["analysis"]["category"] == "general"
     assert payload["analysis"]["message_id"] == "msg-001"
     assert "analysis_id" not in payload
+
+
+def test_analyze_with_workflow_permission_only_returns_403(
+    oidc_client: TestClient,
+    private_key,
+) -> None:
+    """communications:workflow must not authorize the analyze endpoint."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_WORKFLOW_PERMISSION},
+    )
+    response = oidc_client.post(
+        _ANALYZE_URL,
+        json=_valid_payload(),
+        headers=bearer_header(token),
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not authorized"}
+
+
+def test_analyze_with_analyze_and_workflow_permissions_returns_200(
+    oidc_client: TestClient,
+    private_key,
+) -> None:
+    """A token holding both permissions still authorizes analysis."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": f"{TEST_PERMISSION} {COMMUNICATIONS_WORKFLOW_PERMISSION}"},
+    )
+    response = oidc_client.post(
+        _ANALYZE_URL,
+        json=_valid_payload(),
+        headers=bearer_header(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["provider"] == "mock"
 
 
 def test_unauthorized_requests_do_not_invoke_provider(
