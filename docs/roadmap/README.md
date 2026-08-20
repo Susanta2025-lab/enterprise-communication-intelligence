@@ -32,6 +32,6 @@ This directory documents the planned implementation phases for ECI Platform.
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
-Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is implementation complete / review pending. Phase 10C–10E are pending.
+Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is completed. Phase 10C — Gmail Read-Only Adapter is implementation complete / review pending. Phase 10D–10E are pending.
 
 Next: complete Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.

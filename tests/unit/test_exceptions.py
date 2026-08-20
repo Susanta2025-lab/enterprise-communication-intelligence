@@ -11,6 +11,7 @@ from app.core.exceptions import (
     ConnectorAuthenticationError,
     ConnectorError,
     ConnectorInvalidCursorError,
+    ConnectorMessageContentError,
     ConnectorMessageNotFoundError,
     ConnectorPermissionError,
     ConnectorRateLimitError,
@@ -37,6 +38,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ConnectorUnavailableError, ConnectorError)
     assert issubclass(ConnectorMessageNotFoundError, ConnectorError)
     assert issubclass(ConnectorInvalidCursorError, ConnectorError)
+    assert issubclass(ConnectorMessageContentError, ConnectorError)
 
 
 def test_analysis_not_found_has_generic_message() -> None:
@@ -71,6 +73,7 @@ def test_connector_errors_use_generic_messages() -> None:
     assert ConnectorUnavailableError().message == "Connector is currently unavailable."
     assert ConnectorMessageNotFoundError().message == "Connector message not found."
     assert ConnectorInvalidCursorError().message == "Connector cursor is invalid."
+    assert ConnectorMessageContentError().message == "Connector message content is invalid."
     for error in (
         ConnectorAuthenticationError(),
         ConnectorPermissionError(),
@@ -78,6 +81,7 @@ def test_connector_errors_use_generic_messages() -> None:
         ConnectorUnavailableError(),
         ConnectorMessageNotFoundError(),
         ConnectorInvalidCursorError(),
+        ConnectorMessageContentError(),
     ):
         lowered = error.message.lower()
         assert "gmail" not in lowered

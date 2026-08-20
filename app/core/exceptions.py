@@ -65,3 +65,10 @@ class ConnectorInvalidCursorError(ConnectorError):
 
     def __init__(self, message: str = "Connector cursor is invalid.") -> None:
         super().__init__(message)
+
+
+class ConnectorMessageContentError(ConnectorError):
+    """Raised when a fetched message cannot be normalized into domain form."""
+
+    def __init__(self, message: str = "Connector message content is invalid.") -> None:
+        super().__init__(message)

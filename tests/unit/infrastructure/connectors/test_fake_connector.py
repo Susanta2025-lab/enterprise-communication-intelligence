@@ -10,10 +10,11 @@ from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery,
 from app.domain.models import CommunicationMessage
 from app.infrastructure.connectors.fake import FakeCommunicationConnector
 
-_CONNECTOR_ROOT = Path(__file__).resolve().parents[4] / "app" / "infrastructure" / "connectors"
+_FAKE_ROOT = Path(__file__).resolve().parents[4] / "app" / "infrastructure" / "connectors" / "fake"
 _NETWORK_MARKERS = (
     "httpx",
     "requests",
+    "urllib",
     "google",
     "graph.microsoft.com",
     "gmail.googleapis.com",
@@ -135,7 +136,7 @@ def test_fetch_unknown_message_raises_not_found() -> None:
 
 def test_fake_connector_source_is_offline() -> None:
     """Phase 10A fake adapter code must not call vendor or HTTP clients."""
-    for path in _CONNECTOR_ROOT.rglob("*.py"):
+    for path in _FAKE_ROOT.rglob("*.py"):
         source = path.read_text(encoding="utf-8").lower()
         for marker in _NETWORK_MARKERS:
             assert marker not in source, f"{path} must remain offline ({marker})"
