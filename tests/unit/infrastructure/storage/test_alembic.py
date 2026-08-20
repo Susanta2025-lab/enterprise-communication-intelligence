@@ -1,7 +1,10 @@
 """Offline Alembic configuration tests. Do not connect to PostgreSQL."""
 
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
@@ -39,7 +42,11 @@ def test_alembic_env_uses_base_metadata() -> None:
     env_source = (_ROOT / "alembic" / "env.py").read_text(encoding="utf-8")
     assert "target_metadata = Base.metadata" in env_source
     assert "from app.infrastructure.storage.models import Base" in env_source
-    assert "get_settings().database_url" in env_source
+    assert "resolve_migration_database_url" in env_source
+    assert "get_settings" not in env_source
+    assert "create_all" not in env_source
+    assert "OIDC" not in env_source
+    assert "fastapi" not in env_source.lower()
 
 
 def test_target_metadata_contains_phase9a_tables() -> None:
@@ -68,3 +75,37 @@ def test_initial_migration_creates_expected_tables_and_constraints() -> None:
     assert "raw_body" not in migration
     assert "access_token" not in migration
     assert "email" not in migration
+
+
+def test_offline_upgrade_sql_compiles_without_oidc_or_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """alembic upgrade head --sql must compile PostgreSQL SQL without connecting."""
+    secret = "eci_offline_secret"
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.delenv("OIDC_ISSUER", raising=False)
+    monkeypatch.delenv("OIDC_AUDIENCE", raising=False)
+    monkeypatch.delenv("OIDC_JWKS_URL", raising=False)
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        f"postgresql+psycopg://eci_offline:{secret}@127.0.0.1:5432/eci_offline",
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head", "--sql"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout
+    assert "CREATE TABLE" in sql
+    assert "users" in sql
+    assert "external_identities" in sql
+    assert "analyses" in sql
+    assert "JSONB" in sql or "jsonb" in sql
+    assert "uq_external_identities_issuer_subject" in sql
+    assert secret not in sql
+    assert secret not in result.stderr

@@ -1,0 +1,103 @@
+"""PostgreSQL unit-of-work commit and rollback tests."""
+
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
+
+from app.core.exceptions import PersistenceError
+from app.infrastructure.storage.models import ExternalIdentity, User
+from app.infrastructure.storage.repositories.identity import SqlAlchemyIdentityRepository
+from app.infrastructure.storage.unit_of_work import SqlAlchemyPersistenceUnitOfWork
+
+_ISSUER = "https://issuer.example.invalid/"
+_SUBJECT = "uow-subject"
+
+
+def test_successful_commit_persists_identity(session_factory: sessionmaker) -> None:
+    """Repository work is visible only after an explicit commit."""
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        user_id = uow.identity_repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+        uow.commit()
+
+    with session_factory() as session:
+        assert session.get(User, user_id) is not None
+        repository = SqlAlchemyIdentityRepository(session)
+        assert repository.get_user_id_by_external_identity(_ISSUER, _SUBJECT) == user_id
+
+
+def test_uncommitted_exit_rolls_back(session_factory: sessionmaker) -> None:
+    """Closing without commit must discard repository writes."""
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        user_id = uow.identity_repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+
+    with session_factory() as session:
+        assert session.get(User, user_id) is None
+        count = session.scalar(select(func.count()).select_from(User))
+        assert count == 0
+
+
+def test_exception_exit_rolls_back(session_factory: sessionmaker) -> None:
+    """An exception inside the unit of work must not persist rows."""
+    try:
+        with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+            uow.identity_repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+            raise RuntimeError("forced-failure")
+    except RuntimeError:
+        pass
+
+    with session_factory() as session:
+        count = session.scalar(select(func.count()).select_from(User))
+        identities = session.scalar(select(func.count()).select_from(ExternalIdentity))
+        assert count == 0
+        assert identities == 0
+
+
+def test_commit_failure_becomes_persistence_error(session_factory: sessionmaker) -> None:
+    """Driver commit failures must become PersistenceError without leaking SQL."""
+    sentinel = "password=supersecret host=db.internal.sqlalchemy-test"
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        uow.identity_repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+
+        def _fail_commit() -> None:
+            raise OperationalError("SELECT 1 FROM users", {}, Exception(sentinel))
+
+        assert uow._session is not None
+        uow._session.commit = _fail_commit  # type: ignore[method-assign]
+        try:
+            uow.commit()
+            raised = None
+        except PersistenceError as exc:
+            raised = exc
+
+    assert raised is not None
+    assert raised.message == "Could not commit persistence changes."
+    assert sentinel not in raised.message
+    assert "supersecret" not in str(raised)
+    assert "db.internal" not in str(raised)
+    assert raised.__cause__ is None
+
+
+def test_identity_savepoint_failure_leaves_no_orphan_user(
+    session_factory: sessionmaker,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A unique-identity SAVEPOINT failure must not leave an extra user row."""
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        first = uow.identity_repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+        uow.commit()
+
+    with SqlAlchemyPersistenceUnitOfWork(session_factory) as uow:
+        repository = uow.identity_repository
+        monkeypatch.setattr(repository, "get_user_id_by_external_identity", lambda *_args: None)
+        with pytest.raises(PersistenceError):
+            repository.create_user_with_external_identity(_ISSUER, _SUBJECT)
+        uow.commit()
+
+    with session_factory() as session:
+        count = session.scalar(select(func.count()).select_from(User))
+        identities = session.scalar(select(func.count()).select_from(ExternalIdentity))
+        assert count == 1
+        assert identities == 1
+        lookup = SqlAlchemyIdentityRepository(session)
+        assert lookup.get_user_id_by_external_identity(_ISSUER, _SUBJECT) == first

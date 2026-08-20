@@ -1,12 +1,19 @@
 """Health, liveness, and readiness endpoints."""
 
-from fastapi import APIRouter
+from collections.abc import Callable
+from typing import Annotated
 
+from fastapi import APIRouter, Depends
+
+from app.api.dependencies import get_database_readiness_probe
 from app.core.config import get_settings
+from app.core.exceptions import ServiceUnavailableError
 from app.schemas.health import HealthResponse, LivenessResponse, ReadinessResponse
 
 liveness_router = APIRouter(tags=["health"])
 router = APIRouter(tags=["health"])
+
+_UNAVAILABLE = "Persistence is currently unavailable."
 
 
 @liveness_router.get("/health", response_model=LivenessResponse)
@@ -28,9 +35,16 @@ def get_health() -> HealthResponse:
 
 
 @router.get("/readiness", response_model=ReadinessResponse)
-def get_readiness() -> ReadinessResponse:
-    """Confirm that application configuration loaded successfully."""
+def get_readiness(
+    database_probe: Annotated[
+        Callable[[], bool] | None,
+        Depends(get_database_readiness_probe),
+    ],
+) -> ReadinessResponse:
+    """Confirm that configuration loaded and, when configured, the database responds."""
     settings = get_settings()
     # Touch required settings to confirm the cached configuration is usable.
     _ = (settings.app_name, settings.app_version, settings.app_env, settings.api_v1_prefix)
+    if database_probe is not None and not database_probe():
+        raise ServiceUnavailableError(_UNAVAILABLE)
     return ReadinessResponse(status="ready")

@@ -1,10 +1,10 @@
-"""Alembic environment. Connection URL comes from application Settings."""
+"""Alembic environment. Connection URL comes from DATABASE_URL only."""
 
 from logging.config import fileConfig
 
 from alembic import context
-from app.core.config import get_settings
 from app.infrastructure.storage.database import create_database_engine
+from app.infrastructure.storage.migration_config import resolve_migration_database_url
 from app.infrastructure.storage.models import Base
 
 config = context.config
@@ -16,14 +16,11 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    url = get_settings().database_url
-    if not url:
-        raise RuntimeError("DATABASE_URL must be set to run Alembic migrations.")
-    return url
+    return resolve_migration_database_url()
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
+    """Run migrations in 'offline' mode without connecting."""
     context.configure(
         url=_database_url(),
         target_metadata=target_metadata,
@@ -36,7 +33,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode using the application engine factory."""
+    """Run migrations in 'online' mode using a short-lived engine."""
     engine = create_database_engine(_database_url())
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

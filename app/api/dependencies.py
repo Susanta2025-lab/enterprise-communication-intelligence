@@ -132,6 +132,21 @@ def get_unit_of_work_factory() -> UnitOfWorkFactory | None:
     return build_factory(settings.database_url)
 
 
+def get_database_readiness_probe() -> Callable[[], bool] | None:
+    """Return a SQLAlchemy-free database probe when persistence is configured."""
+    settings = get_settings()
+    if not settings.database_url:
+        return None
+    from app.infrastructure.storage.runtime import probe_database_readiness
+
+    url = settings.database_url
+
+    def _probe() -> bool:
+        return probe_database_readiness(url)
+
+    return _probe
+
+
 def require_unit_of_work_factory(
     factory: Annotated[UnitOfWorkFactory | None, Depends(get_unit_of_work_factory)],
 ) -> UnitOfWorkFactory:

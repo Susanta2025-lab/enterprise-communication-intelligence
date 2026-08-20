@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.dependencies import get_database_readiness_probe
 from app.core.config import get_settings
 from app.main import create_app
 
@@ -67,3 +68,68 @@ def test_readiness_endpoint(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ready"}
+
+
+def test_readiness_when_persistence_disabled_remains_ready(client: TestClient) -> None:
+    """Omitting DATABASE_URL must not make development unreadiness."""
+    response = client.get("/api/v1/readiness")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+@pytest.fixture
+def client_with_ready_database(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    """TestClient with a successful database probe override."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    get_settings.cache_clear()
+    application = create_app()
+    application.dependency_overrides[get_database_readiness_probe] = lambda: (lambda: True)
+    with TestClient(application) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def client_with_unavailable_database(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    """TestClient with a failing database probe override."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    get_settings.cache_clear()
+    application = create_app()
+    application.dependency_overrides[get_database_readiness_probe] = lambda: (lambda: False)
+    with TestClient(application) as test_client:
+        yield test_client
+
+
+def test_readiness_when_database_ready(client_with_ready_database: TestClient) -> None:
+    """A successful database probe keeps readiness 200."""
+    response = client_with_ready_database.get("/api/v1/readiness")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readiness_when_database_unavailable(
+    client_with_unavailable_database: TestClient,
+) -> None:
+    """An unavailable database fails closed with a generic 503."""
+    response = client_with_unavailable_database.get("/api/v1/readiness")
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload == {"detail": "Persistence is currently unavailable."}
+    text = response.text.lower()
+    assert "sqlalchemy" not in text
+    assert "localhost" not in text
+    assert "password" not in text
+    assert "postgresql" not in text
+
+
+def test_health_does_not_query_database_when_probe_fails(
+    client_with_unavailable_database: TestClient,
+) -> None:
+    """GET /health and GET /api/v1/health stay process-only."""
+    root = client_with_unavailable_database.get("/health")
+    versioned = client_with_unavailable_database.get("/api/v1/health")
+    assert root.status_code == 200
+    assert root.json() == {"status": "healthy"}
+    assert versioned.status_code == 200
+    assert versioned.json()["status"] == "healthy"
