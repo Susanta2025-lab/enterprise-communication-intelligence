@@ -18,17 +18,17 @@ Phase 10 is **In progress**.
 - **10A is Completed:** domain connector contract, connector-neutral errors, ingestion service, offline fake adapter, unit and boundary tests. No API, OAuth, or vendor SDKs.
 - **10B is Completed:** `connector_accounts` persistence, user ownership isolation, opaque `credential_ref`, `ConnectorAccountService`, Alembic revision `10b0001`, SQLite and PostgreSQL tests. No OAuth, token storage, Gmail, Microsoft Graph, or connector API routes.
 - **10C is Completed:** mocked/offline tests plus a controlled local live verification passed. The repository still contains only the Gmail API v1 REST adapter, MIME normalization, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Gmail SDK, or connector HTTP routes were added to ECI. The live mailbox check was a separate local verification, not GitHub Actions.
-- **10D is focused review complete / commit pending:** mocked/offline Microsoft Graph REST adapter, JSON normalization, nextLink validation, mocked HTTP tests, and a mocked ingestion-boundary test. No live Graph call, Microsoft login, Entra app registration, OAuth implementation, token persistence, Graph SDK, or connector HTTP routes were added to ECI.
+- **10D is Completed:** mocked/offline tests plus a controlled local live Microsoft Graph verification passed. The repository still contains only the Microsoft Graph REST v1.0 adapter, JSON normalization, nextLink validation, mocked HTTP tests, and a mocked ingestion-boundary test. No OAuth implementation, token persistence, Graph SDK, MSAL, or connector HTTP routes were added to ECI. The live Graph check was a separate local verification, not GitHub Actions.
 - **10E is pending.**
 
-Phase 10 overall remains in progress. Phase 10D is not fully completed until commit, push, CI, and any separately approved live verification checkpoint are done.
+Phase 10 overall remains in progress.
 
 ## Deliverables
 
 - [x] Phase 10A — Connector Architecture & Domain Contracts (completed)
 - [x] Phase 10B — Connector Accounts & Credential References (completed)
 - [x] Phase 10C — Gmail Read-Only Adapter (mocked/offline tests + controlled local live verification passed)
-- [x] Phase 10D — Microsoft Graph Read-Only Adapter (focused review complete / commit pending)
+- [x] Phase 10D — Microsoft Graph Read-Only Adapter (mocked/offline tests + controlled local live Microsoft Graph verification passed)
 - [ ] Phase 10E — pending
 
 ## Phase 10A Architecture
@@ -330,22 +330,35 @@ CommunicationIngestionService
 CommunicationAnalysisWorkflowService (existing)
 ```
 
+The designed path above is unchanged. Offline tests mock HTTP and cover request construction through the ingestion-boundary test. The controlled local live verification on 2026-08-20 exercised only:
+
+```text
+Microsoft Graph REST v1.0
+        ↓
+MicrosoftGraphCommunicationConnector
+        ↓
+CommunicationMessage
+        STOP
+```
+
+The remaining workflow was already covered by offline integration testing and was deliberately excluded from the live Graph test.
+
 - `MicrosoftGraphCommunicationConnector` is a sibling of `GmailCommunicationConnector`. It implements the unchanged `CommunicationConnector` contract: `provider`, `list_messages(ConnectorMessageQuery) -> MessagePage`, `fetch_message(provider_message_id) -> CommunicationMessage`.
 - Connector provider identity is `microsoft_graph`. Normalized messages still use `SourceType.EMAIL`. There is no `SourceType.OUTLOOK`, `SourceType.GRAPH`, or `SourceType.MICROSOFT`.
 - Direct REST against `https://graph.microsoft.com/v1.0` with an injected `httpx.Client`. No Microsoft Graph SDK, MSAL, or Azure Identity inside this adapter.
 - The caller owns client lifecycle. Construction makes no network call.
 - Access tokens are supplied in memory by `Callable[[], str]` (`AccessTokenProvider`). The adapter does not implement OAuth, refresh, PKCE, callbacks, secret-store lookup, or `credential_ref` resolution.
 - 10B remains compatible: `provider="microsoft_graph"` plus opaque `external_account_id` and `credential_ref` can later compose with a credential resolver without schema changes. 10D does not call `ConnectorAccountService`.
-- Existing Phase 8 Entra apps (`eci-api-auth-dev`, `eci-auth-verifier-dev`, `eci-github-deploy-dev`, runtime managed identities) are not reused for Graph mailbox OAuth. A future live Graph client registration is out of scope for 10D.
+- Existing Phase 8 Entra apps (`eci-api-auth-dev`, `eci-auth-verifier-dev`, `eci-github-deploy-dev`, runtime managed identities) are not reused for Graph mailbox OAuth. A dedicated development-verification app registration was used only for the controlled live checkpoint; it is not the production OAuth architecture. See [Controlled Live Microsoft Graph Verification](#controlled-live-microsoft-graph-verification).
 
-### Future authorization context (not implemented)
+### Authorization context
 
-Intended delegated Microsoft Graph permission for a later live mailbox checkpoint:
+Delegated Microsoft Graph permission used by the controlled live verification:
 
 - `Mail.Read` — required because ECI analyzes message bodies.
-- `Mail.ReadBasic` is insufficient: it excludes `body` / `bodyPreview` / attachments.
+- `Mail.ReadBasic` remains insufficient: it excludes `body` / `bodyPreview` / attachments.
 
-10D does not request consent, create an Entra app registration, or claim that a tenant will permit user self-consent. Tenant consent policies may differ. `Mail.ReadWrite`, `Mail.Send`, `Mail.ReadWrite.Shared`, and application `Mail.Read` are not in scope.
+10D does not implement consent, OAuth, or a production Entra app registration inside ECI. Successful personal-Microsoft-account user consent in this test does not mean admin consent is universally unnecessary, that all Microsoft tenants permit user consent, or that production consent architecture is complete. `Mail.ReadWrite`, `Mail.Send`, `Mail.ReadWrite.Shared`, and application `Mail.Read` remain out of scope.
 
 ### List and fetch
 
@@ -398,10 +411,9 @@ Intended delegated Microsoft Graph permission for a later live mailbox checkpoin
 
 ### Out of scope for 10D implementation
 
-The 10D adapter in ECI does not include:
+The 10D adapter in ECI still does not include:
 
-- Live Microsoft Graph calls, Microsoft/Entra login, or real mailbox verification
-- Entra app registration, tenant consent, or OAuth lifecycle (authorization code, PKCE, refresh, device code, client credentials, On-Behalf-Of)
+- OAuth consent, token exchange, PKCE, or durable token files inside ECI
 - Token columns, Settings tokens, `.env` tokens, schema/migrations
 - Connector-account composition or credential resolver
 - Shared/delegated mailboxes, application permissions, `/users/{id}`
@@ -409,10 +421,266 @@ The 10D adapter in ECI does not include:
 - Webhooks, delta query, background sync, raw-message persistence
 - Connector HTTP/API routes, connector factory, Graph SDK, MSAL
 
-Phase 10D is mocked/offline only. Live Microsoft Graph verification is a separate explicit checkpoint after commit, push, and green CI. Do not mark Phase 10D completed until that remaining checkpoint path is decided.
+A controlled local live verification was performed after 10D implementation. It did not add OAuth, credentials, MSAL, or Graph SDK to ECI. See [Controlled Live Microsoft Graph Verification](#controlled-live-microsoft-graph-verification).
 
 ADR-015 and credential-store ADRs remain deferred until Phase 10E or a focused connector architecture review.
 
+## Controlled Live Microsoft Graph Verification
+
+After Phase 10D implementation, focused review, commit, push, and green GitHub Actions CI, a separate controlled local live verification was performed against the real Microsoft Graph API on **2026-08-20**.
+
+This is a verification checkpoint, not a new architecture decision. No ADR is recorded for it.
+
+### Verification boundary
+
+The live flow was:
+
+```text
+Microsoft interactive OAuth
+        ↓
+temporary in-memory access token
+        ↓
+Microsoft Graph REST v1.0
+        ↓
+MicrosoftGraphCommunicationConnector
+        ↓
+CommunicationMessage
+        STOP
+```
+
+The live verification intentionally stopped at the connector/domain boundary. It did not continue into `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `MockAIProvider`, Microsoft Foundry, Amazon Bedrock, PostgreSQL, analysis persistence, or connector-account persistence.
+
+The wider workflow remains covered by mocked/offline integration tests.
+
+### Microsoft identity setup
+
+Non-secret architectural facts only:
+
+- A dedicated personal Outlook.com test mailbox was used.
+- A dedicated Entra app registration was created specifically for this verification.
+- App name: `ECI Graph Live Verification`.
+- Supported account type: Personal Microsoft accounts only.
+- Platform: Mobile and desktop applications.
+- Redirect URI: `http://localhost`.
+- Public-client flow was configured.
+- No client secret was created.
+- Configured Microsoft Graph API permission: delegated `Mail.Read` only.
+- Explicit `User.Read` was not configured as a Graph API permission; it had been removed from the app registration.
+- No `Mail.ReadWrite`.
+- No `Mail.Send`.
+- No application `Mail.Read`.
+- No admin-consent grant was used for this controlled test.
+- Existing Phase 8 ECI Entra applications were not reused.
+
+`Mail.Read` was used because message-body access is required. `Mail.ReadBasic` remains insufficient for body-based analysis.
+
+This successful verification used a personal Microsoft account test scenario. It does not prove that admin consent is universally unnecessary, that all Microsoft tenants permit user consent, or that production consent architecture is complete.
+
+No Microsoft account email address, Application (client) ID, Object ID, tenant ID, access token, refresh token, authorization code, browser callback query, or consent-session identifier is recorded here.
+
+### Existing ECI Entra identities
+
+The live Graph verification did not reuse:
+
+- `eci-api-auth-dev`
+- `eci-auth-verifier-dev`
+- `eci-github-deploy-dev`
+- Azure managed identities
+
+Mailbox OAuth is a different trust and use case from ECI API authentication, deployment identity, and runtime managed identity. The dedicated Graph app registration therefore remained separate.
+
+`ECI Graph Live Verification` is a controlled development-verification identity. It is not a production app registration, not the final customer OAuth app, and not an enterprise multi-tenant OAuth architecture. Production identity design remains deferred.
+
+### Temporary local workspace
+
+A temporary local workspace outside the ECI repository was used. Conceptually it contained:
+
+- an isolated Python virtual environment
+- MSAL installed only in that temporary environment
+- a temporary verification script
+
+Those files are not part of the ECI repository and were not added by this checkpoint. MSAL was not added to `pyproject.toml` or `requirements.txt`.
+
+### Authentication behavior
+
+The temporary script used MSAL Python `PublicClientApplication.acquire_token_interactive(...)` for browser-based public-client authentication.
+
+The scope requested by the script was `https://graph.microsoft.com/Mail.Read`.
+
+The live script held the resulting access token in memory only and supplied it through `AccessTokenProvider`. No refresh token, token cache, or credential file was added to ECI.
+
+This checkpoint does not claim production refresh-token management, token-cache architecture, credential resolver, secret-manager integration, production OAuth lifecycle, or a production callback API.
+
+### Consent screen
+
+Microsoft's consent UI displayed the expected delegated mail-read permission plus standard delegated-authentication identity/continued-access consent.
+
+Bounded facts only:
+
+- The only configured Microsoft Graph API permission was delegated `Mail.Read`.
+- The consent UI also showed standard identity/basic-profile sign-in access. That is treated as ordinary OpenID/OAuth interactive sign-in consent, not as a separately configured ECI Graph API permission such as `User.Read`.
+- The consent UI also showed continued-access wording. That is treated as Microsoft's standard delegated OAuth behavior, not as ECI implementing `offline_access`, refresh-token persistence, or a token cache.
+
+Mailbox address, screenshots, callback URL, authorization URL, and token details are not recorded.
+
+### Live test design
+
+The verification used the real committed `MicrosoftGraphCommunicationConnector` with:
+
+- a real `httpx.Client`
+- a temporary in-memory access-token callable
+- `ConnectorMessageQuery(limit=1)`
+
+The connector then performed the real Graph read path. The test intentionally requested only one message. Expected network pattern:
+
+1. 1 × `GET /v1.0/me/messages`
+2. 1 × `GET /v1.0/me/messages/{id}`
+
+No attachments call. No MIME `$value`. No second page. No profile lookup. No send. No modify. No delete. No Graph SDK call. No AI call. No database call.
+
+### Synthetic mailbox test
+
+One dedicated Outlook.com test mailbox was used. One synthetic test message with no meaningful personal or business data was placed in the mailbox. Live verification intentionally requested only one message. No message content was printed by the verification script.
+
+Email address, sender, recipient, subject, message body, message ID, conversation ID, categories, and timestamps are not recorded here.
+
+### Successful verification result
+
+Validated outcomes:
+
+- Microsoft interactive OAuth succeeded
+- delegated `Mail.Read` consent succeeded
+- real Microsoft Graph authentication succeeded
+- real `/me/messages` list succeeded
+- real `/me/messages/{id}` fetch succeeded
+- `MicrosoftGraphCommunicationConnector` successfully normalized the Graph response
+- exactly one `CommunicationMessage` was produced
+- connector `provider == "microsoft_graph"`
+- normalized `source_type == SourceType.EMAIL`
+- normalized body was non-empty
+- message content was not printed
+
+Terminal result:
+
+```text
+Live Microsoft Graph connector verification: PASS
+```
+
+No credentials or mailbox content are recorded here.
+
+### What this proves
+
+Phase 10D has now been validated at two levels.
+
+**Automated/offline verification.** `MockTransport`-based tests prove Graph request construction, `$top` / `$select`, one-page list semantics, sequential fetch, `@odata.nextLink` opacity, nextLink origin/path validation before bearer-token use, unsafe continuation URL rejection, redirect protection, message-id quoting, text-body normalization, HTML fallback, sender/from fallback, recipients, subject, timestamps, categories/labels, `bodyPreview` non-fallback, attachment exclusion, error mapping, token/content privacy, and ingestion-boundary interoperability. Those attack and error paths were not live-tested.
+
+**Controlled live verification.** Real Microsoft Graph verification proves:
+
+- the dedicated public-client OAuth setup can obtain delegated `Mail.Read` access
+- the token can be supplied through the adapter's existing in-memory token interface
+- the real `/me/messages` endpoint is compatible with the committed adapter
+- the real message fetch endpoint is compatible with the committed adapter
+- a real Graph message response can be normalized into the existing ECI `CommunicationMessage` model
+- `SourceType.EMAIL` is produced
+- normalized body is non-empty
+
+The live Graph verification exercised only the successful path. Mocked edge-case coverage is not attributed to this live test.
+
+### What is not proven
+
+The controlled live test does not prove or implement:
+
+- production Microsoft OAuth lifecycle
+- production redirect/callback API routes
+- persistent token cache
+- refresh-token lifecycle inside ECI
+- credential resolver integration
+- connector-account → `credential_ref` → credential resolver composition
+- production secret-manager integration
+- multi-user Microsoft Graph mailbox onboarding
+- work/school Microsoft 365 tenant onboarding
+- admin-consent workflows
+- shared mailboxes
+- application `Mail.Read`
+- client-credentials flow
+- tenant-wide mailbox access
+- background synchronization
+- Graph delta query
+- webhook/subscription handling
+- mailbox change notifications
+- attachments
+- MIME `$value`
+- send
+- modify
+- delete
+- multi-page live pagination
+- live nextLink continuation
+- live `401`/`403`/`404`/`429`/`5xx` behavior
+- live rate-limit behavior
+- large-mailbox behavior
+- large-message behavior
+- AI analysis of live Graph content, including Microsoft Foundry, Amazon Bedrock, and `MockAIProvider`
+- persistence of live Graph-derived analysis
+- Azure-hosted OAuth
+- AWS-hosted OAuth
+- production Graph OAuth architecture
+
+### Privacy and data minimization
+
+- Real Graph JSON existed only transiently during request handling.
+- The live verification did not persist the fetched Graph message. The designed workflow may persist derived analysis later; that path was not exercised live.
+- No live Graph message content was sent to Microsoft Foundry, Amazon Bedrock, or `MockAIProvider`. The live test stopped before analysis.
+- No live Graph content was written to PostgreSQL.
+- No live Graph content was intentionally logged.
+- No access token was intentionally logged.
+- Verification output contained bounded status information only.
+- The test mailbox contained only synthetic verification content relevant to this test.
+
+These statements describe the verification procedure and the adapter's existing bounded logging. They are not stronger guarantees than the implementation supports.
+
+### Connector-account boundary
+
+Live verification did not exercise `connector_accounts`, `credential_ref`, `ConnectorAccountService`, a credential resolver, or database-backed mailbox selection.
+
+The live token was supplied directly through `AccessTokenProvider`. That remains intentionally separate from Phase 10B persistence.
+
+Future production composition remains conceptually:
+
+```text
+authenticated ECI user
+        ↓
+owned connector account
+        ↓
+credential_ref
+        ↓
+credential resolver
+        ↓
+token provider
+        ↓
+MicrosoftGraphCommunicationConnector
+```
+
+That composition is not implemented in this checkpoint.
+
+### Implementation CI checkpoint
+
+Phase 10D implementation commit:
+
+- `74c2a82` — `feat: add Microsoft Graph read-only connector`
+- GitHub Actions run `32372699620`
+- Result: PASS
+
+CI proves the mocked/offline committed code and tests. The controlled local live Microsoft Graph verification was a separate local execution. The live Graph call did not run in GitHub Actions.
+
 ## Phase 10E Readiness
 
-Phase 10E (final verification/documentation) remains pending until Phase 10D commit, push, and CI are complete. Live Microsoft Graph verification is not part of this implementation checkpoint.
+Phase 10E (final verification/documentation) may now begin after this documentation checkpoint is reviewed, committed, pushed, and green CI.
+
+Phase 10E should focus on:
+
+- final connector verification
+- architecture consistency
+- final Phase 10 documentation
+- remaining integration/deferred-work boundaries
+
+Phase 10E is not implemented in this checkpoint. Phase 10 overall remains in progress.

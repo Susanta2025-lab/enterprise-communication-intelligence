@@ -32,6 +32,6 @@ This directory documents the planned implementation phases for ECI Platform.
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
-Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is completed. Phase 10C — Gmail Read-Only Adapter is completed (mocked/offline tests + controlled local live verification passed; implementation CI run `32351444028` PASS; live Gmail check was local, not GitHub Actions). Phase 10D — Microsoft Graph Read-Only Adapter is focused review complete; commit pending. Phase 10E is pending.
+Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B — Connector Accounts & Credential References is completed. Phase 10C — Gmail Read-Only Adapter is completed (mocked/offline tests + controlled local live verification passed; implementation CI run `32351444028` PASS; live Gmail check was local, not GitHub Actions). Phase 10D — Microsoft Graph Read-Only Adapter is completed (mocked/offline tests + controlled local live Microsoft Graph verification passed; implementation CI run `32372699620` PASS; live Graph check was local, not GitHub Actions). Phase 10E is pending.
 
 Next: complete Phase 10 — Communication Connectors. Later: Phase 11 — Workflow Automation.
