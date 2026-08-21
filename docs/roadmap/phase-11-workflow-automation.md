@@ -24,7 +24,7 @@ Phase 11 is **In progress**.
 - **11A is Completed:** `WorkflowAction` domain model, `REPLY`-only action type, explicit state machine, `InvalidWorkflowTransitionError`, capability-specific permission checks (`communications:workflow`), backward-compatible `communications:analyze`.
 - **11B is Completed:** `workflow_actions` persistence, user ownership, proposed-reply snapshotting, validated rehydrate, conditional expected-status updates, `WorkflowActionService` create/get/list/approve/reject, Alembic `11b0001`, ADR-016.
 - **11C is Completed:** workflow proposal and approval API over `WorkflowActionService`. Create, list, get, approve, and reject are exposed. Execute, retry, PATCH, and DELETE remain absent. `AUTH_MODE=disabled` returns `401`. No persistence change.
-- **11D is Not started:** action execution port and deterministic fake executor.
+- **11D is Completed:** `CommunicationActionExecutor` write port, immutable `CommunicationActionExecution` command, deterministic `FakeCommunicationActionExecutor`, and `WorkflowActionExecutionService` with TX1 `APPROVED` → `EXECUTING` committed before the fake call and TX2 `EXECUTED`/`FAILED`. No HTTP execute route. No real Gmail/Graph writes. No persistence change. ADR-017.
 - **11E is Not started:** integration, documentation closure, and regression.
 
 Phase 11 overall is not completed.
@@ -34,7 +34,7 @@ Phase 11 overall is not completed.
 - [x] Phase 11A — Workflow Domain, State Machine & Authorization Foundation (completed)
 - [x] Phase 11B — Workflow Persistence & User Ownership (completed)
 - [x] Phase 11C — Workflow Proposal and Approval API (completed)
-- [ ] Phase 11D — Action Execution Port + Deterministic Fake Executor
+- [x] Phase 11D — Action Execution Port + Deterministic Fake Executor (completed)
 - [ ] Phase 11E — Integration, Documentation & Regression
 
 ## Phase 11B flow
@@ -69,7 +69,7 @@ authenticate JWT
 - Workflow uses `communications:workflow`.
 - Neither permission implies the other.
 
-`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. `WorkflowActionService` remains the application service. Phase 11C is a thin FastAPI layer over that service.
+`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. `WorkflowActionService` remains the proposal/approval application service. Phase 11C is a thin FastAPI layer over that service. Phase 11D adds `WorkflowActionExecutionService` below HTTP.
 
 ## Allowed transitions
 
@@ -95,20 +95,29 @@ All five routes require `communications:workflow` and a real `AuthenticatedPrinc
 
 Create accepts only `analysis_id`. Approve and reject have no request body. Responses omit `owner_user_id`. Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrency conflict return `409`. Persistence unavailable returns `503`.
 
+## Phase 11D flow
+
+```text
+APPROVED WorkflowAction
+        ↓
+TX1 APPROVED → EXECUTING (commit, close UoW)
+        ↓
+CommunicationActionExecutor.execute(approved snapshot)
+        ↓
+TX2 EXECUTING → EXECUTED | FAILED
+```
+
+`WorkflowActionExecutionService` is separate from `WorkflowActionService`. The executor command uses `approved_reply_body`, not `proposed_reply_body` and not a reloaded analysis. Analysis hard-delete does not block execution. Known fake failure becomes durable `FAILED`. Unexpected executor exceptions may leave `EXECUTING`. There is no HTTP execute route.
+
 ## Unavailable until later slices
 
-- workflow execution
+- HTTP execute / retry
 - Gmail send/reply
 - Microsoft Graph send/reply
 - production workflow automation
 - automatic replies
 
-## Deferred beyond Phase 11C
-
-### 11D
-
-- `CommunicationActionExecutor` and `FakeCommunicationActionExecutor`
-- execute-after-approval with no database transaction across the executor call
+## Deferred beyond Phase 11D
 
 ### 11E
 

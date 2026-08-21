@@ -260,7 +260,22 @@ Phase 11B added `workflow_actions`:
 
 There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. Conditional updates require the stored `status` to match `expected_status`.
 
-Phase 11C exposes this table over HTTP. It does not change the schema, Alembic revisions, or `WorkflowActionRepository`. Execution remains later work.
+Phase 11C exposes this table over HTTP. It does not change the schema, Alembic revisions, or `WorkflowActionRepository`.
+
+## Phase 11D execution transactions
+
+Phase 11D adds no persistence schema, Alembic revision, or repository-contract change. Existing `EXECUTING` / `EXECUTED` / `FAILED` columns and timestamps are sufficient.
+
+Execution uses two short database transactions with no unit of work open during the executor call:
+
+```text
+resolve owner identity
+→ TX1: APPROVED → EXECUTING, commit, close
+→ CommunicationActionExecutor.execute(command)
+→ TX2: EXECUTING → EXECUTED or FAILED, commit
+```
+
+Known fake failure becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`. If the executor completes and TX2 fails, or the process crashes between them, the row may remain `EXECUTING`. Phase 11 does not add retry, outbox, reconciliation, or `EXECUTION_UNKNOWN`.
 
 ## Performance and operations (deferred)
 

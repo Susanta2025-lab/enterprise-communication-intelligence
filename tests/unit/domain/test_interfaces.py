@@ -1,13 +1,17 @@
 """Unit tests for domain interfaces."""
 
 from abc import ABC
+from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
-from app.domain.enums import PriorityLevel, SourceType
+from app.domain.enums import PriorityLevel, SourceType, WorkflowActionType
 from app.domain.interfaces import (
     AIProvider,
     AnalysisRepository,
+    CommunicationActionExecution,
+    CommunicationActionExecutor,
     CommunicationConnector,
     ConnectorAccountRepository,
     IdentityRepository,
@@ -92,12 +96,65 @@ def test_communication_connector_interface_is_abstract() -> None:
         CommunicationConnector()  # type: ignore[abstract]
 
 
+def test_communication_action_executor_interface_is_abstract() -> None:
+    """The write port must not be instantiable without an execute implementation."""
+    assert issubclass(CommunicationActionExecutor, ABC)
+    assert "execute" in CommunicationActionExecutor.__abstractmethods__
+    with pytest.raises(TypeError):
+        CommunicationActionExecutor()  # type: ignore[abstract]
+
+
+def test_communication_action_execution_is_immutable_and_validated() -> None:
+    """The executor command is a frozen approved-snapshot, not a workflow entity."""
+    action_id = uuid4()
+    command = CommunicationActionExecution(
+        action_id=action_id,
+        action_type=WorkflowActionType.REPLY,
+        approved_reply_body="  Thanks, I will review the report and respond by Friday.  ",
+    )
+    assert command.action_id == action_id
+    assert command.action_type is WorkflowActionType.REPLY
+    assert command.approved_reply_body == (
+        "Thanks, I will review the report and respond by Friday."
+    )
+    assert set(CommunicationActionExecution.model_fields) == {
+        "action_id",
+        "action_type",
+        "approved_reply_body",
+    }
+    assert "proposed_reply_body" not in CommunicationActionExecution.model_fields
+    assert "analysis_id" not in CommunicationActionExecution.model_fields
+    assert "owner_user_id" not in CommunicationActionExecution.model_fields
+    with pytest.raises(ValidationError):
+        command.action_id = uuid4()  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        command.action_type = WorkflowActionType.REPLY  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        command.approved_reply_body = "mutated"  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        CommunicationActionExecution(
+            action_id=action_id,
+            action_type=WorkflowActionType.REPLY,
+            approved_reply_body="   ",
+        )
+    with pytest.raises(ValidationError):
+        CommunicationActionExecution.model_validate(
+            {
+                "action_id": action_id,
+                "action_type": WorkflowActionType.REPLY,
+                "approved_reply_body": "Thanks, I will review the report.",
+                "proposed_reply_body": "ignored",
+            }
+        )
+
+
 def test_domain_package_has_no_fastapi_dependency() -> None:
     """Domain modules must remain independent of FastAPI."""
     import app.domain.enums as enums
     import app.domain.exceptions as domain_exceptions
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
+    import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_connector as communication_connector
     import app.domain.interfaces.connector_account_repository as connector_account_repository
     import app.domain.interfaces.identity_repository as identity_repository
@@ -113,6 +170,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         domain_exceptions,
         ai_provider,
         analysis_repository,
+        communication_action_executor,
         communication_connector,
         connector_account_repository,
         identity_repository,

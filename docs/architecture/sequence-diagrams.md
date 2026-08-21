@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 11C. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure.
+These diagrams describe the request flows implemented as of Phase 11D. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. The fake executor occupies the `CommunicationActionExecutor` slot below HTTP.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -271,6 +271,49 @@ sequenceDiagram
 ```
 
 Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrent update return `409`. Persistence unavailable returns `503`. Execute and retry are not implemented.
+
+## Workflow action execution (Phase 11D, below HTTP)
+
+There is no `POST /api/v1/workflow-actions/{action_id}/execute` route. Execution is an application-layer boundary:
+
+```text
+APPROVED WorkflowAction
+        ↓
+TX1 APPROVED → EXECUTING (commit, close UoW)
+        ↓
+CommunicationActionExecutor.execute(command)
+        ↓
+TX2 EXECUTING → EXECUTED | FAILED
+```
+
+```mermaid
+sequenceDiagram
+    participant Caller as Application caller
+    participant Exec as WorkflowActionExecutionService
+    participant UoW as PersistenceUnitOfWork
+    participant Port as CommunicationActionExecutor
+
+    Caller->>Exec: execute(principal, action_id)
+    Exec->>UoW: TX1 mark EXECUTING
+    UoW-->>Exec: commit and close
+    Exec->>Port: execute(CommunicationActionExecution)
+    alt Fake success
+        Port-->>Exec: None
+        Exec->>UoW: TX2 mark EXECUTED
+        UoW-->>Exec: commit
+        Exec-->>Caller: WorkflowAction EXECUTED
+    else Known CommunicationActionExecutionError
+        Port--xExec: CommunicationActionExecutionError
+        Exec->>UoW: TX2 mark FAILED
+        UoW-->>Exec: commit
+        Exec-->>Caller: WorkflowAction FAILED
+    else Unexpected exception
+        Port--xExec: RuntimeError
+        Exec--xCaller: propagate (row may remain EXECUTING)
+    end
+```
+
+The command carries `approved_reply_body` only. Analysis is not loaded. `CommunicationConnector` is not used. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 11 does not add retry, outbox, or `EXECUTION_UNKNOWN`.
 
 The domain state machine is unchanged:
 

@@ -10,6 +10,7 @@ from app.application.exceptions import (
     WorkflowActionNotFoundError,
 )
 from app.core.exceptions import (
+    CommunicationActionExecutionError,
     ConfigurationError,
     ConnectorAuthenticationError,
     ConnectorError,
@@ -31,6 +32,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ConfigurationError, ECIPlatformError)
     assert issubclass(ServiceUnavailableError, ECIPlatformError)
     assert issubclass(PersistenceError, ECIPlatformError)
+    assert issubclass(CommunicationActionExecutionError, ECIPlatformError)
     assert issubclass(AnalysisFailedError, ECIPlatformError)
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
@@ -103,6 +105,18 @@ def test_connector_errors_use_generic_messages() -> None:
         assert "google" not in lowered
         assert "graph" not in lowered
         assert "httpx" not in lowered
+
+
+def test_communication_action_execution_error_has_generic_message() -> None:
+    """Executor failures must not leak provider payload or exception text."""
+    error = CommunicationActionExecutionError()
+    assert error.message == "Communication action execution failed."
+    assert str(error) == "Communication action execution failed."
+    lowered = error.message.lower()
+    assert "gmail" not in lowered
+    assert "graph" not in lowered
+    assert "http" not in lowered
+    assert "token" not in lowered
 
 
 def test_invalid_workflow_transition_has_generic_message() -> None:

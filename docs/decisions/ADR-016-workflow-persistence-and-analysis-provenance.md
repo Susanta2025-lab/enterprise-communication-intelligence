@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 11B. `WorkflowAction` persistence, user ownership, conditional expected-status updates, and `WorkflowActionService` exist in the codebase. HTTP workflow routes and action execution are not implemented.
+The decision is implemented for Phase 11B. `WorkflowAction` persistence, user ownership, conditional expected-status updates, and `WorkflowActionService` exist in the codebase. HTTP workflow routes were added in Phase 11C. Action execution is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md) without changing this persistence decision.
 
 ## Date
 

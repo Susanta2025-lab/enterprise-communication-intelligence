@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 11A. `WorkflowAction`, the reply-only action type, the explicit state machine, and capability-specific permission checks exist in the codebase. Persistence, HTTP workflow routes, and execution ports are not implemented.
+The decision is implemented for Phase 11A. `WorkflowAction`, the reply-only action type, the explicit state machine, and capability-specific permission checks exist in the codebase. Persistence and HTTP workflow routes were added in later slices. The execution boundary is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md); this ADR's domain and authorization decisions are unchanged.
 
 ## Date
 

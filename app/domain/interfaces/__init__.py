@@ -6,6 +6,10 @@ from app.domain.interfaces.analysis_repository import (
     AnalysisRepository,
     NewAnalysis,
 )
+from app.domain.interfaces.communication_action_executor import (
+    CommunicationActionExecution,
+    CommunicationActionExecutor,
+)
 from app.domain.interfaces.communication_connector import (
     CommunicationConnector,
     ConnectorMessageQuery,
@@ -28,6 +32,8 @@ __all__ = [
     "AIProvider",
     "AnalysisRecord",
     "AnalysisRepository",
+    "CommunicationActionExecution",
+    "CommunicationActionExecutor",
     "CommunicationConnector",
     "ConnectorAccountRecord",
     "ConnectorAccountRepository",

@@ -1,6 +1,6 @@
 # Application Layer
 
-The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer. Phase 11B adds `WorkflowActionService` for durable approval-gated reply actions. Phase 11C exposes that service over HTTP. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration.
+The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer. Phase 11B adds `WorkflowActionService` for durable approval-gated reply actions. Phase 11C exposes that service over HTTP. Phase 11D adds `WorkflowActionExecutionService` for execute-after-approval through `CommunicationActionExecutor`. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration.
 
 ## Role of `CommunicationAnalysisService`
 
@@ -146,3 +146,21 @@ AuthenticatedPrincipal
 Public operations are create, get, list, approve, and reject. Create requires an owned analysis with a usable draft reply. Approve and reject load the owned `WorkflowAction` only; they do not reload the analysis or call an AI provider. Approval copies `proposed_reply_body` into `approved_reply_body`. Missing identity mappings use the same not-found semantics as other owned resources; list returns an empty page.
 
 The service depends on `PersistenceUnitOfWork` and `WorkflowActionRepository`. It does not import SQLAlchemy models, FastAPI, Gmail/Graph adapters, or an executor. Phase 11C maps those operations to HTTP in `app/api/routes/workflow_actions.py` without duplicating service logic.
+
+## Workflow action execution
+
+`WorkflowActionExecutionService` (`app/application/services/workflow_action_execution.py`) is the Phase 11D execution orchestrator. It is not an extension of `WorkflowActionService`.
+
+```text
+AuthenticatedPrincipal
+→ IdentityResolver.find_existing
+→ TX1: owned APPROVED → EXECUTING, commit, close UoW
+→ CommunicationActionExecutor.execute(CommunicationActionExecution)
+→ TX2: EXECUTING → EXECUTED or FAILED, commit
+```
+
+Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutor`. There is no executor factory, no `ACTION_EXECUTOR` setting, and no FastAPI `get_workflow_action_execution_service` dependency because 11D has no HTTP execute route.
+
+The executor command is the approved snapshot (`approved_reply_body`), not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Known `CommunicationActionExecutionError` becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`; the row may remain `EXECUTING`.
+
+Phase 11D implements only `FakeCommunicationActionExecutor` under `app/infrastructure/executors/`. `CommunicationConnector` remains read-only. Real Gmail/Graph writes remain later work.

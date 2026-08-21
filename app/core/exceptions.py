@@ -21,6 +21,13 @@ class PersistenceError(ECIPlatformError):
     """Raised when a persistence operation fails without a more specific type."""
 
 
+class CommunicationActionExecutionError(ECIPlatformError):
+    """Raised when an authorized communication action cannot be executed."""
+
+    def __init__(self, message: str = "Communication action execution failed.") -> None:
+        super().__init__(message)
+
+
 class ConnectorError(ECIPlatformError):
     """Raised when a communication connector operation fails."""
 
