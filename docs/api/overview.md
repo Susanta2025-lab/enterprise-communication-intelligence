@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ECI Platform exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)). When persistence is configured and the caller is authenticated, a successful analysis can be stored as user-owned history.
+ECI Platform exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)). When persistence is configured and the caller is authenticated, a successful analysis can be stored as user-owned history. Authenticated callers with `communications:workflow` can also propose and approve or reject a `WorkflowAction` derived from a stored draft. Approval authorizes a stored snapshot; it does not execute or send mail. There is no HTTP execute route.
 
 ## Base URL
 
@@ -110,4 +110,4 @@ FastAPI route (app/api/routes/*)
   └── WorkflowActionService (workflow proposal and approval)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints; Gmail and Graph adapters are not reachable through this API surface. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints; Gmail and Graph adapters are not reachable through this API surface. Phase 11D execution (`WorkflowActionExecutionService` / `CommunicationActionExecutor`) remains below HTTP. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

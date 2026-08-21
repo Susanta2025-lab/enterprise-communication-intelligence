@@ -258,7 +258,7 @@ Phase 11B added `workflow_actions`:
 | `approved_reply_body` | Authorization snapshot written on approve; null until then |
 | timestamps | `created_at` required; `approved_at` / `rejected_at` / `executed_at` / `failed_at` nullable |
 
-There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. Conditional updates require the stored `status` to match `expected_status`.
+There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. An APPROVED action remains executable after the source analysis is gone because execution uses `approved_reply_body`. Conditional updates require the stored `status` to match `expected_status`.
 
 Phase 11C exposes this table over HTTP. It does not change the schema, Alembic revisions, or `WorkflowActionRepository`.
 

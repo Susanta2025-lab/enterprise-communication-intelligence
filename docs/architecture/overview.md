@@ -15,6 +15,28 @@ CommunicationAnalysisWorkflowService   (app/application/services)
   └── AnalysisHistoryService → AnalysisRepository → PostgreSQL
 ```
 
+Workflow HTTP product surface (proposal and approval only):
+
+```text
+Client
+  ↓
+FastAPI REST API
+  ↓
+WorkflowActionService
+  ├── IdentityResolver.find_existing
+  └── WorkflowActionRepository → PostgreSQL
+```
+
+There is no HTTP execute route. Execution is below HTTP:
+
+```text
+WorkflowActionExecutionService
+  → TX1 APPROVED → EXECUTING (commit, close UoW)
+  → CommunicationActionExecutor interface
+  → FakeCommunicationActionExecutor (current implementation only)
+  → TX2 EXECUTED | FAILED
+```
+
 Connector ingestion path (below the HTTP product surface; no connector routes). Vendor adapters call Gmail or Microsoft Graph REST and implement the domain port:
 
 ```text

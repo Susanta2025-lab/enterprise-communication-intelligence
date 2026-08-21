@@ -19,15 +19,15 @@ Phase 11 is a governed `REPLY` action derived from an existing analysis. It is n
 
 ## Status
 
-Phase 11 is **In progress**.
+Phase 11 is **Completed**.
 
 - **11A is Completed:** `WorkflowAction` domain model, `REPLY`-only action type, explicit state machine, `InvalidWorkflowTransitionError`, capability-specific permission checks (`communications:workflow`), backward-compatible `communications:analyze`.
 - **11B is Completed:** `workflow_actions` persistence, user ownership, proposed-reply snapshotting, validated rehydrate, conditional expected-status updates, `WorkflowActionService` create/get/list/approve/reject, Alembic `11b0001`, ADR-016.
 - **11C is Completed:** workflow proposal and approval API over `WorkflowActionService`. Create, list, get, approve, and reject are exposed. Execute, retry, PATCH, and DELETE remain absent. `AUTH_MODE=disabled` returns `401`. No persistence change.
 - **11D is Completed:** `CommunicationActionExecutor` write port, immutable `CommunicationActionExecution` command, deterministic `FakeCommunicationActionExecutor`, and `WorkflowActionExecutionService` with TX1 `APPROVED` → `EXECUTING` committed before the fake call and TX2 `EXECUTED`/`FAILED`. No HTTP execute route. No real Gmail/Graph writes. No persistence change. ADR-017.
-- **11E is Not started:** integration, documentation closure, and regression.
+- **11E is Completed:** integration, documentation consistency (including README files), and full regression. No new product capability. No HTTP execute, real provider writes, retry, or `communications:send`.
 
-Phase 11 overall is not completed.
+Phase 11 overall is completed. HTTP execute, Gmail/Graph send/reply, production workflow automation, and automatic replies remain deferred.
 
 ## Deliverables
 
@@ -35,7 +35,7 @@ Phase 11 overall is not completed.
 - [x] Phase 11B — Workflow Persistence & User Ownership (completed)
 - [x] Phase 11C — Workflow Proposal and Approval API (completed)
 - [x] Phase 11D — Action Execution Port + Deterministic Fake Executor (completed)
-- [ ] Phase 11E — Integration, Documentation & Regression
+- [x] Phase 11E — Integration, Documentation & Regression (completed)
 
 ## Phase 11B flow
 
@@ -117,12 +117,7 @@ TX2 EXECUTING → EXECUTED | FAILED
 - production workflow automation
 - automatic replies
 
-## Deferred beyond Phase 11D
-
-### 11E
-
-- Phase 11 closure documentation and full regression
-- no new product capability
+## Deferred beyond Phase 11
 
 ### Later connector-write / productionization
 

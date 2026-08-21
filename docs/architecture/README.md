@@ -11,7 +11,7 @@ This directory documents the architecture implemented through **Phase 11D – Ac
 - [Persistence](persistence.md) — PostgreSQL architecture, ownership, connector accounts, migrations, and proof level
 - [Provider Abstraction](provider-abstraction.md) — `AIProvider`, mock, Foundry, Bedrock, the common LLM contract, and the factory
 - [Project Structure](project-structure.md) — the actual repository layout and the role of each package
-- [Sequence Diagrams](sequence-diagrams.md) — request-level walkthroughs, including connector ingestion
+- [Sequence Diagrams](sequence-diagrams.md) — request-level walkthroughs, including connector ingestion, workflow HTTP, and the below-HTTP execution boundary
 
 ## Diagrams
 

@@ -50,7 +50,7 @@ ADR-013 records OIDC `(issuer, subject)` mapping onto an opaque internal user UU
 
 ADR-014 records Option C: cloud-portable PostgreSQL plus ephemeral CI proof. Shared cross-cloud databases and dual standing managed databases are rejected for this phase. No Azure PostgreSQL or Amazon RDS is provisioned.
 
-ADR-015 records that AI suggestions are not authorized external actions. `WorkflowAction` requires an explicit proposal and human approval. `CommunicationConnector` stays read-only; a future write executor is separate. Authorization checks capability-specific permissions (`communications:analyze` vs `communications:workflow`). Future execution must not hold a database transaction across a provider call. Persistence and HTTP were later Phase 11 slices; the execution boundary is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md).
+ADR-015 records that AI suggestions are not authorized external actions. `WorkflowAction` requires an explicit proposal and human approval. `CommunicationConnector` stays read-only. Authorization checks capability-specific permissions (`communications:analyze` vs `communications:workflow`). Persistence and HTTP were later Phase 11 slices; the execution boundary is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md).
 
 ADR-016 records that workflow actions persist as user-owned `workflow_actions` rows. The proposed reply is snapshotted at creation. Approval writes a separate authorized snapshot. `analysis_id` is required provenance without a database FK, so analysis hard-delete leaves actions intact. HTTP was added in Phase 11C. Execution is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md) without changing this persistence decision.
 

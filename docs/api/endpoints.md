@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 11C. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. There is no execute, retry, PATCH, or DELETE workflow endpoint.
+All HTTP endpoints implemented in the repository as of Phase 11C. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 11D added an internal deterministic execution boundary below HTTP. There is no execute, retry, PATCH, or DELETE workflow endpoint.
 
 ## `GET /health`
 
@@ -241,7 +241,7 @@ The stored `analysis_id` is returned without dereferencing the analysis.
   - `409 Conflict` — invalid transition or concurrent update
   - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
 
-Repeated approve is not idempotent. Approving an already approved or rejected action returns `409`. Approval still succeeds after the source analysis is deleted.
+Repeated approve is not idempotent. Approving an already approved or rejected action returns `409`. Approval still succeeds after the source analysis is deleted. Approval copies the stored proposal into `approved_reply_body`; it does not call `CommunicationActionExecutor` and does not send mail.
 
 ---
 
@@ -261,4 +261,4 @@ Repeated approve is not idempotent. Approving an already approved or rejected ac
   - `409 Conflict` — invalid transition or concurrent update
   - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
 
-Repeated reject is not idempotent. Rejecting an already rejected or approved action returns `409`. Rejection still succeeds after the source analysis is deleted.
+Repeated reject is not idempotent. Rejecting an already rejected or approved action returns `409`. Rejection still succeeds after the source analysis is deleted. A rejected action cannot execute.

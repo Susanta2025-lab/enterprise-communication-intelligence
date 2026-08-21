@@ -62,12 +62,12 @@ Only `email` is exercised by any implemented behavior; the remaining values exis
 
 | Value | Notes |
 |---|---|
-| `pending` | Created proposal |
-| `approved` | Human-approved; `approved_reply_body` snapshotted |
-| `rejected` | Human-rejected; terminal in Phase 11 |
-| `executing` | Later execution; not created by 11C |
-| `executed` | Later execution success; not created by 11C |
-| `failed` | Later execution failure; not created by 11C |
+| `pending` | Proposal exists; not authorized |
+| `approved` | User authorized the stored snapshot; not sent |
+| `rejected` | User denied execution; terminal in Phase 11 |
+| `executing` | Authorized execution attempt has begun (internal boundary; no HTTP execute route) |
+| `executed` | Deterministic fake executor completed; not Gmail/Graph delivery |
+| `failed` | Known execution failure; terminal in Phase 11 |
 
 ---
 

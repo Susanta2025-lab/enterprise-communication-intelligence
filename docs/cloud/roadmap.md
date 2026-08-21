@@ -63,4 +63,4 @@ Cloud runtimes still do **not** provide:
 
 Controlled live adapter verification was local. This document does not claim Azure or AWS connector deployment verification.
 
-Next: Phase 11 — Workflow Automation. Do not implement Phase 11 here. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.
+Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). It adds proposal/approval HTTP and an internal deterministic execution boundary. Do not add cloud send/reply, OAuth write scopes, or provider write executors here. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.

@@ -1,6 +1,6 @@
 # ECI Platform API Documentation
 
-This directory documents the REST API implemented through Phase 11C of the ECI Platform roadmap. Phase 10 added no connector HTTP endpoints. Phase 11C adds workflow proposal and approval routes; it does not add execute, retry, or connector routes.
+This directory documents the REST API implemented through Phase 11C of the ECI Platform roadmap. Phase 10 added no connector HTTP endpoints. Phase 11C adds workflow proposal and approval routes. Phase 11D added an internal deterministic execution boundary below HTTP; it did not add execute, retry, or connector routes.
 
 ## Contents
 
@@ -16,4 +16,4 @@ The API currently defaults to `AI_PROVIDER=mock` (see `.env.example`). `Microsof
 
 ## Scope
 
-This documentation reflects the REST API plus Phase 6 cloud AI providers, Phase 8 application-user OIDC, Phase 9 user-owned analysis history, and Phase 11C workflow proposal/approval. Phase 10 connector adapters are not exposed as HTTP routes. Responses include `X-Request-ID` for operational correlation. Persistence details stay behind the API: callers see optional `analysis_id`, history resources, and owned workflow actions, not SQLAlchemy or PostgreSQL types. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). Persistence strategy is documented in [`docs/cloud/persistence.md`](../cloud/persistence.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.
+This documentation reflects the REST API plus Phase 6 cloud AI providers, Phase 8 application-user OIDC, Phase 9 user-owned analysis history, and Phase 11C workflow proposal/approval. Phase 11D execution is not an HTTP capability. Phase 10 connector adapters are not exposed as HTTP routes. Responses include `X-Request-ID` for operational correlation. Persistence details stay behind the API: callers see optional `analysis_id`, history resources, and owned workflow actions, not SQLAlchemy or PostgreSQL types. Cloud hosting is documented in [`docs/cloud/deployment.md`](../cloud/deployment.md). Persistence strategy is documented in [`docs/cloud/persistence.md`](../cloud/persistence.md). See [`docs/roadmap/README.md`](../roadmap/README.md) for phase status.

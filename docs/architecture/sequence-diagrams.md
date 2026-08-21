@@ -270,7 +270,7 @@ sequenceDiagram
     Route-->>Client: 200 WorkflowActionResponse
 ```
 
-Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrent update return `409`. Persistence unavailable returns `503`. Execute and retry are not implemented.
+Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrent update return `409`. Persistence unavailable returns `503`. HTTP execute and retry are not implemented.
 
 ## Workflow action execution (Phase 11D, below HTTP)
 

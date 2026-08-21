@@ -67,7 +67,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 ### Authentication
 
 * Provider-independent OIDC JWT validation
-* Permission authorization (`communications:analyze` from `scp` / `scope` / `roles`)
+* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for workflow routes)
 * Fail-closed production (`APP_ENV=production` requires `AUTH_MODE=oidc`)
 * First live identity provider: Microsoft Entra ID (single-tenant resource application)
 
@@ -92,6 +92,9 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * `POST /api/v1/communications/analyze`
 * Optional `analysis_id` when authenticated history storage succeeds
 * `GET /api/v1/analyses` and `GET/DELETE /api/v1/analyses/{analysis_id}`
+* `POST /api/v1/workflow-actions`, `GET /api/v1/workflow-actions`, `GET /api/v1/workflow-actions/{action_id}`
+* `POST /api/v1/workflow-actions/{action_id}/approve` and `.../reject`
+* No HTTP execute, retry, PATCH, or DELETE workflow routes
 * Request validation
 * Structured error handling
 * Reusable domain schemas
@@ -102,6 +105,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * PostgreSQL production persistence architecture (SQLAlchemy 2.x, Alembic, psycopg 3)
 * Authenticated user ownership via OIDC `issuer` + `subject` → internal user UUID
 * Analysis history with SQL-scoped ownership isolation
+* User-owned `workflow_actions` with proposed/approved reply snapshots and no analysis FK
 * Raw communication body is not stored
 * PostgreSQL CI validation (ephemeral `postgres:16`; run `32336909759`)
 * SQLite for default local tests only
@@ -116,6 +120,18 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Controlled local live adapter verification for Gmail and Microsoft Graph, stopping at `CommunicationMessage`
 
 Phase 10 does not include production OAuth, connector HTTP APIs, background synchronization, sending, or automatic replies.
+
+### Workflow Automation
+
+* Approval-gated `WorkflowAction` domain (`REPLY` only) with an explicit state machine
+* AI `DraftReply` remains a suggestion; analyze does not create a workflow action
+* Explicit proposal creation snapshots `draft_reply.body` into a PENDING action
+* User approval copies the proposed snapshot; rejection retains it and cannot execute
+* HTTP proposal/approval API under `/api/v1/workflow-actions` (`communications:workflow`)
+* Internal deterministic execution boundary: `WorkflowActionExecutionService` → `CommunicationActionExecutor` → `FakeCommunicationActionExecutor`
+* Execution uses only `approved_reply_body`; analysis deletion does not block it
+
+Phase 11 does not include a public execute endpoint, real Gmail/Graph send/reply, automatic replies, `communications:send`, OAuth write scopes, retry, or reconciliation.
 
 ### Engineering
 
@@ -161,6 +177,12 @@ Phase 10 does not include production OAuth, connector HTTP APIs, background sync
 * ✅ Phase 10D – Microsoft Graph Read-Only Adapter
 * ✅ Phase 10E – Documentation Finalization
 * ✅ Phase 10 – Communication Connectors
+* ✅ Phase 11A – Workflow Domain, State Machine & Authorization Foundation
+* ✅ Phase 11B – Workflow Persistence & User Ownership
+* ✅ Phase 11C – Workflow Proposal and Approval API
+* ✅ Phase 11D – Action Execution Port + Deterministic Fake Executor
+* ✅ Phase 11E – Integration, Documentation & Regression
+* ✅ Phase 11 – Workflow Automation
 
 ---
 
@@ -207,6 +229,28 @@ AIProvider
 ```
 
 Controlled local live Gmail and Graph checks stopped at `CommunicationMessage` and did not call Foundry, Bedrock, or PostgreSQL.
+
+Phase 11 adds an approval-gated workflow path. Analyze still does not create or authorize actions:
+
+```text
+CommunicationAnalysis
+        ↓
+AI DraftReply (suggestion only)
+        ↓
+explicit WorkflowAction proposal (PENDING)
+        ↓
+user approve / reject
+        ↓
+approved snapshot (APPROVED) or REJECTED
+        ↓
+WorkflowActionExecutionService (below HTTP)
+        ↓
+FakeCommunicationActionExecutor
+        ↓
+EXECUTED / FAILED
+```
+
+`CommunicationConnector` remains read-only. `CommunicationActionExecutor` is a separate write port. The current executor is deterministic and fake; it does not send Gmail or Microsoft Graph mail. There is no HTTP execute route.
 
 Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, AI workload identity, and GitHub deploy identity.
 
@@ -454,8 +498,12 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 10C – Gmail Read-Only Adapter    | ✅ Completed   |
 | ↳ Phase 10D – Microsoft Graph Adapter    | ✅ Completed   |
 | ↳ Phase 10E – Documentation Finalization | ✅ Completed   |
-
-Next: Phase 11 — Workflow Automation.
+| Phase 11 – Workflow Automation           | ✅ Completed   |
+| ↳ Phase 11A – Domain & Authorization     | ✅ Completed   |
+| ↳ Phase 11B – Persistence & Ownership    | ✅ Completed   |
+| ↳ Phase 11C – Proposal & Approval API    | ✅ Completed   |
+| ↳ Phase 11D – Fake Execution Boundary    | ✅ Completed   |
+| ↳ Phase 11E – Integration & Documentation| ✅ Completed   |
 
 ---
 
@@ -481,8 +529,8 @@ Not yet implemented:
 
 * Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
 * Production Gmail/Microsoft OAuth, credential resolver, and connector HTTP APIs
-* Mailbox synchronization, webhooks, attachments, sending, and automatic replies
-* Workflow automation (Phase 11)
+* Mailbox synchronization, webhooks, and attachments
+* Real Gmail/Graph send/reply, HTTP execute/retry, `communications:send`, OAuth write scopes, and automatic replies (Phase 11 execution is an internal deterministic fake boundary only)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached
