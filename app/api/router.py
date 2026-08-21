@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import analyses, communications, health
+from app.api.routes import analyses, communications, health, workflow_actions
 from app.core.config import get_settings
 
 
@@ -13,4 +13,5 @@ def create_api_router() -> APIRouter:
     api_router.include_router(health.router, prefix=settings.api_v1_prefix)
     api_router.include_router(communications.router, prefix=settings.api_v1_prefix)
     api_router.include_router(analyses.router, prefix=settings.api_v1_prefix)
+    api_router.include_router(workflow_actions.router, prefix=settings.api_v1_prefix)
     return api_router

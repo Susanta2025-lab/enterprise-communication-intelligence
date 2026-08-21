@@ -48,9 +48,10 @@ When persistence is configured, a verified `(issuer, subject)` maps to an opaque
 Client
   → Authorization: Bearer <JWT>
   → ECI validates signature, issuer, audience, and expiry
-  → ECI requires permission communications:analyze
-  → POST /api/v1/communications/analyze
-  → optional analysis_id when history storage succeeds
+  → ECI requires the route-specific permission
+  → POST /api/v1/communications/analyze (communications:analyze)
+  → GET/DELETE /api/v1/analyses (communications:analyze)
+  → POST/GET /api/v1/workflow-actions (communications:workflow)
 ```
 
 Configuration (`app/core/config.py`):
@@ -76,8 +77,13 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `GET /api/v1/analyses`
 - `GET /api/v1/analyses/{analysis_id}`
 - `DELETE /api/v1/analyses/{analysis_id}`
+- `POST /api/v1/workflow-actions`
+- `GET /api/v1/workflow-actions`
+- `GET /api/v1/workflow-actions/{action_id}`
+- `POST /api/v1/workflow-actions/{action_id}/approve`
+- `POST /api/v1/workflow-actions/{action_id}/reject`
 
-Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without `communications:analyze` returns `403`. History routes reuse `communications:analyze`. Unknown and cross-user analysis resources return `404`, not `403`. History without `DATABASE_URL` returns `503`.
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow routes require `communications:workflow`; analyze does not imply workflow, and workflow does not imply analyze. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
 
 Permissions are read only from bounded claims `scp`, `scope`, or `roles`. Internal users store only `issuer` and `subject`; they are not a session store or login database.
 
@@ -100,9 +106,8 @@ request_id middleware
   ↓
 FastAPI route (app/api/routes/*)
   ↓ dependency injection
-CommunicationAnalysisWorkflowService (app/application/services)
-  ├── CommunicationAnalysisService → AIProvider
-  └── AnalysisHistoryService → PostgreSQL repositories (when configured)
+  ├── CommunicationAnalysisWorkflowService (analyze / history)
+  └── WorkflowActionService (workflow proposal and approval)
 ```
 
 Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints; Gmail and Graph adapters are not reachable through this API surface. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

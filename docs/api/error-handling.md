@@ -34,17 +34,32 @@ class AnalysisFailedError(ECIPlatformError):
 
 class AnalysisNotFoundError(ECIPlatformError):
     """Raised when an analysis is unknown or not owned by the caller."""
+
+class WorkflowActionNotFoundError(ECIPlatformError):
+    """Raised when a workflow action is unknown or not owned by the caller."""
+
+class WorkflowActionConflictError(ECIPlatformError):
+    """Raised when a conditional workflow update no longer matches stored status."""
+
+class AnalysisHasNoDraftReplyError(ECIPlatformError):
+    """Raised when an owned analysis has no usable draft reply to snapshot."""
 ```
+
+`app/domain/exceptions.py` defines `InvalidWorkflowTransitionError` with message `"Invalid workflow state transition."`. It is not an `ECIPlatformError` subclass and has a dedicated HTTP handler.
 
 `PersistenceError` is also defined on `app/core/exceptions.py`. All of these carry a plain `.message: str` and no additional context, stack trace, or provider internals.
 
 ## Registered Exception Handlers (`app/main.py`)
 
-Two handlers plus persistence-specific handlers are registered on the FastAPI app:
+Exception handlers are registered on the FastAPI app:
 
 | Exception type | Status code | Response body | Logged event |
 |---|---|---|---|
 | `AnalysisNotFoundError` | `404` | `{"detail": "Analysis not found."}` | `analysis_not_found` (info) |
+| `WorkflowActionNotFoundError` | `404` | `{"detail": "Workflow action not found."}` | `workflow_action_not_found` (info) |
+| `AnalysisHasNoDraftReplyError` | `409` | `{"detail": "Analysis has no usable draft reply."}` | `analysis_has_no_draft_reply` (info) |
+| `InvalidWorkflowTransitionError` | `409` | `{"detail": "Invalid workflow state transition."}` | `invalid_workflow_transition` (info) |
+| `WorkflowActionConflictError` | `409` | `{"detail": "Workflow action was updated concurrently."}` | `workflow_action_conflict` (warning) |
 | `PersistenceError` | `503` | `{"detail": "Persistence is currently unavailable."}` | `persistence_unavailable` (warning) |
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
 | `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
@@ -55,14 +70,17 @@ Authentication and authorization failures are raised as FastAPI `HTTPException` 
 
 ## Authentication and Authorization Errors
 
-When `AUTH_MODE=oidc`, analyze requires a bearer token. History routes always require an authenticated principal; `AUTH_MODE=disabled` returns `401` for history. Responses:
+When `AUTH_MODE=oidc`, analyze requires a bearer token. History and workflow routes always require an authenticated principal; `AUTH_MODE=disabled` returns `401` for those routes. Responses:
 
 | Condition | Status | `WWW-Authenticate` | Body |
 |---|---|---|---|
 | Missing bearer token | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
 | Invalid, expired, wrong issuer/audience, or bad signature | `401` | `Bearer` | `{"detail": "Not authenticated"}` |
-| Valid token without `communications:analyze` | `403` | not set | `{"detail": "Not authorized"}` |
+| Valid token without the route permission | `403` | not set | `{"detail": "Not authorized"}` |
 | Unknown or cross-user `analysis_id` | `404` | not set | `{"detail": "Analysis not found."}` |
+| Unknown or cross-user workflow action | `404` | not set | `{"detail": "Workflow action not found."}` |
+
+Analyze and history require `communications:analyze`. Workflow routes require `communications:workflow`. Neither permission implies the other.
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -95,6 +113,8 @@ AI success plus history save failure returns HTTP `200` with the analysis and om
 
 History get/delete of an unknown or cross-user id returns `404` with `{"detail": "Analysis not found."}`, not `403`.
 
+Workflow create against an unknown or cross-user analysis returns the same analysis `404`. Workflow get/approve/reject of an unknown or cross-user action returns `404` with `{"detail": "Workflow action not found."}`. Create against an owned analysis with no usable draft returns `409`. Invalid approve/reject transitions return `409` with `{"detail": "Invalid workflow state transition."}`. Concurrent updates return `409` with `{"detail": "Workflow action was updated concurrently."}`. Workflow routes without persistence return the same generic `503` body.
+
 Readiness returns the same generic `503` body when persistence is configured and the database probe fails. Database host, driver, and SQL details are not returned.
 
 ## Safe Error-Response Behavior
@@ -107,11 +127,13 @@ Readiness returns the same generic `503` body when persistence is configured and
 
 | Status | Meaning | Source |
 |---|---|---|
-| `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. |
+| `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject return the updated action. |
+| `201` | Workflow action created | `POST /api/v1/workflow-actions` |
 | `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
-| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history always (`AUTH_MODE=disabled` included) |
-| `403` | Authenticated token lacks `communications:analyze` | `require_communications_analyze` when `AUTH_MODE=oidc` |
-| `404` | Analysis unknown or not owned by the caller | `AnalysisNotFoundError` |
+| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history and workflow always (`AUTH_MODE=disabled` included) |
+| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for workflow routes |
+| `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError` or `WorkflowActionNotFoundError` |
+| `409` | Workflow conflict | No usable draft, invalid transition, or concurrent update |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
 | `503` | Persistence unavailable (`ServiceUnavailableError` / `PersistenceError`), including readiness probe failure | `app/main.py` exception handlers |

@@ -88,6 +88,39 @@ curl -sS -X DELETE http://localhost:8000/api/v1/analyses/<analysis-id> \
 
 Unknown and cross-user ids both return `404`. Do not send real bearer tokens in committed documentation or over AWS HTTP.
 
+## Workflow Actions
+
+Workflow endpoints always require an authenticated principal with `communications:workflow` (`AUTH_MODE=disabled` returns `401`). Without `DATABASE_URL`, they return `503`. Create accepts only `analysis_id`. Approve and reject have no request body.
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/workflow-actions \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"analysis_id": "<analysis-id>"}'
+```
+
+```bash
+curl -sS http://localhost:8000/api/v1/workflow-actions \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -sS http://localhost:8000/api/v1/workflow-actions/<action-id> \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/workflow-actions/<action-id>/approve \
+  -H "Authorization: Bearer <access-token>"
+```
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/workflow-actions/<action-id>/reject \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Unknown and cross-user workflow actions both return `404`. Responses omit `owner_user_id`. There is no execute, retry, PATCH, or DELETE workflow route.
+
 ## Urgent Communication
 
 ```bash

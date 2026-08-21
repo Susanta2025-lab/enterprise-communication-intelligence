@@ -12,6 +12,7 @@ from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
 from app.application.services.identity import IdentityResolver
+from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import get_logger
@@ -192,6 +193,27 @@ def require_authenticated_communications_analyze(
     return principal
 
 
+def require_authenticated_communications_workflow(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(require_communications_workflow),
+    ],
+) -> AuthenticatedPrincipal:
+    """Require a real authenticated principal for workflow endpoints.
+
+    ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
+    Missing permission remains 403.
+    """
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
+    return principal
+
+
 def get_unit_of_work_factory() -> UnitOfWorkFactory | None:
     """Return a persistence unit-of-work factory when DATABASE_URL is configured."""
     settings = get_settings()
@@ -268,3 +290,11 @@ def get_analysis_history_service(
 ) -> AnalysisHistoryService:
     """Build the analysis history service for authenticated history endpoints."""
     return AnalysisHistoryService(uow_factory)
+
+
+def get_workflow_action_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> WorkflowActionService:
+    """Build the workflow action service for authenticated workflow endpoints."""
+    return WorkflowActionService(identity_resolver, uow_factory)

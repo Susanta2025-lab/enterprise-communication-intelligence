@@ -9,11 +9,17 @@ from fastapi.responses import JSONResponse
 from app.api.middleware import RequestTelemetryMiddleware
 from app.api.router import create_api_router
 from app.api.routes import health
-from app.application.exceptions import AnalysisNotFoundError
+from app.application.exceptions import (
+    AnalysisHasNoDraftReplyError,
+    AnalysisNotFoundError,
+    WorkflowActionConflictError,
+    WorkflowActionNotFoundError,
+)
 from app.core.config import get_settings
 from app.core.exceptions import ECIPlatformError, PersistenceError, ServiceUnavailableError
 from app.core.logging import configure_logging, get_logger
 from app.core.telemetry import error_class
+from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.infrastructure.storage.runtime import dispose_persistence_runtime
 
 
@@ -64,6 +70,42 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("analysis_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(WorkflowActionNotFoundError)
+    async def workflow_action_not_found_handler(
+        _request: Request,
+        exc: WorkflowActionNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("workflow_action_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(AnalysisHasNoDraftReplyError)
+    async def analysis_has_no_draft_reply_handler(
+        _request: Request,
+        exc: AnalysisHasNoDraftReplyError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("analysis_has_no_draft_reply", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(InvalidWorkflowTransitionError)
+    async def invalid_workflow_transition_handler(
+        _request: Request,
+        exc: InvalidWorkflowTransitionError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("invalid_workflow_transition", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(WorkflowActionConflictError)
+    async def workflow_action_conflict_handler(
+        _request: Request,
+        exc: WorkflowActionConflictError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.warning("workflow_action_conflict", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
 
     @application.exception_handler(PersistenceError)
     async def persistence_error_handler(

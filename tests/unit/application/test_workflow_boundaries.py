@@ -36,13 +36,35 @@ def test_workflow_action_service_does_not_import_connectors_or_ai() -> None:
     assert "fastapi" not in source
 
 
-def test_api_has_no_workflow_routes() -> None:
-    """Phase 11B does not add HTTP workflow endpoints."""
-    for path in _API_ROUTES.glob("*.py"):
+def test_workflow_api_exists_without_executor_routes() -> None:
+    """Phase 11C exposes proposal/approval HTTP; execute and retry remain absent."""
+    workflow_routes = (_API_ROUTES / "workflow_actions.py").read_text(encoding="utf-8")
+    assert "workflow-actions" in workflow_routes
+    assert "WorkflowActionService" in workflow_routes
+    assert "/execute" not in workflow_routes
+    assert "/retry" not in workflow_routes
+    assert "CommunicationActionExecutor" not in workflow_routes
+    assert "sqlalchemy" not in workflow_routes
+    assert "GmailCommunicationConnector" not in workflow_routes
+    assert "MicrosoftGraphCommunicationConnector" not in workflow_routes
+
+    communications = (_API_ROUTES / "communications.py").read_text(encoding="utf-8")
+    analyses = (_API_ROUTES / "analyses.py").read_text(encoding="utf-8")
+    assert "WorkflowAction" not in communications
+    assert "WorkflowActionService" not in communications
+    assert "WorkflowAction" not in analyses
+    assert "WorkflowActionService" not in analyses
+
+    router = (_ROOT / "app" / "api" / "router.py").read_text(encoding="utf-8")
+    assert "workflow_actions" in router
+
+
+def test_communications_send_permission_is_absent_from_application_code() -> None:
+    """Phase 11C must not introduce communications:send."""
+    application_root = _ROOT / "app"
+    for path in application_root.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
-        assert "workflow-actions" not in source
-        assert "WorkflowAction" not in source
-        assert "WorkflowActionService" not in source
+        assert "communications:send" not in source, f"{path} must not introduce send permission"
 
 
 def test_communication_connector_remains_read_only() -> None:

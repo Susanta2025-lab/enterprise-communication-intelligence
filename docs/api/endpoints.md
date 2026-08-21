@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 10. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow).
+All HTTP endpoints implemented in the repository as of Phase 11C. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. There is no execute, retry, PATCH, or DELETE workflow endpoint.
 
 ## `GET /health`
 
@@ -159,3 +159,106 @@ Cross-user access is indistinguishable from an unknown id.
   - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
   - `404 Not Found` — unknown id or owned by a different user
   - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+Cross-user access is indistinguishable from an unknown id.
+
+---
+
+## `POST /api/v1/workflow-actions`
+
+**Purpose:** Create a PENDING reply workflow action by snapshotting the draft reply from an analysis owned by the authenticated caller.
+
+- **Method:** `POST`
+- **Path:** `{API_V1_PREFIX}/workflow-actions` → `/api/v1/workflow-actions` by default
+- **Request requirements:**
+  - `Content-Type: application/json`
+  - Body must conform to `WorkflowActionCreateRequest`: `{ "analysis_id": "<uuid>" }`
+  - Unknown fields are rejected (`extra="forbid"`)
+  - Callers cannot supply `action_type`, `status`, `proposed_reply_body`, `approved_reply_body`, ownership, or timestamps
+- **Authentication:** always required. Uses `require_authenticated_communications_workflow`: `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, send `Authorization: Bearer <JWT>` with permission `communications:workflow`.
+- **Response model:** `WorkflowActionResponse`
+- **Status codes:**
+  - `201 Created` — pending workflow action created; `proposed_reply_body` is the draft snapshot; `approved_reply_body` is `null`
+  - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
+  - `404 Not Found` — analysis unknown or not owned by the caller. Body: `{"detail": "Analysis not found."}`
+  - `409 Conflict` — analysis has no usable draft reply. Body: `{"detail": "Analysis has no usable draft reply."}`
+  - `422` — invalid UUID or extra fields
+  - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+The same `analysis_id` may create multiple workflow actions. The route does not load the analysis, resolve `user_id`, or open a unit of work; `WorkflowActionService.create` owns that behavior.
+
+---
+
+## `GET /api/v1/workflow-actions`
+
+**Purpose:** Return a bounded page of workflow actions owned by the authenticated caller.
+
+- **Method:** `GET`
+- **Path:** `{API_V1_PREFIX}/workflow-actions` → `/api/v1/workflow-actions` by default
+- **Query parameters:** `limit` (1–100, default 20), `offset` (>= 0, default 0)
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:workflow`.
+- **Response model:** `WorkflowActionListResponse`
+- **Status codes:**
+  - `200 OK` — page of owned items; callers without an identity mapping receive an empty page
+  - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
+  - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+Ordering is repository `created_at DESC, id DESC`. The response is `{ "items": [...], "limit": ..., "offset": ... }`. Total count is omitted. `owner_user_id` is not exposed.
+
+---
+
+## `GET /api/v1/workflow-actions/{action_id}`
+
+**Purpose:** Return one workflow action owned by the authenticated caller.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/workflow-actions/{action_id}`
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:workflow`.
+- **Response model:** `WorkflowActionResponse`
+- **Status codes:**
+  - `200 OK` — owned workflow action, including when the referenced analysis has been deleted
+  - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
+  - `404 Not Found` — unknown id or owned by a different user. Body: `{"detail": "Workflow action not found."}`
+  - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+The stored `analysis_id` is returned without dereferencing the analysis.
+
+---
+
+## `POST /api/v1/workflow-actions/{action_id}/approve`
+
+**Purpose:** Approve a PENDING workflow action owned by the authenticated caller.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/workflow-actions/{action_id}/approve`
+- **Request body:** none. Do not send approved reply text.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:workflow`.
+- **Response model:** `WorkflowActionResponse`
+- **Status codes:**
+  - `200 OK` — status `approved`; `approved_reply_body` copied from `proposed_reply_body`; `approved_at` populated
+  - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
+  - `404 Not Found` — unknown id or owned by a different user
+  - `409 Conflict` — invalid transition or concurrent update
+  - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+Repeated approve is not idempotent. Approving an already approved or rejected action returns `409`. Approval still succeeds after the source analysis is deleted.
+
+---
+
+## `POST /api/v1/workflow-actions/{action_id}/reject`
+
+**Purpose:** Reject a PENDING workflow action owned by the authenticated caller.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/workflow-actions/{action_id}/reject`
+- **Request body:** none. Rejection reason is not accepted.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:workflow`.
+- **Response model:** `WorkflowActionResponse`
+- **Status codes:**
+  - `200 OK` — status `rejected`; `proposed_reply_body` retained; `approved_reply_body` remains `null`; `rejected_at` populated
+  - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
+  - `404 Not Found` — unknown id or owned by a different user
+  - `409 Conflict` — invalid transition or concurrent update
+  - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
+
+Repeated reject is not idempotent. Rejecting an already rejected or approved action returns `409`. Rejection still succeeds after the source analysis is deleted.

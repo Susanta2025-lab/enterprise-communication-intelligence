@@ -22,8 +22,8 @@ Phase 11 is a governed `REPLY` action derived from an existing analysis. It is n
 Phase 11 is **In progress**.
 
 - **11A is Completed:** `WorkflowAction` domain model, `REPLY`-only action type, explicit state machine, `InvalidWorkflowTransitionError`, capability-specific permission checks (`communications:workflow`), backward-compatible `communications:analyze`.
-- **11B is Completed:** `workflow_actions` persistence, user ownership, proposed-reply snapshotting, validated rehydrate, conditional expected-status updates, `WorkflowActionService` create/get/list/approve/reject, Alembic `11b0001`, ADR-016. No HTTP workflow routes or execution.
-- **11C is Not started:** workflow proposal and approval API.
+- **11B is Completed:** `workflow_actions` persistence, user ownership, proposed-reply snapshotting, validated rehydrate, conditional expected-status updates, `WorkflowActionService` create/get/list/approve/reject, Alembic `11b0001`, ADR-016.
+- **11C is Completed:** workflow proposal and approval API over `WorkflowActionService`. Create, list, get, approve, and reject are exposed. Execute, retry, PATCH, and DELETE remain absent. `AUTH_MODE=disabled` returns `401`. No persistence change.
 - **11D is Not started:** action execution port and deterministic fake executor.
 - **11E is Not started:** integration, documentation closure, and regression.
 
@@ -33,7 +33,7 @@ Phase 11 overall is not completed.
 
 - [x] Phase 11A — Workflow Domain, State Machine & Authorization Foundation (completed)
 - [x] Phase 11B — Workflow Persistence & User Ownership (completed)
-- [ ] Phase 11C — Workflow Proposal and Approval API
+- [x] Phase 11C — Workflow Proposal and Approval API (completed)
 - [ ] Phase 11D — Action Execution Port + Deterministic Fake Executor
 - [ ] Phase 11E — Integration, Documentation & Regression
 
@@ -69,7 +69,7 @@ authenticate JWT
 - Workflow uses `communications:workflow`.
 - Neither permission implies the other.
 
-`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. `WorkflowActionService` is the Phase 11B application service.
+`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. `WorkflowActionService` remains the application service. Phase 11C is a thin FastAPI layer over that service.
 
 ## Allowed transitions
 
@@ -81,21 +81,29 @@ EXECUTING → EXECUTED | FAILED
 
 Terminal in Phase 11: `REJECTED`, `EXECUTED`, `FAILED`.
 
+## Phase 11C HTTP surface
+
+```text
+POST /api/v1/workflow-actions
+GET  /api/v1/workflow-actions
+GET  /api/v1/workflow-actions/{action_id}
+POST /api/v1/workflow-actions/{action_id}/approve
+POST /api/v1/workflow-actions/{action_id}/reject
+```
+
+All five routes require `communications:workflow` and a real `AuthenticatedPrincipal`. `AUTH_MODE=disabled` returns `401`. Routes validate input, call `WorkflowActionService`, and map the result. They do not open a unit of work, resolve `user_id`, or snapshot draft replies themselves.
+
+Create accepts only `analysis_id`. Approve and reject have no request body. Responses omit `owner_user_id`. Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrency conflict return `409`. Persistence unavailable returns `503`.
+
 ## Unavailable until later slices
 
-- workflow REST API
 - workflow execution
 - Gmail send/reply
 - Microsoft Graph send/reply
 - production workflow automation
 - automatic replies
 
-## Deferred beyond Phase 11B
-
-### 11C
-
-- `/api/v1/workflow-actions` (or equivalent)
-- HTTP mapping of not-found, invalid transitions, and concurrency conflicts
+## Deferred beyond Phase 11C
 
 ### 11D
 

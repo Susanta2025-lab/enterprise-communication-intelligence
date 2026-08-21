@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 10. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure.
+These diagrams describe the request flows implemented as of Phase 11C. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -235,9 +235,44 @@ sequenceDiagram
     end
 ```
 
-## Workflow action lifecycle (Phase 11B, no HTTP)
+## Workflow action HTTP (Phase 11C)
 
-Phase 11B persists user-owned workflow actions. There are still no workflow routes. The domain state machine is:
+```text
+HTTP request
+    ↓
+authentication
+    ↓
+communications:workflow
+    ↓
+API validation
+    ↓
+WorkflowActionService
+    ↓
+existing domain + persistence
+    ↓
+API response
+```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Route as FastAPI Route
+    participant Service as WorkflowActionService
+
+    Client->>Route: POST /api/v1/workflow-actions
+    Route->>Route: Validate analysis_id
+    Route->>Service: create(principal, analysis_id)
+    Service-->>Route: WorkflowAction
+    Route-->>Client: 201 WorkflowActionResponse
+    Client->>Route: POST /api/v1/workflow-actions/{id}/approve
+    Route->>Service: approve(principal, action_id)
+    Service-->>Route: WorkflowAction
+    Route-->>Client: 200 WorkflowActionResponse
+```
+
+Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrent update return `409`. Persistence unavailable returns `503`. Execute and retry are not implemented.
+
+The domain state machine is unchanged:
 
 ```text
 PENDING → APPROVED → EXECUTING → EXECUTED
@@ -273,5 +308,5 @@ Authorization is capability-specific after JWT authentication:
 ```text
 authenticate JWT → AuthenticatedPrincipal → required permission
 communications:analyze     (existing analyze / history)
-communications:workflow    (future workflow HTTP; checkable in 11A)
+communications:workflow    (workflow HTTP)
 ```

@@ -6,11 +6,15 @@ from fastapi import HTTPException
 from app.api.dependencies import (
     get_ai_provider,
     get_communication_analysis_service,
+    get_workflow_action_service,
+    require_authenticated_communications_workflow,
     require_communications_analyze,
     require_communications_workflow,
     require_permission,
 )
 from app.application.services.communication_analysis import CommunicationAnalysisService
+from app.application.services.identity import IdentityResolver
+from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.security import (
     COMMUNICATIONS_WORKFLOW_PERMISSION,
@@ -207,6 +211,35 @@ def test_require_permission_skips_checks_when_auth_disabled() -> None:
     workflow_dep = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
     assert require_communications_analyze(None, None) is None
     assert workflow_dep(None, None) is None
+
+
+def test_require_authenticated_communications_workflow_rejects_missing_principal() -> None:
+    """AUTH_MODE=disabled must not pass None into WorkflowActionService."""
+    with pytest.raises(HTTPException) as exc_info:
+        require_authenticated_communications_workflow(None)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Not authenticated"
+    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_require_authenticated_communications_workflow_returns_principal(
+    permission_validator,
+) -> None:
+    """A workflow-authorized principal is passed through unchanged."""
+    principal = _principal(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    authorized = require_communications_workflow(principal, permission_validator)
+    assert require_authenticated_communications_workflow(authorized) is principal
+
+
+def test_get_workflow_action_service_uses_identity_resolver_and_uow_factory() -> None:
+    """Workflow routes receive WorkflowActionService, not a repository or Session."""
+
+    def _factory() -> object:
+        raise AssertionError("factory should not be called during construction")
+
+    resolver = IdentityResolver(_factory)
+    service = get_workflow_action_service(resolver, _factory)
+    assert isinstance(service, WorkflowActionService)
 
 
 def test_require_permission_rejects_blank_permission() -> None:

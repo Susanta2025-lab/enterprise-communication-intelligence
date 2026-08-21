@@ -260,7 +260,7 @@ Phase 11B added `workflow_actions`:
 
 There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. Conditional updates require the stored `status` to match `expected_status`.
 
-HTTP workflow routes and execution are not part of this table's 11B surface.
+Phase 11C exposes this table over HTTP. It does not change the schema, Alembic revisions, or `WorkflowActionRepository`. Execution remains later work.
 
 ## Performance and operations (deferred)
 
