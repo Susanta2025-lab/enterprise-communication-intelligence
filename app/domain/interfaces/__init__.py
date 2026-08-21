@@ -18,6 +18,11 @@ from app.domain.interfaces.connector_account_repository import (
 )
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
+from app.domain.interfaces.workflow_action_repository import (
+    WorkflowActionRepository,
+    WorkflowActionSaveOutcome,
+    WorkflowActionSaveResult,
+)
 
 __all__ = [
     "AIProvider",
@@ -32,4 +37,7 @@ __all__ = [
     "NewAnalysis",
     "NewConnectorAccount",
     "PersistenceUnitOfWork",
+    "WorkflowActionRepository",
+    "WorkflowActionSaveOutcome",
+    "WorkflowActionSaveResult",
 ]

@@ -11,7 +11,13 @@ from alembic.script import ScriptDirectory
 from app.infrastructure.storage.models import Base
 
 _ROOT = Path(__file__).resolve().parents[4]
-_REQUIRED_TABLES = {"users", "external_identities", "analyses", "connector_accounts"}
+_REQUIRED_TABLES = {
+    "users",
+    "external_identities",
+    "analyses",
+    "connector_accounts",
+    "workflow_actions",
+}
 _FORBIDDEN_TABLES = {
     "messages",
     "connections",
@@ -33,11 +39,12 @@ def test_alembic_revision_graph_is_valid() -> None:
     config = Config(str(_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
     revisions = {revision.revision: revision for revision in script.walk_revisions()}
-    assert set(revisions) == {"9a0001", "10b0001"}
+    assert set(revisions) == {"9a0001", "10b0001", "11b0001"}
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
-    assert script.get_heads() == ["10b0001"]
-    assert script.get_current_head() == "10b0001"
+    assert revisions["11b0001"].down_revision == "10b0001"
+    assert script.get_heads() == ["11b0001"]
+    assert script.get_current_head() == "11b0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -115,6 +122,12 @@ def test_offline_upgrade_sql_compiles_without_oidc_or_connection(
     assert "uq_connector_accounts_user_provider_external_account" in sql
     assert "ck_connector_accounts_status" in sql
     assert "ix_connector_accounts_user_id_created_at_id" in sql
+    assert "CREATE TABLE workflow_actions" in sql
+    assert "workflow_actions" in sql
+    assert "ck_workflow_actions_action_type" in sql
+    assert "ck_workflow_actions_status" in sql
+    assert "ix_workflow_actions_user_id_created_at_id" in sql
+    assert "CREATE TABLE workflows" not in sql
     assert secret not in sql
     assert secret not in result.stderr
 
@@ -141,6 +154,30 @@ def test_connector_account_migration_creates_expected_schema() -> None:
         assert f'"{forbidden}"' not in migration
 
 
+def test_workflow_action_migration_creates_expected_schema() -> None:
+    """The 11B migration must create workflow_actions without inbound mail columns."""
+    migration = (
+        _ROOT / "alembic" / "versions" / "11b0001_workflow_actions.py"
+    ).read_text(encoding="utf-8")
+    assert 'op.create_table(\n        "workflow_actions"' in migration
+    assert 'name="ck_workflow_actions_action_type"' in migration
+    assert 'name="ck_workflow_actions_status"' in migration
+    assert "ix_workflow_actions_user_id_created_at_id" in migration
+    assert 'ondelete="CASCADE"' in migration
+    assert "proposed_reply_body" in migration
+    assert "approved_reply_body" in migration
+    assert 'op.drop_table("workflow_actions")' in migration
+    assert "raw_body" not in migration
+    assert "access_token" not in migration
+    assert "refresh_token" not in migration
+    assert '"sender"' not in migration
+    assert '"recipient"' not in migration
+    assert '"subject"' not in migration
+    assert "credential_ref" not in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
+
+
 def test_alembic_head_check_uses_script_directory_not_database_revision() -> None:
     """Head must come from migration scripts; current must come from the database."""
     source = (_ROOT / "tests" / "postgres" / "alembic_checks.py").read_text(
@@ -154,18 +191,24 @@ def test_alembic_head_check_uses_script_directory_not_database_revision() -> Non
 def test_assert_at_head_fails_when_database_is_one_revision_behind(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A database at 9a0001 must not pass when script head is 10b0001."""
+    """A database at 10b0001 must not pass when script head is 11b0001."""
     from tests.postgres import alembic_checks
 
     monkeypatch.setattr(
         alembic_checks,
         "current_and_head_revisions",
-        lambda _url: ("9a0001", "10b0001"),
+        lambda _url: ("10b0001", "11b0001"),
     )
     monkeypatch.setattr(
         alembic_checks,
         "application_tables",
-        lambda _url: {"users", "external_identities", "analyses", "alembic_version"},
+        lambda _url: {
+            "users",
+            "external_identities",
+            "analyses",
+            "connector_accounts",
+            "alembic_version",
+        },
     )
     with pytest.raises(SystemExit, match="does not match head"):
         alembic_checks.assert_at_head("postgresql+psycopg://unused/unused")
@@ -180,7 +223,7 @@ def test_assert_at_head_passes_when_current_matches_script_head(
     monkeypatch.setattr(
         alembic_checks,
         "current_and_head_revisions",
-        lambda _url: ("10b0001", "10b0001"),
+        lambda _url: ("11b0001", "11b0001"),
     )
     monkeypatch.setattr(
         alembic_checks,
@@ -190,6 +233,7 @@ def test_assert_at_head_passes_when_current_matches_script_head(
             "external_identities",
             "analyses",
             "connector_accounts",
+            "workflow_actions",
             "alembic_version",
         },
     )
@@ -205,7 +249,7 @@ def test_assert_at_head_fails_when_database_revision_is_empty(
     monkeypatch.setattr(
         alembic_checks,
         "current_and_head_revisions",
-        lambda _url: (None, "10b0001"),
+        lambda _url: (None, "11b0001"),
     )
     with pytest.raises(SystemExit, match="does not match head"):
         alembic_checks.assert_at_head("postgresql+psycopg://unused/unused")
@@ -220,7 +264,7 @@ def test_assert_at_head_fails_when_script_head_is_missing(
     monkeypatch.setattr(
         alembic_checks,
         "current_and_head_revisions",
-        lambda _url: ("10b0001", None),
+        lambda _url: ("11b0001", None),
     )
     with pytest.raises(SystemExit, match="does not match head"):
         alembic_checks.assert_at_head("postgresql+psycopg://unused/unused")

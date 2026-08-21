@@ -1,6 +1,6 @@
 # Application Layer
 
-The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer. Phase 11A does not add a business-workflow application service; `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration.
+The application layer (`app/application/`) orchestrates use cases. `CommunicationAnalysisService` remains the AI-only analysis service. Phase 9 adds workflow, identity, and history services around it without putting SQLAlchemy in the application layer. Phase 10 adds `CommunicationIngestionService` and `ConnectorAccountService` without putting vendor mailbox types or OAuth in the application layer. Phase 11B adds `WorkflowActionService` for durable approval-gated reply actions. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration.
 
 ## Role of `CommunicationAnalysisService`
 
@@ -130,3 +130,19 @@ Three structured log events are emitted by the AI service, all via `app.core.log
 - **No provider instantiation.** It never calls `create_ai_provider()` or imports a concrete provider class.
 - **No persistence.** Results are stored by `AnalysisHistoryService` after the AI call returns. The AI service remains a request/response orchestrator.
 - **No workflow actions.** Analyze does not create `WorkflowAction` records. `DraftReply` stays suggestion output.
+
+## Workflow actions
+
+`WorkflowActionService` (`app/application/services/workflow_actions.py`) is the Phase 11B application service:
+
+```text
+AuthenticatedPrincipal
+→ IdentityResolver.find_existing
+→ owned analysis (create only)
+→ snapshot draft_reply.body
+→ WorkflowActionRepository
+```
+
+Public operations are create, get, list, approve, and reject. Create requires an owned analysis with a usable draft reply. Approve and reject load the owned `WorkflowAction` only; they do not reload the analysis or call an AI provider. Approval copies `proposed_reply_body` into `approved_reply_body`. Missing identity mappings use the same not-found semantics as other owned resources; list returns an empty page.
+
+The service depends on `PersistenceUnitOfWork` and `WorkflowActionRepository`. It does not import SQLAlchemy models, FastAPI, Gmail/Graph adapters, or an executor. HTTP mapping is deferred to Phase 11C.

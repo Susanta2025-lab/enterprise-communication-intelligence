@@ -235,9 +235,9 @@ sequenceDiagram
     end
 ```
 
-## Workflow action lifecycle (Phase 11A, no HTTP)
+## Workflow action lifecycle (Phase 11B, no HTTP)
 
-Phase 11A has no workflow routes. The domain state machine is:
+Phase 11B persists user-owned workflow actions. There are still no workflow routes. The domain state machine is:
 
 ```text
 PENDING → APPROVED → EXECUTING → EXECUTED
@@ -254,9 +254,9 @@ sequenceDiagram
     Note over Analysis,Draft: Analyze produces suggestions only
     Analysis->>Draft: draft_reply body
     Note over Action: Explicit later construction; not created by analyze
-    Action->>Action: PENDING
+    Action->>Action: PENDING (proposed_reply_body snapshotted)
     alt Human approves
-        Action->>Action: APPROVED (reply snapshot)
+        Action->>Action: APPROVED (approved_reply_body = proposed_reply_body)
         Action->>Action: EXECUTING
         alt Later execution success
             Action->>Action: EXECUTED

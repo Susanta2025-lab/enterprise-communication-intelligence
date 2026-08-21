@@ -13,7 +13,13 @@ from sqlalchemy import create_engine, inspect
 
 _ROOT = Path(__file__).resolve().parents[2]
 APPLICATION_TABLES = frozenset(
-    {"users", "external_identities", "analyses", "connector_accounts"}
+    {
+        "users",
+        "external_identities",
+        "analyses",
+        "connector_accounts",
+        "workflow_actions",
+    }
 )
 ALLOWED_TABLES = APPLICATION_TABLES | {"alembic_version"}
 

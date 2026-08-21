@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 11A. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 11B. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -12,12 +12,13 @@ app/
 │       ├── communications.py # POST /api/v1/communications/analyze
 │       └── analyses.py       # GET/DELETE /api/v1/analyses
 ├── application/
-│   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account errors
+│   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account and workflow-action errors
 │   └── services/
 │       ├── communication_analysis.py  # CommunicationAnalysisService (AI-only)
 │       ├── communication_analysis_workflow.py  # persist-after-analyze workflow
 │       ├── communication_ingestion.py  # CommunicationIngestionService
 │       ├── connector_accounts.py  # ConnectorAccountService
+│       ├── workflow_actions.py  # WorkflowActionService (create/get/list/approve/reject)
 │       ├── identity.py       # IdentityResolver
 │       └── analysis_history.py  # AnalysisHistoryService
 ├── core/
@@ -41,6 +42,7 @@ app/
 │   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
 │   │   ├── analysis_repository.py
+│   │   ├── workflow_action_repository.py
 │   │   └── persistence_unit_of_work.py
 │   └── services/              # empty scaffold package — unused (business logic lives in app/application)
 ├── providers/
@@ -74,7 +76,7 @@ app/
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
 │   └── storage/                # SQLAlchemy runtime, models, UoW, repositories
-│       ├── models.py           # users, external_identities, analyses, connector_accounts
+│       ├── models.py           # users, external_identities, analyses, connector_accounts, workflow_actions
 │       ├── database.py
 │       ├── unit_of_work.py
 │       ├── runtime.py
@@ -82,7 +84,8 @@ app/
 │       └── repositories/
 │           ├── identity.py
 │           ├── analysis.py
-│           └── connector_account.py
+│           ├── connector_account.py
+│           └── workflow_action.py
 ├── schemas/
 │   ├── health.py               # LivenessResponse, HealthResponse, ReadinessResponse
 │   ├── analysis.py             # CommunicationAnalysisResponse, history items
@@ -110,7 +113,7 @@ tests/
 └── postgres/                    # skipped locally unless ECI_POSTGRES_TEST_DATABASE_URL is set
 
 alembic/
-└── versions/                    # 9a0001, 10b0001
+└── versions/                    # 9a0001, 10b0001, 11b0001
 
 docs/
 ├── roadmap/                     # phase-by-phase roadmap
@@ -128,8 +131,8 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes. Phase 11A added no workflow routes; `require_permission` generalizes authorization while `require_communications_analyze` remains the analyze/history dependency.
-- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes. Phase 11B added no workflow routes; `require_permission` generalizes authorization while `require_communications_analyze` remains the analyze/history dependency.
+- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `WorkflowActionService` creates, lists, retrieves, approves, and rejects durable workflow actions. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.

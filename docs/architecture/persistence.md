@@ -41,6 +41,7 @@ Internal `users.id` is an ownership key, not a login system and not a tenant.
 | `external_identities` | `issuer`, `subject`, unique `(issuer, subject)`, FK to `users.id` |
 | `analyses` | User-owned structured analysis results |
 | `connector_accounts` | User-owned connector account registry with opaque `credential_ref` |
+| `workflow_actions` | User-owned approval-gated reply actions with proposed/approved snapshots |
 
 Identifier classes:
 
@@ -55,7 +56,7 @@ Identifier classes:
 
 ## Data minimization
 
-Raw communication body is not persisted. Sender, recipients, subject line, email, display name, JWT, access token, refresh token, and scope claims are not stored. Connector adapters do not persist raw mail. `connector_accounts.credential_ref` is an opaque locator, not token material. This is an intentional privacy decision. Raw communication body retention remains an explicit future decision.
+Raw communication body is not persisted. Sender, recipients, subject line, email, display name, JWT, access token, refresh token, and scope claims are not stored. Connector adapters do not persist raw mail. `connector_accounts.credential_ref` is an opaque locator, not token material. `workflow_actions` may store `proposed_reply_body` and `approved_reply_body` because those are derived workflow snapshots, not inbound mail. This is an intentional privacy decision. Raw communication body retention remains an explicit future decision.
 
 ## Transaction architecture
 
@@ -133,7 +134,7 @@ Do not auto-migrate from FastAPI startup. Do not let every Azure Container Apps 
 
 Alembic reads `DATABASE_URL` through a storage-level resolver. It does not load application Settings or OIDC configuration.
 
-Current head revision: `10b0001` (follows `9a0001`).
+Current head revision: `11b0001` (follows `10b0001`, which follows `9a0001`).
 
 ## Rollback and expand/contract
 
@@ -188,7 +189,7 @@ Default local `python -m pytest` skips `tests/postgres/` unless `ECI_POSTGRES_TE
 
 - SQLAlchemy repository and unit-of-work architecture
 - Alembic migrations
-- `users` / `external_identities` / `analyses` / `connector_accounts` schema
+- `users` / `external_identities` / `analyses` / `connector_accounts` / `workflow_actions` schema
 - UUID, JSONB, and `timestamptz` behavior on PostgreSQL
 - composite issuer+subject uniqueness
 - foreign-key cascades
@@ -241,6 +242,25 @@ Still **not** present (deliberately deferred):
 - OAuth token columns
 
 Those remain later production/connector-lifecycle work, not Phase 10 defects.
+
+## Phase 11B persistence additions
+
+Phase 11B added `workflow_actions`:
+
+| Field | Purpose |
+|---|---|
+| `id` | Internal UUID |
+| `user_id` | Ownership FK to `users.id` (`ON DELETE CASCADE`) |
+| `analysis_id` | Required opaque provenance. No FK to `analyses.id` |
+| `action_type` | TEXT; Phase 11 allows `reply` only |
+| `status` | TEXT lifecycle value |
+| `proposed_reply_body` | Immutable proposal snapshotted at create from `draft_reply.body` |
+| `approved_reply_body` | Authorization snapshot written on approve; null until then |
+| timestamps | `created_at` required; `approved_at` / `rejected_at` / `executed_at` / `failed_at` nullable |
+
+There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. Conditional updates require the stored `status` to match `expected_status`.
+
+HTTP workflow routes and execution are not part of this table's 11B surface.
 
 ## Performance and operations (deferred)
 

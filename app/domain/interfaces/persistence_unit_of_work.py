@@ -6,6 +6,7 @@ from types import TracebackType
 from app.domain.interfaces.analysis_repository import AnalysisRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.workflow_action_repository import WorkflowActionRepository
 
 
 class PersistenceUnitOfWork(ABC):
@@ -28,6 +29,11 @@ class PersistenceUnitOfWork(ABC):
     @abstractmethod
     def connector_accounts(self) -> ConnectorAccountRepository:
         """Connector account repository bound to this unit of work."""
+
+    @property
+    @abstractmethod
+    def workflow_actions(self) -> WorkflowActionRepository:
+        """Workflow action repository bound to this unit of work."""
 
     @abstractmethod
     def commit(self) -> None:

@@ -21,8 +21,8 @@ Phase 11 is a governed `REPLY` action derived from an existing analysis. It is n
 
 Phase 11 is **In progress**.
 
-- **11A is Completed:** `WorkflowAction` domain model, `REPLY`-only action type, explicit state machine, `InvalidWorkflowTransitionError`, capability-specific permission checks (`communications:workflow`), backward-compatible `communications:analyze`. No persistence, HTTP workflow routes, or execution.
-- **11B is Not started:** workflow persistence and user ownership.
+- **11A is Completed:** `WorkflowAction` domain model, `REPLY`-only action type, explicit state machine, `InvalidWorkflowTransitionError`, capability-specific permission checks (`communications:workflow`), backward-compatible `communications:analyze`.
+- **11B is Completed:** `workflow_actions` persistence, user ownership, proposed-reply snapshotting, validated rehydrate, conditional expected-status updates, `WorkflowActionService` create/get/list/approve/reject, Alembic `11b0001`, ADR-016. No HTTP workflow routes or execution.
 - **11C is Not started:** workflow proposal and approval API.
 - **11D is Not started:** action execution port and deterministic fake executor.
 - **11E is Not started:** integration, documentation closure, and regression.
@@ -32,28 +32,32 @@ Phase 11 overall is not completed.
 ## Deliverables
 
 - [x] Phase 11A — Workflow Domain, State Machine & Authorization Foundation (completed)
-- [ ] Phase 11B — Workflow Persistence & User Ownership
+- [x] Phase 11B — Workflow Persistence & User Ownership (completed)
 - [ ] Phase 11C — Workflow Proposal and Approval API
 - [ ] Phase 11D — Action Execution Port + Deterministic Fake Executor
 - [ ] Phase 11E — Integration, Documentation & Regression
 
-## Phase 11A Architecture
+## Phase 11B flow
 
 ```text
-Communication
-    ↓
-AI analysis
-    ↓
-DraftReply / ActionItem          (suggestion only)
-    ↓
-explicit WorkflowAction          (PENDING; not created by analyze)
-    ↓
-approve / reject                 (domain state machine)
-    ↓
-later: EXECUTING → EXECUTED | FAILED
+owned analysis with DraftReply
+        ↓
+explicit WorkflowAction creation
+        ↓
+snapshot proposed_reply_body
+        ↓
+PENDING persisted action
+        ↓
+approve or reject
+        ↓
+durable state transition
 ```
 
-Authorization:
+`approve()` copies `proposed_reply_body` into `approved_reply_body`. It does not reload the analysis, accept an alternative body, or call an AI provider.
+
+`analysis_id` is required provenance without a database FK. Analysis hard-delete leaves the workflow row, proposal, and later approval/rejection intact.
+
+Authorization from 11A remains:
 
 ```text
 authenticate JWT
@@ -65,7 +69,7 @@ authenticate JWT
 - Workflow uses `communications:workflow`.
 - Neither permission implies the other.
 
-`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. It is not the Phase 11 workflow service.
+`CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` remains persist-after-analyze orchestration. `WorkflowActionService` is the Phase 11B application service.
 
 ## Allowed transitions
 
@@ -77,9 +81,8 @@ EXECUTING → EXECUTED | FAILED
 
 Terminal in Phase 11: `REJECTED`, `EXECUTED`, `FAILED`.
 
-## Unavailable in 11A (and still unavailable until later slices)
+## Unavailable until later slices
 
-- workflow persistence
 - workflow REST API
 - workflow execution
 - Gmail send/reply
@@ -87,17 +90,12 @@ Terminal in Phase 11: `REJECTED`, `EXECUTED`, `FAILED`.
 - production workflow automation
 - automatic replies
 
-## Deferred beyond Phase 11A
-
-### 11B
-
-- `workflow_actions` table, Alembic migration, repository, Unit of Work property
-- user-owned persistence and create-from-owned-analysis
+## Deferred beyond Phase 11B
 
 ### 11C
 
 - `/api/v1/workflow-actions` (or equivalent)
-- HTTP mapping of invalid transitions to `409`
+- HTTP mapping of not-found, invalid transitions, and concurrency conflicts
 
 ### 11D
 

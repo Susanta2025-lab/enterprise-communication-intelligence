@@ -12,6 +12,7 @@ from app.domain.interfaces import (
     ConnectorAccountRepository,
     IdentityRepository,
     PersistenceUnitOfWork,
+    WorkflowActionRepository,
 )
 from app.domain.models import (
     CommunicationAnalysis,
@@ -70,6 +71,7 @@ def test_repository_interfaces_are_abstract() -> None:
     assert issubclass(IdentityRepository, ABC)
     assert issubclass(AnalysisRepository, ABC)
     assert issubclass(ConnectorAccountRepository, ABC)
+    assert issubclass(WorkflowActionRepository, ABC)
     assert issubclass(PersistenceUnitOfWork, ABC)
     with pytest.raises(TypeError):
         IdentityRepository()  # type: ignore[abstract]
@@ -77,6 +79,8 @@ def test_repository_interfaces_are_abstract() -> None:
         AnalysisRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         ConnectorAccountRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        WorkflowActionRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         PersistenceUnitOfWork()  # type: ignore[abstract]
 
@@ -98,6 +102,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.connector_account_repository as connector_account_repository
     import app.domain.interfaces.identity_repository as identity_repository
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
+    import app.domain.interfaces.workflow_action_repository as workflow_action_repository
     import app.domain.models.analysis as analysis_models
     import app.domain.models.message as message_models
     import app.domain.models.workflow as workflow_models
@@ -112,6 +117,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         connector_account_repository,
         identity_repository,
         persistence_unit_of_work,
+        workflow_action_repository,
         analysis_models,
         message_models,
         workflow_models,

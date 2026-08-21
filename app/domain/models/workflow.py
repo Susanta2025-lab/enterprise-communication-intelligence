@@ -1,10 +1,17 @@
 """Domain model for approval-gated workflow actions."""
 
 from datetime import UTC, datetime
-from typing import Self
+from typing import Any, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from app.domain.enums import WorkflowActionStatus, WorkflowActionType
 from app.domain.exceptions import InvalidWorkflowTransitionError
@@ -31,6 +38,16 @@ TERMINAL_WORKFLOW_STATUSES = frozenset(
     }
 )
 
+_REHYDRATE_CONTEXT_KEY = "rehydrate"
+
+_NONE_AFTER_PENDING = (
+    "approved_reply_body",
+    "approved_at",
+    "rejected_at",
+    "executed_at",
+    "failed_at",
+)
+
 
 class WorkflowAction(BaseModel):
     """An explicit, approval-gated business action.
@@ -46,6 +63,7 @@ class WorkflowAction(BaseModel):
     action_type: WorkflowActionType
     analysis_id: UUID
     owner_user_id: UUID
+    proposed_reply_body: str
     status: WorkflowActionStatus = WorkflowActionStatus.PENDING
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     approved_at: datetime | None = None
@@ -54,35 +72,45 @@ class WorkflowAction(BaseModel):
     failed_at: datetime | None = None
     approved_reply_body: str | None = None
 
+    @field_validator("proposed_reply_body")
+    @classmethod
+    def validate_proposed_reply_body(cls, value: str) -> str:
+        """Require a non-empty proposed reply snapshot."""
+        return require_non_empty_text(value, "proposed_reply_body")
+
+    @field_validator("approved_reply_body")
+    @classmethod
+    def validate_approved_reply_body(cls, value: str | None) -> str | None:
+        """Normalize an approved snapshot when one is present."""
+        if value is None:
+            return None
+        return require_non_empty_text(value, "approved_reply_body")
+
     @model_validator(mode="after")
-    def validate_created_pending(self) -> Self:
-        """New workflow actions start pending with no later lifecycle fields."""
-        if self.status is not WorkflowActionStatus.PENDING:
+    def validate_lifecycle(self, info: ValidationInfo) -> Self:
+        """Enforce PENDING-only public construction or persisted lifecycle invariants."""
+        rehydrate = bool(info.context and info.context.get(_REHYDRATE_CONTEXT_KEY))
+        if not rehydrate and self.status is not WorkflowActionStatus.PENDING:
             raise ValueError("workflow actions must be created with pending status")
-        if self.approved_at is not None:
-            raise ValueError("pending workflow actions cannot have approved_at")
-        if self.rejected_at is not None:
-            raise ValueError("pending workflow actions cannot have rejected_at")
-        if self.executed_at is not None:
-            raise ValueError("pending workflow actions cannot have executed_at")
-        if self.failed_at is not None:
-            raise ValueError("pending workflow actions cannot have failed_at")
-        if self.approved_reply_body is not None:
-            raise ValueError("pending workflow actions cannot have approved_reply_body")
+        _validate_status_invariants(self)
         return self
+
+    @classmethod
+    def rehydrate(cls, **data: Any) -> Self:
+        """Reconstruct a persisted workflow action and validate its lifecycle."""
+        return cls.model_validate(data, context={_REHYDRATE_CONTEXT_KEY: True})
 
     @property
     def is_terminal(self) -> bool:
         """Whether Phase 11 allows no further transitions from the current status."""
         return self.status in TERMINAL_WORKFLOW_STATUSES
 
-    def approve(self, *, approved_reply_body: str) -> None:
-        """Move ``PENDING`` → ``APPROVED`` and snapshot the approved reply body."""
+    def approve(self) -> None:
+        """Move ``PENDING`` → ``APPROVED`` by copying the proposed reply snapshot."""
         self._require_transition(WorkflowActionStatus.APPROVED)
-        snapshot = require_non_empty_text(approved_reply_body, "approved_reply_body")
         self.status = WorkflowActionStatus.APPROVED
         self.approved_at = datetime.now(UTC)
-        self.approved_reply_body = snapshot
+        self.approved_reply_body = self.proposed_reply_body
 
     def reject(self) -> None:
         """Move ``PENDING`` → ``REJECTED``."""
@@ -111,3 +139,49 @@ class WorkflowAction(BaseModel):
         allowed = _ALLOWED_TRANSITIONS[self.status]
         if target not in allowed:
             raise InvalidWorkflowTransitionError()
+
+
+def _validate_status_invariants(action: WorkflowAction) -> None:
+    status = action.status
+    if status is WorkflowActionStatus.PENDING:
+        _require_absent(action, *_NONE_AFTER_PENDING)
+        return
+    if status is WorkflowActionStatus.APPROVED:
+        _require_present(action, "approved_reply_body", "approved_at")
+        _require_absent(action, "rejected_at", "executed_at", "failed_at")
+        return
+    if status is WorkflowActionStatus.REJECTED:
+        _require_present(action, "rejected_at")
+        _require_absent(
+            action,
+            "approved_reply_body",
+            "approved_at",
+            "executed_at",
+            "failed_at",
+        )
+        return
+    if status is WorkflowActionStatus.EXECUTING:
+        _require_present(action, "approved_reply_body", "approved_at")
+        _require_absent(action, "rejected_at", "executed_at", "failed_at")
+        return
+    if status is WorkflowActionStatus.EXECUTED:
+        _require_present(action, "approved_reply_body", "approved_at", "executed_at")
+        _require_absent(action, "rejected_at", "failed_at")
+        return
+    if status is WorkflowActionStatus.FAILED:
+        _require_present(action, "approved_reply_body", "approved_at", "failed_at")
+        _require_absent(action, "rejected_at", "executed_at")
+        return
+    raise ValueError("unsupported workflow action status")
+
+
+def _require_present(action: WorkflowAction, *field_names: str) -> None:
+    for name in field_names:
+        if getattr(action, name) is None:
+            raise ValueError(f"{action.status.value} workflow actions require {name}")
+
+
+def _require_absent(action: WorkflowAction, *field_names: str) -> None:
+    for name in field_names:
+        if getattr(action, name) is not None:
+            raise ValueError(f"{action.status.value} workflow actions cannot have {name}")

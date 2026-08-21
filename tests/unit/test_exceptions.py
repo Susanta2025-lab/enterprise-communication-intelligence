@@ -2,9 +2,12 @@
 
 from app.application.exceptions import (
     AnalysisFailedError,
+    AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
+    WorkflowActionConflictError,
+    WorkflowActionNotFoundError,
 )
 from app.core.exceptions import (
     ConfigurationError,
@@ -32,6 +35,9 @@ def test_exception_hierarchy() -> None:
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountInvalidRequestError, ECIPlatformError)
+    assert issubclass(WorkflowActionNotFoundError, ECIPlatformError)
+    assert issubclass(WorkflowActionConflictError, ECIPlatformError)
+    assert issubclass(AnalysisHasNoDraftReplyError, ECIPlatformError)
     assert issubclass(ConnectorError, ECIPlatformError)
     assert issubclass(ConnectorAuthenticationError, ConnectorError)
     assert issubclass(ConnectorPermissionError, ConnectorError)
@@ -57,6 +63,14 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert ConnectorAccountInvalidRequestError().message == (
         "Connector account request is invalid."
     )
+
+
+def test_workflow_action_errors_have_generic_messages() -> None:
+    """Workflow persistence errors must not distinguish unknown from cross-user."""
+    assert WorkflowActionNotFoundError().message == "Workflow action not found."
+    assert str(WorkflowActionNotFoundError()) == "Workflow action not found."
+    assert WorkflowActionConflictError().message == "Workflow action was updated concurrently."
+    assert AnalysisHasNoDraftReplyError().message == "Analysis has no usable draft reply."
 
 
 def test_exception_message_is_preserved() -> None:

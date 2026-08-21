@@ -26,3 +26,24 @@ class ConnectorAccountInvalidRequestError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Connector account request is invalid.")
+
+
+class WorkflowActionNotFoundError(ECIPlatformError):
+    """Raised when a workflow action is unknown or not owned by the caller."""
+
+    def __init__(self) -> None:
+        super().__init__("Workflow action not found.")
+
+
+class WorkflowActionConflictError(ECIPlatformError):
+    """Raised when a conditional workflow update no longer matches stored status."""
+
+    def __init__(self) -> None:
+        super().__init__("Workflow action was updated concurrently.")
+
+
+class AnalysisHasNoDraftReplyError(ECIPlatformError):
+    """Raised when an owned analysis has no usable draft reply to snapshot."""
+
+    def __init__(self) -> None:
+        super().__init__("Analysis has no usable draft reply.")

@@ -66,8 +66,10 @@ def test_repositories_share_the_same_session(session_factory: sessionmaker) -> N
         identity_session = uow.identity_repository._session  # type: ignore[attr-defined]
         analysis_session = uow.analysis_repository._session  # type: ignore[attr-defined]
         connector_session = uow.connector_accounts._session  # type: ignore[attr-defined]
+        workflow_session = uow.workflow_actions._session  # type: ignore[attr-defined]
         assert identity_session is analysis_session
         assert analysis_session is connector_session
+        assert connector_session is workflow_session
         assert identity_session is uow._session
 
 

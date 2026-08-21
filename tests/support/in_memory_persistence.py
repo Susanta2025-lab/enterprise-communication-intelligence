@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.core.exceptions import PersistenceError
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import ConnectorAccountStatus, WorkflowActionStatus
 from app.domain.interfaces.analysis_repository import AnalysisRecord, NewAnalysis
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
@@ -17,6 +17,12 @@ from app.domain.interfaces.connector_account_repository import (
 )
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
+from app.domain.interfaces.workflow_action_repository import (
+    WorkflowActionRepository,
+    WorkflowActionSaveOutcome,
+    WorkflowActionSaveResult,
+)
+from app.domain.models.workflow import WorkflowAction
 
 _DUPLICATE_IDENTITY = "External identity is already registered."
 _DUPLICATE_CONNECTOR_ACCOUNT = "Connector account is already registered."
@@ -48,6 +54,7 @@ class InMemoryAnalysisRepository:
     def __init__(self, analyses: dict[UUID, AnalysisRecord]) -> None:
         self._analyses = analyses
         self.save_calls = 0
+        self.get_calls = 0
 
     def save(self, analysis: NewAnalysis) -> AnalysisRecord:
         self.save_calls += 1
@@ -72,6 +79,7 @@ class InMemoryAnalysisRepository:
         return record
 
     def get_by_id_for_user(self, analysis_id: UUID, user_id: UUID) -> AnalysisRecord | None:
+        self.get_calls += 1
         record = self._analyses.get(analysis_id)
         if record is None or record.user_id != user_id:
             return None
@@ -206,6 +214,75 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
         return None
 
 
+class InMemoryWorkflowActionRepository(WorkflowActionRepository):
+    """Dict-backed workflow action store used by unit tests."""
+
+    def __init__(self, actions: dict[UUID, WorkflowAction]) -> None:
+        self._actions = actions
+        self.add_calls = 0
+        self.get_calls = 0
+        self.save_calls = 0
+
+    def add(self, action: WorkflowAction) -> WorkflowAction:
+        self.add_calls += 1
+        stored = _copy_workflow_action(action)
+        self._actions[stored.id] = stored
+        return _copy_workflow_action(stored)
+
+    def get_owned(self, action_id: UUID, user_id: UUID) -> WorkflowAction | None:
+        self.get_calls += 1
+        stored = self._actions.get(action_id)
+        if stored is None or stored.owner_user_id != user_id:
+            return None
+        return _copy_workflow_action(stored)
+
+    def list_owned(self, user_id: UUID, limit: int, offset: int) -> list[WorkflowAction]:
+        owned = [
+            _copy_workflow_action(item)
+            for item in self._actions.values()
+            if item.owner_user_id == user_id
+        ]
+        owned.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        if limit < 1 or offset < 0:
+            return []
+        return owned[offset : offset + min(limit, 100)]
+
+    def save_owned(
+        self,
+        action: WorkflowAction,
+        expected_status: WorkflowActionStatus,
+    ) -> WorkflowActionSaveResult:
+        self.save_calls += 1
+        stored = self._actions.get(action.id)
+        if stored is None or stored.owner_user_id != action.owner_user_id:
+            return WorkflowActionSaveResult(outcome=WorkflowActionSaveOutcome.NOT_FOUND)
+        if stored.status is not expected_status:
+            return WorkflowActionSaveResult(outcome=WorkflowActionSaveOutcome.CONFLICT)
+        saved = _copy_workflow_action(action)
+        self._actions[action.id] = saved
+        return WorkflowActionSaveResult(
+            outcome=WorkflowActionSaveOutcome.SUCCESS,
+            action=_copy_workflow_action(saved),
+        )
+
+
+def _copy_workflow_action(action: WorkflowAction) -> WorkflowAction:
+    return WorkflowAction.rehydrate(
+        id=action.id,
+        action_type=action.action_type,
+        analysis_id=action.analysis_id,
+        owner_user_id=action.owner_user_id,
+        proposed_reply_body=action.proposed_reply_body,
+        status=action.status,
+        created_at=action.created_at,
+        approved_at=action.approved_at,
+        rejected_at=action.rejected_at,
+        executed_at=action.executed_at,
+        failed_at=action.failed_at,
+        approved_reply_body=action.approved_reply_body,
+    )
+
+
 class InMemoryUnitOfWork(PersistenceUnitOfWork):
     """Minimal unit of work that records commit/rollback/close."""
 
@@ -215,6 +292,7 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         identities: dict[tuple[str, str], UUID] | None = None,
         analyses: dict[UUID, AnalysisRecord] | None = None,
         connector_accounts: dict[UUID, ConnectorAccountRecord] | None = None,
+        workflow_actions: dict[UUID, WorkflowAction] | None = None,
         fail_commit: bool = False,
         fail_on_enter: Exception | None = None,
         commit_error: Exception | None = None,
@@ -224,10 +302,16 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self.connector_account_store = (
             connector_accounts if connector_accounts is not None else {}
         )
+        self.workflow_action_store = (
+            workflow_actions if workflow_actions is not None else {}
+        )
         self._identity_repository = InMemoryIdentityRepository(self.identities)
         self._analysis_repository = InMemoryAnalysisRepository(self.analyses)
         self._connector_accounts = InMemoryConnectorAccountRepository(
             self.connector_account_store
+        )
+        self._workflow_actions = InMemoryWorkflowActionRepository(
+            self.workflow_action_store
         )
         self.fail_commit = fail_commit
         self.fail_on_enter = fail_on_enter
@@ -248,6 +332,10 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     @property
     def connector_accounts(self) -> InMemoryConnectorAccountRepository:
         return self._connector_accounts
+
+    @property
+    def workflow_actions(self) -> InMemoryWorkflowActionRepository:
+        return self._workflow_actions
 
     def commit(self) -> None:
         self.commit_calls += 1

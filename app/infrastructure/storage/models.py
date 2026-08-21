@@ -64,6 +64,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    workflow_actions: Mapped[list["WorkflowAction"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class ExternalIdentity(Base):
@@ -179,3 +183,60 @@ class ConnectorAccount(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="connector_accounts")
+
+
+class WorkflowAction(Base):
+    """User-owned workflow action. Snapshots proposed/approved reply text only."""
+
+    __tablename__ = "workflow_actions"
+    __table_args__ = (
+        CheckConstraint(
+            "action_type IN ('reply')",
+            name="ck_workflow_actions_action_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'executing', 'executed', 'failed')",
+            name="ck_workflow_actions_status",
+        ),
+        Index(
+            "ix_workflow_actions_user_id_created_at_id",
+            "user_id",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    analysis_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    action_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    proposed_reply_body: Mapped[str] = mapped_column(Text, nullable=False)
+    approved_reply_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    executed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[User] = relationship(back_populates="workflow_actions")

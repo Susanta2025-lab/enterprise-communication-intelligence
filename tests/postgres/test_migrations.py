@@ -54,16 +54,24 @@ def test_expected_tables_only(postgres_engine: Engine) -> None:
 def test_primary_keys(postgres_engine: Engine) -> None:
     """Each application table has a UUID primary key on id."""
     inspector = inspect(postgres_engine)
-    for table in ("users", "external_identities", "analyses", "connector_accounts"):
+    for table in (
+        "users",
+        "external_identities",
+        "analyses",
+        "connector_accounts",
+        "workflow_actions",
+    ):
         pk = inspector.get_pk_constraint(table)
         assert pk["constrained_columns"] == ["id"]
 
 
 def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
-    """Identity and analysis rows must reference users with ON DELETE CASCADE."""
+    """Identity, analysis, connector, and workflow rows must reference users with CASCADE."""
     inspector = inspect(postgres_engine)
     identity_fks = inspector.get_foreign_keys("external_identities")
     analysis_fks = inspector.get_foreign_keys("analyses")
+    connector_fks = inspector.get_foreign_keys("connector_accounts")
+    workflow_fks = inspector.get_foreign_keys("workflow_actions")
     identity_ok = any(
         fk["referred_table"] == "users"
         and fk["constrained_columns"] == ["user_id"]
@@ -76,8 +84,23 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
         and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
         for fk in analysis_fks
     )
+    connector_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in connector_fks
+    )
+    workflow_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in workflow_fks
+    )
     assert identity_ok
     assert analysis_ok
+    assert connector_ok
+    assert workflow_ok
+    assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
 
 
 def test_external_identity_unique_constraint_named(postgres_engine: Engine) -> None:
@@ -98,8 +121,10 @@ def test_expected_indexes(postgres_engine: Engine) -> None:
     inspector = inspect(postgres_engine)
     identity_indexes = {index["name"] for index in inspector.get_indexes("external_identities")}
     analysis_indexes = {index["name"] for index in inspector.get_indexes("analyses")}
+    workflow_indexes = {index["name"] for index in inspector.get_indexes("workflow_actions")}
     assert "ix_external_identities_user_id" in identity_indexes
     assert "ix_analyses_user_id" in analysis_indexes
+    assert "ix_workflow_actions_user_id_created_at_id" in workflow_indexes
 
 
 def test_nullability(postgres_engine: Engine) -> None:
@@ -175,6 +200,11 @@ def test_schema_excludes_sensitive_columns(postgres_engine: Engine) -> None:
     for table in inspector.get_table_names():
         columns = {column["name"] for column in inspector.get_columns(table)}
         assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+        if table == "workflow_actions":
+            assert "proposed_reply_body" in columns
+            assert "approved_reply_body" in columns
+            assert "body" not in columns
+            assert "raw_body" not in columns
         if table != "external_identities":
             assert "subject" not in columns
             assert "issuer" not in columns

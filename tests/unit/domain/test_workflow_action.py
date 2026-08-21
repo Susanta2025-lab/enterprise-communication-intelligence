@@ -10,7 +10,7 @@ from app.domain.enums import WorkflowActionStatus, WorkflowActionType
 from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.domain.models import ActionItem, DraftReply, WorkflowAction
 
-_APPROVED_REPLY = "Thanks, I will review the report and respond by Friday."
+_PROPOSED_REPLY = "Thanks, I will review the report and respond by Friday."
 _NON_PENDING_STATUSES = [
     status
     for status in WorkflowActionStatus
@@ -23,6 +23,7 @@ def _pending_action(**overrides: object) -> WorkflowAction:
         "action_type": WorkflowActionType.REPLY,
         "analysis_id": uuid4(),
         "owner_user_id": uuid4(),
+        "proposed_reply_body": _PROPOSED_REPLY,
     }
     payload.update(overrides)
     return WorkflowAction.model_validate(payload)
@@ -40,8 +41,29 @@ def _snapshot(action: WorkflowAction) -> tuple[object, ...]:
         action.rejected_at,
         action.executed_at,
         action.failed_at,
+        action.proposed_reply_body,
         action.approved_reply_body,
     )
+
+
+def _rehydrate(**overrides: object) -> WorkflowAction:
+    now = datetime.now(UTC)
+    payload: dict[str, object] = {
+        "id": uuid4(),
+        "action_type": WorkflowActionType.REPLY,
+        "analysis_id": uuid4(),
+        "owner_user_id": uuid4(),
+        "proposed_reply_body": _PROPOSED_REPLY,
+        "status": WorkflowActionStatus.PENDING,
+        "created_at": now,
+        "approved_at": None,
+        "rejected_at": None,
+        "executed_at": None,
+        "failed_at": None,
+        "approved_reply_body": None,
+    }
+    payload.update(overrides)
+    return WorkflowAction.rehydrate(**payload)
 
 
 def test_workflow_action_is_distinct_from_action_item() -> None:
@@ -49,25 +71,25 @@ def test_workflow_action_is_distinct_from_action_item() -> None:
     action = _pending_action()
     assert not isinstance(action, ActionItem)
     assert ActionItem is not WorkflowAction
-    assert "status" not in DraftReply.model_fields
-    assert "approval" not in DraftReply.model_fields
     assert set(DraftReply.model_fields) == {"body", "tone", "confidence"}
 
 
 def test_valid_workflow_action_starts_pending() -> None:
-    """A well-formed workflow action is created in PENDING with REPLY type."""
+    """A well-formed workflow action is created in PENDING with a proposal."""
     analysis_id = uuid4()
     owner_user_id = uuid4()
     action = WorkflowAction(
         action_type=WorkflowActionType.REPLY,
         analysis_id=analysis_id,
         owner_user_id=owner_user_id,
+        proposed_reply_body=_PROPOSED_REPLY,
     )
 
     assert action.action_type is WorkflowActionType.REPLY
     assert action.status is WorkflowActionStatus.PENDING
     assert action.analysis_id == analysis_id
     assert action.owner_user_id == owner_user_id
+    assert action.proposed_reply_body == _PROPOSED_REPLY
     assert action.id is not None
     assert action.created_at.tzinfo is not None
     assert action.approved_at is None
@@ -78,6 +100,31 @@ def test_valid_workflow_action_starts_pending() -> None:
     assert action.is_terminal is False
 
 
+def test_public_constructor_requires_non_empty_proposed_reply_body() -> None:
+    """Public construction must include a usable proposed reply snapshot."""
+    with pytest.raises(ValidationError):
+        WorkflowAction.model_validate(
+            {
+                "action_type": WorkflowActionType.REPLY,
+                "analysis_id": uuid4(),
+                "owner_user_id": uuid4(),
+            }
+        )
+
+
+@pytest.mark.parametrize("body", ["", "   ", "\n\t"])
+def test_blank_proposed_reply_body_is_rejected(body: str) -> None:
+    """Blank or whitespace-only proposals are invalid."""
+    with pytest.raises(ValidationError):
+        _pending_action(proposed_reply_body=body)
+
+
+def test_proposed_reply_body_is_normalized() -> None:
+    """Surrounding whitespace is stripped from the proposed snapshot."""
+    action = _pending_action(proposed_reply_body=f"  {_PROPOSED_REPLY}  ")
+    assert action.proposed_reply_body == _PROPOSED_REPLY
+
+
 def test_missing_analysis_id_is_rejected() -> None:
     """Analysis provenance is required."""
     with pytest.raises(ValidationError):
@@ -85,6 +132,7 @@ def test_missing_analysis_id_is_rejected() -> None:
             {
                 "action_type": WorkflowActionType.REPLY,
                 "owner_user_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
             }
         )
 
@@ -96,6 +144,7 @@ def test_missing_owner_user_id_is_rejected() -> None:
             {
                 "action_type": WorkflowActionType.REPLY,
                 "analysis_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
             }
         )
 
@@ -107,6 +156,7 @@ def test_missing_action_type_is_rejected() -> None:
             {
                 "analysis_id": uuid4(),
                 "owner_user_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
             }
         )
 
@@ -119,6 +169,7 @@ def test_invalid_action_type_is_rejected() -> None:
                 "action_type": "calendar_event",
                 "analysis_id": uuid4(),
                 "owner_user_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
             }
         )
 
@@ -132,6 +183,7 @@ def test_non_pending_construction_is_rejected(status: WorkflowActionStatus) -> N
                 "action_type": WorkflowActionType.REPLY,
                 "analysis_id": uuid4(),
                 "owner_user_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
                 "status": status,
             }
         )
@@ -144,7 +196,7 @@ def test_non_pending_construction_is_rejected(status: WorkflowActionStatus) -> N
         ("rejected_at", datetime.now(UTC)),
         ("executed_at", datetime.now(UTC)),
         ("failed_at", datetime.now(UTC)),
-        ("approved_reply_body", _APPROVED_REPLY),
+        ("approved_reply_body", _PROPOSED_REPLY),
     ],
 )
 def test_pending_construction_rejects_later_lifecycle_fields(
@@ -164,6 +216,7 @@ def test_unknown_fields_are_rejected() -> None:
                 "action_type": WorkflowActionType.REPLY,
                 "analysis_id": uuid4(),
                 "owner_user_id": uuid4(),
+                "proposed_reply_body": _PROPOSED_REPLY,
                 "table": "workflow_actions",
             }
         )
@@ -176,48 +229,43 @@ def test_message_content_fields_are_rejected(field: str) -> None:
         _pending_action(**{field: "should-not-be-stored"})
 
 
-def test_pending_to_approved() -> None:
-    """PENDING → APPROVED snapshots the approved reply body."""
+def test_pending_to_approved_copies_proposal() -> None:
+    """PENDING → APPROVED copies proposed_reply_body and does not accept a body."""
     action = _pending_action()
     created_at = action.created_at
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    proposal = action.proposed_reply_body
+    action.approve()
 
     assert action.status is WorkflowActionStatus.APPROVED
     assert action.approved_at is not None
     assert action.approved_at.tzinfo is not None
-    assert action.approved_reply_body == _APPROVED_REPLY
+    assert action.approved_reply_body == proposal
+    assert action.proposed_reply_body == proposal
     assert action.rejected_at is None
     assert action.created_at == created_at
     assert action.is_terminal is False
 
 
-@pytest.mark.parametrize("body", ["", "   ", "\n\t"])
-def test_approve_rejects_empty_reply_body_without_mutating(body: str) -> None:
-    """An empty approved reply is invalid and must not change status."""
+def test_approve_does_not_accept_a_reply_body() -> None:
+    """Approval must not take an alternative authorized body."""
     action = _pending_action()
-    before = _snapshot(action)
-
-    with pytest.raises(ValueError, match="approved_reply_body must not be empty"):
-        action.approve(approved_reply_body=body)
-
-    assert _snapshot(action) == before
-    assert action.status is WorkflowActionStatus.PENDING
+    with pytest.raises(TypeError):
+        action.approve(approved_reply_body="Edited reply")  # type: ignore[call-arg]
 
 
-def test_approve_strips_whitespace_and_does_not_mutate_draft_reply() -> None:
-    """Approval snapshots the caller-supplied body and leaves DraftReply unchanged."""
+def test_approve_does_not_mutate_proposal_or_draft_reply() -> None:
+    """Approval copies the proposal and leaves DraftReply unchanged."""
     draft = DraftReply(body="AI suggested reply")
-    action = _pending_action()
+    action = _pending_action(proposed_reply_body="Proposed snapshot")
+    action.approve()
 
-    action.approve(approved_reply_body="  Approved edited reply  ")
-
-    assert action.approved_reply_body == "Approved edited reply"
+    assert action.proposed_reply_body == "Proposed snapshot"
+    assert action.approved_reply_body == "Proposed snapshot"
     assert draft.body == "AI suggested reply"
-    assert action.status is WorkflowActionStatus.APPROVED
 
 
-def test_pending_to_rejected() -> None:
-    """PENDING → REJECTED is terminal."""
+def test_pending_to_rejected_retains_proposal() -> None:
+    """PENDING → REJECTED is terminal and keeps the proposal."""
     action = _pending_action()
     action.reject()
 
@@ -226,25 +274,27 @@ def test_pending_to_rejected() -> None:
     assert action.rejected_at.tzinfo is not None
     assert action.approved_at is None
     assert action.approved_reply_body is None
+    assert action.proposed_reply_body == _PROPOSED_REPLY
     assert action.is_terminal is True
 
 
 def test_approved_to_executing() -> None:
     """APPROVED → EXECUTING is allowed."""
     action = _pending_action()
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    action.approve()
     action.mark_executing()
 
     assert action.status is WorkflowActionStatus.EXECUTING
     assert action.executed_at is None
     assert action.failed_at is None
+    assert action.approved_reply_body == _PROPOSED_REPLY
     assert action.is_terminal is False
 
 
 def test_executing_to_executed() -> None:
     """EXECUTING → EXECUTED is terminal success."""
     action = _pending_action()
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    action.approve()
     action.mark_executing()
     action.mark_executed()
 
@@ -252,14 +302,15 @@ def test_executing_to_executed() -> None:
     assert action.executed_at is not None
     assert action.executed_at.tzinfo is not None
     assert action.failed_at is None
-    assert action.approved_reply_body == _APPROVED_REPLY
+    assert action.approved_reply_body == _PROPOSED_REPLY
+    assert action.proposed_reply_body == _PROPOSED_REPLY
     assert action.is_terminal is True
 
 
 def test_executing_to_failed() -> None:
     """EXECUTING → FAILED is terminal failure."""
     action = _pending_action()
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    action.approve()
     action.mark_executing()
     action.mark_failed()
 
@@ -267,7 +318,7 @@ def test_executing_to_failed() -> None:
     assert action.failed_at is not None
     assert action.failed_at.tzinfo is not None
     assert action.executed_at is None
-    assert action.approved_reply_body == _APPROVED_REPLY
+    assert action.approved_reply_body == _PROPOSED_REPLY
     assert action.is_terminal is True
 
 
@@ -277,70 +328,33 @@ def test_executing_to_failed() -> None:
         (lambda action: None, lambda action: action.mark_executed()),
         (lambda action: None, lambda action: action.mark_failed()),
         (lambda action: None, lambda action: action.mark_executing()),
+        (lambda action: action.approve(), lambda action: action.reject()),
+        (lambda action: action.approve(), lambda action: action.mark_executed()),
+        (lambda action: action.approve(), lambda action: action.approve()),
         (
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
+            lambda action: (action.approve(), action.mark_executing()),
+            lambda action: action.approve(),
+        ),
+        (
+            lambda action: (action.approve(), action.mark_executing()),
             lambda action: action.reject(),
         ),
+        (lambda action: action.reject(), lambda action: action.approve()),
+        (lambda action: action.reject(), lambda action: action.mark_executing()),
         (
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-            lambda action: action.mark_executed(),
-        ),
-        (
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-        ),
-        (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-            ),
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-        ),
-        (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-            ),
-            lambda action: action.reject(),
-        ),
-        (
-            lambda action: action.reject(),
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-        ),
-        (
-            lambda action: action.reject(),
+            lambda action: (action.approve(), action.mark_executing(), action.mark_executed()),
             lambda action: action.mark_executing(),
         ),
         (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-                action.mark_executed(),
-            ),
+            lambda action: (action.approve(), action.mark_executing(), action.mark_executed()),
+            lambda action: action.approve(),
+        ),
+        (
+            lambda action: (action.approve(), action.mark_executing(), action.mark_failed()),
             lambda action: action.mark_executing(),
         ),
         (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-                action.mark_executed(),
-            ),
-            lambda action: action.approve(approved_reply_body=_APPROVED_REPLY),
-        ),
-        (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-                action.mark_failed(),
-            ),
-            lambda action: action.mark_executing(),
-        ),
-        (
-            lambda action: (
-                action.approve(approved_reply_body=_APPROVED_REPLY),
-                action.mark_executing(),
-                action.mark_failed(),
-            ),
+            lambda action: (action.approve(), action.mark_executing(), action.mark_failed()),
             lambda action: action.mark_executed(),
         ),
     ],
@@ -359,6 +373,20 @@ def test_illegal_transitions_raise_and_do_not_mutate(setup, attempt) -> None:
     assert _snapshot(action) == before
 
 
+def test_failed_transition_does_not_mutate_proposal_body_or_timestamps() -> None:
+    """An illegal approve after reject must leave proposal and timestamps intact."""
+    action = _pending_action()
+    action.reject()
+    before = _snapshot(action)
+
+    with pytest.raises(InvalidWorkflowTransitionError):
+        action.approve()
+
+    assert _snapshot(action) == before
+    assert action.proposed_reply_body == _PROPOSED_REPLY
+    assert action.approved_reply_body is None
+
+
 def test_terminal_rejected_cannot_transition_further() -> None:
     """REJECTED is terminal in Phase 11."""
     action = _pending_action()
@@ -366,7 +394,7 @@ def test_terminal_rejected_cannot_transition_further() -> None:
     before = _snapshot(action)
 
     for attempt in (
-        lambda: action.approve(approved_reply_body=_APPROVED_REPLY),
+        action.approve,
         action.reject,
         action.mark_executing,
         action.mark_executed,
@@ -380,13 +408,13 @@ def test_terminal_rejected_cannot_transition_further() -> None:
 def test_terminal_executed_cannot_transition_further() -> None:
     """EXECUTED is terminal in Phase 11."""
     action = _pending_action()
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    action.approve()
     action.mark_executing()
     action.mark_executed()
     before = _snapshot(action)
 
     for attempt in (
-        lambda: action.approve(approved_reply_body=_APPROVED_REPLY),
+        action.approve,
         action.reject,
         action.mark_executing,
         action.mark_executed,
@@ -400,13 +428,13 @@ def test_terminal_executed_cannot_transition_further() -> None:
 def test_terminal_failed_cannot_transition_further() -> None:
     """FAILED is terminal in Phase 11 and has no retry path."""
     action = _pending_action()
-    action.approve(approved_reply_body=_APPROVED_REPLY)
+    action.approve()
     action.mark_executing()
     action.mark_failed()
     before = _snapshot(action)
 
     for attempt in (
-        lambda: action.approve(approved_reply_body=_APPROVED_REPLY),
+        action.approve,
         action.reject,
         action.mark_executing,
         action.mark_executed,
@@ -415,3 +443,216 @@ def test_terminal_failed_cannot_transition_further() -> None:
         with pytest.raises(InvalidWorkflowTransitionError):
             attempt()
         assert _snapshot(action) == before
+
+
+def test_rehydrate_pending() -> None:
+    """A stored PENDING row reconstructs with a proposal and no later fields."""
+    action = _rehydrate(status=WorkflowActionStatus.PENDING)
+    assert action.status is WorkflowActionStatus.PENDING
+    assert action.proposed_reply_body == _PROPOSED_REPLY
+    assert action.approved_reply_body is None
+    assert action.approved_at is None
+    assert action.rejected_at is None
+    assert action.executed_at is None
+    assert action.failed_at is None
+
+
+def test_rehydrate_approved() -> None:
+    """A stored APPROVED row reconstructs with both snapshots and approved_at."""
+    now = datetime.now(UTC)
+    action = _rehydrate(
+        status=WorkflowActionStatus.APPROVED,
+        approved_reply_body=_PROPOSED_REPLY,
+        approved_at=now,
+    )
+    assert action.status is WorkflowActionStatus.APPROVED
+    assert action.approved_reply_body == _PROPOSED_REPLY
+    assert action.approved_at == now
+    assert action.rejected_at is None
+
+
+def test_rehydrate_approved_allows_divergent_authorized_snapshot() -> None:
+    """Rehydrate must not require approved_reply_body == proposed_reply_body."""
+    action = _rehydrate(
+        status=WorkflowActionStatus.APPROVED,
+        proposed_reply_body="Original proposal",
+        approved_reply_body="Later authorized snapshot",
+        approved_at=datetime.now(UTC),
+    )
+    assert action.proposed_reply_body == "Original proposal"
+    assert action.approved_reply_body == "Later authorized snapshot"
+
+
+def test_rehydrate_rejected() -> None:
+    """A stored REJECTED row keeps the proposal and has no approved snapshot."""
+    now = datetime.now(UTC)
+    action = _rehydrate(status=WorkflowActionStatus.REJECTED, rejected_at=now)
+    assert action.status is WorkflowActionStatus.REJECTED
+    assert action.proposed_reply_body == _PROPOSED_REPLY
+    assert action.approved_reply_body is None
+    assert action.rejected_at == now
+    assert action.approved_at is None
+
+
+def test_rehydrate_executing() -> None:
+    """A stored EXECUTING row requires the approved snapshot."""
+    now = datetime.now(UTC)
+    action = _rehydrate(
+        status=WorkflowActionStatus.EXECUTING,
+        approved_reply_body=_PROPOSED_REPLY,
+        approved_at=now,
+    )
+    assert action.status is WorkflowActionStatus.EXECUTING
+    assert action.approved_reply_body == _PROPOSED_REPLY
+    assert action.executed_at is None
+    assert action.failed_at is None
+
+
+def test_rehydrate_executed() -> None:
+    """A stored EXECUTED row requires executed_at."""
+    now = datetime.now(UTC)
+    action = _rehydrate(
+        status=WorkflowActionStatus.EXECUTED,
+        approved_reply_body=_PROPOSED_REPLY,
+        approved_at=now,
+        executed_at=now,
+    )
+    assert action.status is WorkflowActionStatus.EXECUTED
+    assert action.executed_at == now
+    assert action.failed_at is None
+
+
+def test_rehydrate_failed() -> None:
+    """A stored FAILED row requires failed_at and forbids executed_at."""
+    now = datetime.now(UTC)
+    action = _rehydrate(
+        status=WorkflowActionStatus.FAILED,
+        approved_reply_body=_PROPOSED_REPLY,
+        approved_at=now,
+        failed_at=now,
+    )
+    assert action.status is WorkflowActionStatus.FAILED
+    assert action.failed_at == now
+    assert action.executed_at is None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"proposed_reply_body": ""},
+        {"approved_reply_body": _PROPOSED_REPLY},
+        {"approved_at": datetime.now(UTC)},
+    ],
+)
+def test_rehydrate_rejects_invalid_pending(overrides: dict[str, object]) -> None:
+    """Corrupt PENDING rows must fail closed."""
+    with pytest.raises(ValidationError):
+        _rehydrate(status=WorkflowActionStatus.PENDING, **overrides)
+
+
+def test_rehydrate_rejects_pending_without_proposal_key() -> None:
+    """PENDING without a proposal field must fail closed."""
+    with pytest.raises(ValidationError):
+        WorkflowAction.rehydrate(
+            action_type=WorkflowActionType.REPLY,
+            analysis_id=uuid4(),
+            owner_user_id=uuid4(),
+            status=WorkflowActionStatus.PENDING,
+        )
+
+
+def test_rehydrate_rejects_approved_without_approved_at() -> None:
+    """APPROVED without approved_at is corrupt."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.APPROVED,
+            approved_reply_body=_PROPOSED_REPLY,
+        )
+
+
+def test_rehydrate_rejects_approved_without_approved_body() -> None:
+    """APPROVED without an approved snapshot is corrupt."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.APPROVED,
+            approved_at=datetime.now(UTC),
+        )
+
+
+def test_rehydrate_rejects_rejected_with_approved_body() -> None:
+    """REJECTED must not carry an approved snapshot."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.REJECTED,
+            rejected_at=datetime.now(UTC),
+            approved_reply_body=_PROPOSED_REPLY,
+        )
+
+
+def test_rehydrate_rejects_executing_without_approved_snapshot() -> None:
+    """EXECUTING without an approved snapshot is corrupt."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.EXECUTING,
+            approved_at=datetime.now(UTC),
+        )
+
+
+def test_rehydrate_rejects_executed_without_executed_at() -> None:
+    """EXECUTED without executed_at is corrupt."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.EXECUTED,
+            approved_reply_body=_PROPOSED_REPLY,
+            approved_at=datetime.now(UTC),
+        )
+
+
+def test_rehydrate_rejects_failed_without_failed_at() -> None:
+    """FAILED without failed_at is corrupt."""
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.FAILED,
+            approved_reply_body=_PROPOSED_REPLY,
+            approved_at=datetime.now(UTC),
+        )
+
+
+def test_rehydrate_rejects_executed_with_failed_at() -> None:
+    """EXECUTED cannot also be failed."""
+    now = datetime.now(UTC)
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.EXECUTED,
+            approved_reply_body=_PROPOSED_REPLY,
+            approved_at=now,
+            executed_at=now,
+            failed_at=now,
+        )
+
+
+def test_rehydrate_rejects_failed_with_executed_at() -> None:
+    """FAILED cannot also be executed."""
+    now = datetime.now(UTC)
+    with pytest.raises(ValidationError):
+        _rehydrate(
+            status=WorkflowActionStatus.FAILED,
+            approved_reply_body=_PROPOSED_REPLY,
+            approved_at=now,
+            failed_at=now,
+            executed_at=now,
+        )
+
+
+def test_public_constructor_is_not_rehydrate() -> None:
+    """Calling the public constructor with APPROVED fields remains forbidden."""
+    with pytest.raises(ValidationError):
+        WorkflowAction(
+            action_type=WorkflowActionType.REPLY,
+            analysis_id=uuid4(),
+            owner_user_id=uuid4(),
+            proposed_reply_body=_PROPOSED_REPLY,
+            status=WorkflowActionStatus.APPROVED,
+            approved_reply_body=_PROPOSED_REPLY,
+            approved_at=datetime.now(UTC),
+        )

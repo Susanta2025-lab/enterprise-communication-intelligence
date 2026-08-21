@@ -9,6 +9,7 @@ from app.infrastructure.storage.models import (
     ConnectorAccount,
     ExternalIdentity,
     User,
+    WorkflowAction,
 )
 
 _FORBIDDEN_COLUMNS = frozenset(
@@ -40,12 +41,19 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
     """users, external_identities, analyses, and connector_accounts must be present."""
     inspector = inspect(sqlite_engine)
     tables = set(inspector.get_table_names())
-    assert {"users", "external_identities", "analyses", "connector_accounts"} <= tables
+    assert {
+        "users",
+        "external_identities",
+        "analyses",
+        "connector_accounts",
+        "workflow_actions",
+    } <= tables
     assert "messages" not in tables
     assert "connections" not in tables
     assert "oauth_tokens" not in tables
     assert "connector_credentials" not in tables
     assert "tenants" not in tables
+    assert "workflows" not in tables
 
 
 def test_user_columns_exclude_pii(sqlite_engine: Engine) -> None:
@@ -69,11 +77,12 @@ def test_external_identity_unique_constraint(sqlite_engine: Engine) -> None:
 
 
 def test_foreign_keys_cascade_to_users(sqlite_engine: Engine) -> None:
-    """Identity, analysis, and connector account rows must reference users with CASCADE."""
+    """Identity, analysis, connector, and workflow rows must reference users with CASCADE."""
     inspector = inspect(sqlite_engine)
     identity_fks = inspector.get_foreign_keys("external_identities")
     analysis_fks = inspector.get_foreign_keys("analyses")
     connector_fks = inspector.get_foreign_keys("connector_accounts")
+    workflow_fks = inspector.get_foreign_keys("workflow_actions")
     assert any(
         fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
         for fk in identity_fks
@@ -86,6 +95,11 @@ def test_foreign_keys_cascade_to_users(sqlite_engine: Engine) -> None:
         fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
         for fk in connector_fks
     )
+    assert any(
+        fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
+        for fk in workflow_fks
+    )
+    assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
 
 
 def test_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -133,11 +147,13 @@ def test_orm_metadata_matches_mapped_classes() -> None:
         "external_identities",
         "analyses",
         "connector_accounts",
+        "workflow_actions",
     }
     assert User.__tablename__ == "users"
     assert ExternalIdentity.__tablename__ == "external_identities"
     assert Analysis.__tablename__ == "analyses"
     assert ConnectorAccount.__tablename__ == "connector_accounts"
+    assert WorkflowAction.__tablename__ == "workflow_actions"
 
 
 def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -177,6 +193,37 @@ def test_connector_account_unique_constraint(sqlite_engine: Engine) -> None:
     assert named or expected in unique_indexes
     if named:
         assert named[0]["name"] == "uq_connector_accounts_user_provider_external_account"
+
+
+def test_workflow_action_columns_are_minimized(sqlite_engine: Engine) -> None:
+    """Workflow rows may store reply snapshots but not inbound mail or credentials."""
+    inspector = inspect(sqlite_engine)
+    columns = {column["name"] for column in inspector.get_columns("workflow_actions")}
+    assert columns == {
+        "id",
+        "user_id",
+        "analysis_id",
+        "action_type",
+        "status",
+        "proposed_reply_body",
+        "approved_reply_body",
+        "created_at",
+        "approved_at",
+        "rejected_at",
+        "executed_at",
+        "failed_at",
+    }
+    assert "proposed_reply_body" in columns
+    assert "approved_reply_body" in columns
+    assert "body" not in columns
+    assert "raw_body" not in columns
+    assert "subject" not in columns
+    assert "sender" not in columns
+    assert "recipient" not in columns
+    assert "token" not in columns
+    assert "credential" not in columns
+    assert "credential_ref" not in columns
+    assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
 
 
 def test_schema_excludes_token_columns(sqlite_engine: Engine) -> None:
