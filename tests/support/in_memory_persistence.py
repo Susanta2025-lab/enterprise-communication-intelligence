@@ -74,6 +74,7 @@ class InMemoryAnalysisRepository:
             summary_confidence=analysis.summary_confidence,
             action_items=list(analysis.action_items),
             draft_reply=None if analysis.draft_reply is None else dict(analysis.draft_reply),
+            connector_account_id=analysis.connector_account_id,
         )
         self._analyses[record.id] = record
         return record
@@ -259,6 +260,9 @@ class InMemoryWorkflowActionRepository(WorkflowActionRepository):
         if stored.status is not expected_status:
             return WorkflowActionSaveResult(outcome=WorkflowActionSaveOutcome.CONFLICT)
         saved = _copy_workflow_action(action)
+        # Match SQL save_owned: lifecycle fields update, execution target does not.
+        saved.connector_account_id = stored.connector_account_id
+        saved.provider_message_id = stored.provider_message_id
         self._actions[action.id] = saved
         return WorkflowActionSaveResult(
             outcome=WorkflowActionSaveOutcome.SUCCESS,
@@ -280,6 +284,8 @@ def _copy_workflow_action(action: WorkflowAction) -> WorkflowAction:
         executed_at=action.executed_at,
         failed_at=action.failed_at,
         approved_reply_body=action.approved_reply_body,
+        connector_account_id=action.connector_account_id,
+        provider_message_id=action.provider_message_id,
     )
 
 
@@ -405,4 +411,28 @@ def sample_analysis_record(
         summary_confidence=payload.get("summary_confidence", 1.0),
         action_items=list(payload.get("action_items", [])),
         draft_reply=payload.get("draft_reply"),
+        connector_account_id=payload.get("connector_account_id"),
+    )
+
+
+def sample_connector_account(
+    user_id: UUID,
+    *,
+    account_id: UUID | None = None,
+    provider: str = "fake",
+    external_account_id: str = "mailbox-001",
+    credential_ref: str | None = "credential-ref-001",
+    status: ConnectorAccountStatus = ConnectorAccountStatus.ACTIVE,
+) -> ConnectorAccountRecord:
+    """Build a synthetic connector account for execution-target tests."""
+    now = datetime.now(UTC)
+    return ConnectorAccountRecord(
+        id=account_id or uuid4(),
+        user_id=user_id,
+        provider=provider,
+        external_account_id=external_account_id,
+        credential_ref=credential_ref,
+        status=status,
+        created_at=now,
+        updated_at=now,
     )

@@ -47,8 +47,18 @@ class CommunicationAnalysisWorkflowService:
         self._identity_resolver = identity_resolver
         self._history_service = history_service
 
-    def analyze(self, request: CommunicationRequest) -> PersistedAnalysisOutcome:
-        """Analyze a communication and optionally persist the result."""
+    def analyze(
+        self,
+        request: CommunicationRequest,
+        *,
+        connector_account_id: UUID | None = None,
+    ) -> PersistedAnalysisOutcome:
+        """Analyze a communication and optionally persist the result.
+
+        ``connector_account_id`` is mailbox provenance supplied by connector
+        ingestion. Direct-text analysis omits it. The generic analyze API
+        never accepts this argument.
+        """
         principal = self._principal
         identity_resolver = self._identity_resolver
         history_service = self._history_service
@@ -71,7 +81,12 @@ class CommunicationAnalysisWorkflowService:
         result = self._analysis_service.analyze(request)
 
         try:
-            saved = history_service.save(user_id, request, result)
+            saved = history_service.save(
+                user_id,
+                request,
+                result,
+                connector_account_id=connector_account_id,
+            )
         except PersistenceError as exc:
             logger.warning(
                 "analysis_persistence_failed",

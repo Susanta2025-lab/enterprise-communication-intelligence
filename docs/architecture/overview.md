@@ -31,7 +31,8 @@ There is no HTTP execute route. Execution is below HTTP:
 
 ```text
 WorkflowActionExecutionService
-  → TX1 APPROVED → EXECUTING (commit, close UoW)
+  → TX1: validate has_execution_target and owned active ConnectorAccount,
+    then APPROVED → EXECUTING (commit, close UoW)
   → CommunicationActionExecutor interface
   → FakeCommunicationActionExecutor (current implementation only)
   → TX2 EXECUTED | FAILED

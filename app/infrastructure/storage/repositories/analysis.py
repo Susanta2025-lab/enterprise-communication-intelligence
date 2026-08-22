@@ -39,6 +39,7 @@ class SqlAlchemyAnalysisRepository(AnalysisRepository):
             summary_confidence=analysis.summary_confidence,
             action_items=list(analysis.action_items),
             draft_reply=None if analysis.draft_reply is None else dict(analysis.draft_reply),
+            connector_account_id=analysis.connector_account_id,
         )
         try:
             with self._session.begin_nested():
@@ -104,4 +105,5 @@ def _to_record(row: Analysis) -> AnalysisRecord:
         summary_confidence=row.summary_confidence,
         action_items=list(action_items),
         draft_reply=None if draft_reply is None else dict(draft_reply),
+        connector_account_id=row.connector_account_id,
     )

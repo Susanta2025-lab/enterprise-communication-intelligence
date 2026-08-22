@@ -25,6 +25,7 @@ from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
     UnitOfWorkFactory,
     sample_analysis_record,
+    sample_connector_account,
 )
 from tests.support.jwt_tokens import TEST_PERMISSION
 
@@ -92,6 +93,9 @@ def test_create_snapshots_owned_draft_into_pending_action() -> None:
     assert action.owner_user_id == user_id
     assert action.proposed_reply_body == _DRAFT_BODY
     assert action.approved_reply_body is None
+    assert action.has_execution_target is False
+    assert action.connector_account_id is None
+    assert action.provider_message_id is None
     stored = unit.workflow_action_store[action.id]
     assert stored.proposed_reply_body == _DRAFT_BODY
     assert unit.commit_calls >= 1
@@ -337,3 +341,111 @@ def test_persistence_failure_becomes_unavailable() -> None:
 
     assert exc_info.value.message == "Persistence is currently unavailable."
     assert exc_info.value.__cause__ is None
+
+
+def test_create_snapshots_mailbox_execution_target() -> None:
+    """Create copies analysis connector_account_id and message_id onto the action."""
+    user_id = uuid4()
+    account = sample_connector_account(user_id)
+    analysis = _analysis(
+        user_id,
+        connector_account_id=account.id,
+        message_id="provider-msg-001",
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        analyses={analysis.id: analysis},
+        connector_accounts={account.id: account},
+    )
+    service = _service(unit)
+
+    action = service.create(_principal(), analysis.id)
+
+    assert action.connector_account_id == account.id
+    assert action.provider_message_id == "provider-msg-001"
+    assert action.has_execution_target is True
+
+
+def test_create_does_not_snapshot_incomplete_direct_text_target() -> None:
+    """Direct-text analyses with only message_id remain non-executable."""
+    service, _unit, _user_id, analysis_id = _seeded()
+    action = service.create(_principal(), analysis_id)
+    assert action.connector_account_id is None
+    assert action.provider_message_id is None
+    assert action.has_execution_target is False
+
+
+def test_execution_target_survives_analysis_change_and_delete() -> None:
+    """Later analysis mutation or deletion must not alter the workflow snapshot."""
+    user_id = uuid4()
+    account = sample_connector_account(user_id)
+    analysis = _analysis(
+        user_id,
+        connector_account_id=account.id,
+        message_id="provider-msg-001",
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        analyses={analysis.id: analysis},
+        connector_accounts={account.id: account},
+    )
+    service = _service(unit)
+    created = service.create(_principal(), analysis.id)
+    original_account_id = created.connector_account_id
+    original_message_id = created.provider_message_id
+
+    mutated = sample_analysis_record(
+        user_id,
+        analysis_id=analysis.id,
+        extra={
+            "connector_account_id": uuid4(),
+            "message_id": "changed-message",
+            "draft_reply": {"body": _DRAFT_BODY},
+        },
+    )
+    unit.analyses[analysis.id] = mutated
+    approved = service.approve(_principal(), created.id)
+    assert approved.connector_account_id == original_account_id
+    assert approved.provider_message_id == original_message_id
+
+    assert unit.analysis_repository.delete_for_user(analysis.id, user_id) is True
+    loaded = service.get(_principal(), created.id)
+    assert loaded.connector_account_id == original_account_id
+    assert loaded.provider_message_id == original_message_id
+    assert loaded.has_execution_target is True
+
+
+def test_in_memory_save_owned_does_not_rewrite_execution_target() -> None:
+    """Test doubles must keep the creation snapshot, matching SQL save_owned."""
+    user_id = uuid4()
+    account_id = uuid4()
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+    )
+    stored = unit.workflow_actions.add(
+        WorkflowAction(
+            action_type=WorkflowActionType.REPLY,
+            analysis_id=uuid4(),
+            owner_user_id=user_id,
+            proposed_reply_body=_DRAFT_BODY,
+            connector_account_id=account_id,
+            provider_message_id="provider-msg-001",
+        )
+    )
+    loaded = unit.workflow_actions.get_owned(stored.id, user_id)
+    assert loaded is not None
+    loaded.connector_account_id = uuid4()
+    loaded.provider_message_id = "mutated-message"
+    loaded.approve()
+
+    result = unit.workflow_actions.save_owned(
+        loaded,
+        expected_status=WorkflowActionStatus.PENDING,
+    )
+
+    assert result.action is not None
+    assert result.action.connector_account_id == account_id
+    assert result.action.provider_message_id == "provider-msg-001"
+    persisted = unit.workflow_action_store[stored.id]
+    assert persisted.connector_account_id == account_id
+    assert persisted.provider_message_id == "provider-msg-001"

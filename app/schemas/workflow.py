@@ -18,7 +18,12 @@ class WorkflowActionCreateRequest(BaseModel):
 
 
 class WorkflowActionResponse(BaseModel):
-    """Owned workflow-action resource. Does not include identity fields."""
+    """Owned workflow-action resource. Does not include identity or routing ids.
+
+    ``has_execution_target`` means mailbox routing provenance exists. It does
+    not mean a real provider can already send the message. There is no execute
+    API in Phase 12A.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -33,6 +38,7 @@ class WorkflowActionResponse(BaseModel):
     rejected_at: datetime | None = None
     executed_at: datetime | None = None
     failed_at: datetime | None = None
+    has_execution_target: bool
 
 
 class WorkflowActionListResponse(BaseModel):
@@ -59,4 +65,5 @@ def workflow_action_response(action: WorkflowAction) -> WorkflowActionResponse:
         rejected_at=action.rejected_at,
         executed_at=action.executed_at,
         failed_at=action.failed_at,
+        has_execution_target=action.has_execution_target,
     )

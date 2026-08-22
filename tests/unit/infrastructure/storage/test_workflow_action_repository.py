@@ -47,12 +47,16 @@ def _pending(
     *,
     analysis_id: UUID | None = None,
     proposed_reply_body: str = _PROPOSAL,
+    connector_account_id: UUID | None = None,
+    provider_message_id: str | None = None,
 ) -> WorkflowAction:
     return WorkflowAction(
         action_type=WorkflowActionType.REPLY,
         analysis_id=analysis_id or uuid4(),
         owner_user_id=owner_user_id,
         proposed_reply_body=proposed_reply_body,
+        connector_account_id=connector_account_id,
+        provider_message_id=provider_message_id,
     )
 
 
@@ -90,6 +94,9 @@ def test_add_and_get_owned_round_trips_pending(session_factory: sessionmaker) ->
         assert found.status is WorkflowActionStatus.PENDING
         assert found.proposed_reply_body == _PROPOSAL
         assert found.approved_reply_body is None
+        assert found.connector_account_id is None
+        assert found.provider_message_id is None
+        assert found.has_execution_target is False
         assert _aware(found.created_at) == _aware(created.created_at)
 
 
@@ -365,6 +372,8 @@ def test_no_analysis_foreign_key(sqlite_engine: Engine) -> None:
     fks = inspector.get_foreign_keys("workflow_actions")
     assert all(fk["referred_table"] != "analyses" for fk in fks)
     assert all("analysis_id" not in fk["constrained_columns"] for fk in fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in fks)
+    assert all("connector_account_id" not in fk.get("constrained_columns", []) for fk in fks)
 
 
 def test_deleting_user_cascades_workflow_actions(session_factory: sessionmaker) -> None:
@@ -460,3 +469,118 @@ def test_ownership_is_enforced_in_sql() -> None:
     assert "WorkflowActionRow.user_id == user_id" in source
     assert "WorkflowActionRow.user_id == action.owner_user_id" in source
     assert "row.user_id !=" not in source
+
+
+def test_execution_target_round_trips(session_factory: sessionmaker) -> None:
+    """Mailbox routing identifiers persist and rehydrate on get/list."""
+    user_a, _user_b = _create_users(session_factory)
+    account_id = uuid4()
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        created = repository.add(
+            _pending(
+                user_a,
+                connector_account_id=account_id,
+                provider_message_id="provider-msg-001",
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        found = repository.get_owned(created.id, user_a)
+        listed = repository.list_owned(user_a, limit=20, offset=0)
+
+    assert found is not None
+    assert found.connector_account_id == account_id
+    assert found.provider_message_id == "provider-msg-001"
+    assert found.has_execution_target is True
+    assert listed[0].connector_account_id == account_id
+
+
+def test_legacy_null_execution_target_rehydrates(session_factory: sessionmaker) -> None:
+    """Phase 11-era rows with both routing columns NULL remain valid."""
+    user_a, _user_b = _create_users(session_factory)
+    action_id = uuid4()
+    analysis_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            WorkflowActionRow(
+                id=action_id,
+                user_id=user_a,
+                analysis_id=analysis_id,
+                action_type="reply",
+                status="pending",
+                proposed_reply_body=_PROPOSAL,
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        loaded = repository.get_owned(action_id, user_a)
+
+    assert loaded is not None
+    assert loaded.connector_account_id is None
+    assert loaded.provider_message_id is None
+    assert loaded.has_execution_target is False
+
+
+def test_partial_execution_target_is_rejected_by_sql(
+    session_factory: sessionmaker,
+) -> None:
+    """SQL must reject a half-populated execution target independently of the domain."""
+    user_a, _user_b = _create_users(session_factory)
+    with session_factory() as session:
+        with pytest.raises(IntegrityError):
+            session.add(
+                WorkflowActionRow(
+                    id=uuid4(),
+                    user_id=user_a,
+                    analysis_id=uuid4(),
+                    action_type="reply",
+                    status="pending",
+                    proposed_reply_body=_PROPOSAL,
+                    connector_account_id=uuid4(),
+                    provider_message_id=None,
+                )
+            )
+            session.commit()
+        session.rollback()
+        with pytest.raises(IntegrityError):
+            session.add(
+                WorkflowActionRow(
+                    id=uuid4(),
+                    user_id=user_a,
+                    analysis_id=uuid4(),
+                    action_type="reply",
+                    status="pending",
+                    proposed_reply_body=_PROPOSAL,
+                    connector_account_id=None,
+                    provider_message_id="provider-msg-orphan",
+                )
+            )
+            session.commit()
+
+
+def test_approve_does_not_rewrite_execution_target(session_factory: sessionmaker) -> None:
+    """Conditional status updates must leave routing provenance unchanged."""
+    user_a, _user_b = _create_users(session_factory)
+    account_id = uuid4()
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        created = repository.add(
+            _pending(
+                user_a,
+                connector_account_id=account_id,
+                provider_message_id="provider-msg-001",
+            )
+        )
+        created.approve()
+        result = repository.save_owned(created, expected_status=WorkflowActionStatus.PENDING)
+        session.commit()
+
+    assert result.action is not None
+    assert result.action.connector_account_id == account_id
+    assert result.action.provider_message_id == "provider-msg-001"
+    assert result.action.has_execution_target is True

@@ -33,6 +33,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-015](ADR-015-approval-gated-workflow-actions.md) | Approval-Gated Workflow Actions | Accepted |
 | [ADR-016](ADR-016-workflow-persistence-and-analysis-provenance.md) | Workflow Persistence and Analysis Provenance | Accepted |
 | [ADR-017](ADR-017-communication-action-execution-boundary.md) | Communication Action Execution Boundary | Accepted |
+| [ADR-018](ADR-018-workflow-execution-target-provenance.md) | Workflow Execution Target Provenance | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -55,6 +56,8 @@ ADR-015 records that AI suggestions are not authorized external actions. `Workfl
 ADR-016 records that workflow actions persist as user-owned `workflow_actions` rows. The proposed reply is snapshotted at creation. Approval writes a separate authorized snapshot. `analysis_id` is required provenance without a database FK, so analysis hard-delete leaves actions intact. HTTP was added in Phase 11C. Execution is recorded in [ADR-017](ADR-017-communication-action-execution-boundary.md) without changing this persistence decision.
 
 ADR-017 records the Phase 11D execution boundary: `CommunicationActionExecutor` is a write port separate from `CommunicationConnector`. `WorkflowActionExecutionService` commits `APPROVED` → `EXECUTING` before the fake executor runs, holds no database transaction during the call, then records `EXECUTED` or `FAILED`. There is no HTTP execute route and no real provider write.
+
+ADR-018 records Phase 12A execution-target provenance. `WorkflowAction` snapshots `connector_account_id` and `provider_message_id` at create. Analyses store optional mailbox `connector_account_id`. Execution validates an owned active connector account inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Legacy targetless rows remain valid and non-executable. Credentials are not stored on workflow or analysis rows.
 
 ## Template
 

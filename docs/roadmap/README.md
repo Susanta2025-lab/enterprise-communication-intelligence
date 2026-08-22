@@ -15,6 +15,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 9 – Persistence & Multi-Tenant/User-Associated Data](phase-09-persistence.md)
 - [Phase 10 – Communication Connectors](phase-10-communication-connectors.md)
 - [Phase 11 – Workflow Automation](phase-11-workflow-automation.md)
+- [Phase 12 – Production Communication Execution](phase-12-production-communication-execution.md)
 
 ## Status
 
@@ -31,6 +32,7 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 9 – Persistence & Multi-Tenant/User-Associated Data | Completed |
 | Phase 10 – Communication Connectors | Completed |
 | Phase 11 – Workflow Automation | Completed |
+| Phase 12 – Production Communication Execution | In Progress |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
@@ -39,3 +41,5 @@ Phase 10A — Connector Architecture & Domain Contracts is completed. Phase 10B 
 Phase 10 closed the vendor-neutral connector path through Gmail and Microsoft Graph read-only adapters, user-owned `connector_accounts`, and controlled local live adapter checks. Production OAuth, credential resolver, connector HTTP APIs, synchronization, and send/reply remain deferred. Details: [Phase 10](phase-10-communication-connectors.md).
 
 Phase 11A — Workflow Domain, State Machine & Authorization Foundation is completed. Phase 11B — Workflow Persistence & User Ownership is completed. Phase 11C — Workflow Proposal and Approval API is completed. Phase 11D — Action Execution Port + Deterministic Fake Executor is completed. Phase 11E — Integration, Documentation & Regression is completed. `WorkflowAction` is durable, user-owned, and exposed over `/api/v1/workflow-actions` for create, list, get, approve, and reject. Execution exists below HTTP through `CommunicationActionExecutor` and a deterministic fake. HTTP execute, Gmail/Graph send/reply, production workflow automation, and automatic replies remain unavailable. Phase 11 overall is completed. Details: [Phase 11](phase-11-workflow-automation.md).
+
+Phase 12A — Execution Target, Routing & Executability Foundation is completed. Phase 12 remains in progress. Phase 12 is user-approved real communication execution; automatic replies remain deferred to Phase 13+. 12A still executes through the deterministic fake only. Details: [Phase 12](phase-12-production-communication-execution.md).

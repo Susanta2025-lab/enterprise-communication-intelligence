@@ -23,6 +23,7 @@ class NewAnalysis:
     summary_confidence: float | None = None
     draft_reply: dict[str, Any] | None = None
     analysis_id: UUID | None = None
+    connector_account_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,7 @@ class AnalysisRecord:
     summary_confidence: float | None
     action_items: list[dict[str, Any]]
     draft_reply: dict[str, Any] | None
+    connector_account_id: UUID | None = None
 
 
 class AnalysisRepository(ABC):

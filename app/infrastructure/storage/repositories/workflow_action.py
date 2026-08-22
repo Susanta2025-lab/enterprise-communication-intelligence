@@ -43,6 +43,8 @@ class SqlAlchemyWorkflowActionRepository(WorkflowActionRepository):
             rejected_at=action.rejected_at,
             executed_at=action.executed_at,
             failed_at=action.failed_at,
+            connector_account_id=action.connector_account_id,
+            provider_message_id=action.provider_message_id,
         )
         try:
             with self._session.begin_nested():
@@ -141,6 +143,8 @@ def _to_domain(row: WorkflowActionRow) -> WorkflowAction:
             executed_at=row.executed_at,
             failed_at=row.failed_at,
             approved_reply_body=row.approved_reply_body,
+            connector_account_id=row.connector_account_id,
+            provider_message_id=row.provider_message_id,
         )
     except (ValidationError, ValueError):
         raise PersistenceError(_INVALID_STORED) from None

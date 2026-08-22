@@ -228,6 +228,9 @@ Owned workflow-action resource. Mapped explicitly from the domain `WorkflowActio
 | `rejected_at` | `datetime \| None` | Set on reject |
 | `executed_at` | `datetime \| None` | Later execution; not set by 11C |
 | `failed_at` | `datetime \| None` | Later execution; not set by 11C |
+| `has_execution_target` | `bool` | `true` when mailbox routing provenance exists (`connector_account_id` and `provider_message_id` both present). This is **not** a claim that a real provider can already send the message. There is no execute API in Phase 12A. |
+
+The response omits `owner_user_id`, `connector_account_id`, `provider_message_id`, and `credential_ref`.
 
 ## `WorkflowActionListResponse` (`app/schemas/workflow.py`)
 

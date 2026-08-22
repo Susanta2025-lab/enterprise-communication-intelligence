@@ -133,6 +133,7 @@ class Analysis(Base):
     summary_confidence: Mapped[float | None] = mapped_column(nullable=True)
     action_items: Mapped[list[dict[str, Any]]] = mapped_column(PORTABLE_JSON, nullable=False)
     draft_reply: Mapped[dict[str, Any] | None] = mapped_column(PORTABLE_JSON, nullable=True)
+    connector_account_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="analyses")
 
@@ -198,6 +199,10 @@ class WorkflowAction(Base):
             "status IN ('pending', 'approved', 'rejected', 'executing', 'executed', 'failed')",
             name="ck_workflow_actions_status",
         ),
+        CheckConstraint(
+            "(connector_account_id IS NULL) = (provider_message_id IS NULL)",
+            name="ck_workflow_actions_execution_target",
+        ),
         Index(
             "ix_workflow_actions_user_id_created_at_id",
             "user_id",
@@ -238,5 +243,7 @@ class WorkflowAction(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    connector_account_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="workflow_actions")

@@ -123,6 +123,9 @@ def test_execution_boundary_exists_below_http() -> None:
         "action_id",
         "action_type",
         "approved_reply_body",
+        "connector_account_id",
+        "provider_message_id",
+        "provider",
     }
 
     execution_source = (_SERVICES / "workflow_action_execution.py").read_text(encoding="utf-8")
@@ -132,6 +135,9 @@ def test_execution_boundary_exists_below_http() -> None:
     assert "analysis_repository" not in execution_source
     assert "GmailCommunicationConnector" not in execution_source
     assert "MicrosoftGraphCommunicationConnector" not in execution_source
+    assert "GmailCommunicationActionExecutor" not in execution_source
+    assert "MicrosoftGraphCommunicationActionExecutor" not in execution_source
+    assert "credential_ref" not in execution_source
     assert "sqlalchemy" not in execution_source
     assert "fastapi" not in execution_source
     assert "EXECUTION_UNKNOWN" not in execution_source

@@ -73,8 +73,10 @@ These services depend on `PersistenceUnitOfWork` and repository interfaces in `a
 CommunicationConnector.fetch_message
 → CommunicationMessage
 → CommunicationRequest
-→ CommunicationAnalysisWorkflowService.analyze
+→ CommunicationAnalysisWorkflowService.analyze(..., connector_account_id=...)
 ```
+
+`connector_account_id` is optional constructor context from an already owned connector account. The generic `POST /api/v1/communications/analyze` path never supplies it. Unowned account ids are rejected at analysis save and do not enter persistence. Analysis provenance is not execution eligibility: save does not require `ACTIVE`. A later disconnect does not rewrite stored analysis provenance.
 
 It does **not**:
 
@@ -143,7 +145,7 @@ AuthenticatedPrincipal
 → WorkflowActionRepository
 ```
 
-Public operations are create, get, list, approve, and reject. Create requires an owned analysis with a usable draft reply. Approve and reject load the owned `WorkflowAction` only; they do not reload the analysis or call an AI provider. Approval copies `proposed_reply_body` into `approved_reply_body`. Missing identity mappings use the same not-found semantics as other owned resources; list returns an empty page.
+Public operations are create, get, list, approve, and reject. Create requires an owned analysis with a usable draft reply. Create snapshots a complete mailbox execution target from `analysis.connector_account_id` and `analysis.message_id` when both are present; otherwise both workflow fields stay `NULL`. Approve and reject load the owned `WorkflowAction` only; they do not reload the analysis, call an AI provider, or alter routing provenance. Approval copies `proposed_reply_body` into `approved_reply_body`. Missing identity mappings use the same not-found semantics as other owned resources; list returns an empty page.
 
 The service depends on `PersistenceUnitOfWork` and `WorkflowActionRepository`. It does not import SQLAlchemy models, FastAPI, Gmail/Graph adapters, or an executor. Phase 11C maps those operations to HTTP in `app/api/routes/workflow_actions.py` without duplicating service logic.
 
@@ -154,13 +156,14 @@ The service depends on `PersistenceUnitOfWork` and `WorkflowActionRepository`. I
 ```text
 AuthenticatedPrincipal
 → IdentityResolver.find_existing
-→ TX1: owned APPROVED → EXECUTING, commit, close UoW
+→ TX1: validate execution target and owned active ConnectorAccount,
+  then owned APPROVED → EXECUTING, commit, close UoW
 → CommunicationActionExecutor.execute(CommunicationActionExecution)
 → TX2: EXECUTING → EXECUTED or FAILED, commit
 ```
 
-Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutor`. There is no executor factory, no `ACTION_EXECUTOR` setting, and no FastAPI `get_workflow_action_execution_service` dependency because 11D has no HTTP execute route.
+Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutor`. There is no executor factory, no `ACTION_EXECUTOR` setting, and no FastAPI `get_workflow_action_execution_service` dependency because there is no HTTP execute route.
 
-The executor command is the approved snapshot (`approved_reply_body`), not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Known `CommunicationActionExecutionError` becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`; the row may remain `EXECUTING`.
+The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, and disconnected accounts raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. `ACTIVE` is structural executability in 12A; `credential_ref` is not inspected. Known `CommunicationActionExecutionError` becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`; the row may remain `EXECUTING`.
 
-Phase 11D implements only `FakeCommunicationActionExecutor` under `app/infrastructure/executors/`. `CommunicationConnector` remains read-only. Real Gmail/Graph writes remain later work.
+Phase 12A still implements only `FakeCommunicationActionExecutor` under `app/infrastructure/executors/`. `CommunicationConnector` remains read-only. Real Gmail/Graph writes remain later work.

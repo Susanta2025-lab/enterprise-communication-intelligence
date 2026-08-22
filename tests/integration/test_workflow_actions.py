@@ -74,6 +74,8 @@ _FORBIDDEN_RESPONSE_KEYS = {
     "refresh_token",
     "Authorization",
     "credential_ref",
+    "connector_account_id",
+    "provider_message_id",
 }
 
 
@@ -245,6 +247,7 @@ def test_create_owned_analysis_with_draft_returns_pending_snapshot(
     assert body["rejected_at"] is None
     assert body["executed_at"] is None
     assert body["failed_at"] is None
+    assert body["has_execution_target"] is False
     _assert_workflow_privacy(body)
 
 

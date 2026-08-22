@@ -31,7 +31,7 @@ class _SaveFailingHistory(AnalysisHistoryService):
     def __init__(self) -> None:
         self.save_calls = 0
 
-    def save(self, user_id, request, result):  # noqa: ANN001
+    def save(self, user_id, request, result, *, connector_account_id=None):  # noqa: ANN001
         self.save_calls += 1
         raise PersistenceError("Could not persist analysis.")
 

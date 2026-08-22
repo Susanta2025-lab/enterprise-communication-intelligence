@@ -24,6 +24,7 @@ from app.core.logging import get_logger
 from app.core.security import AuthenticatedPrincipal
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import WorkflowActionStatus, WorkflowActionType
+from app.domain.interfaces.analysis_repository import AnalysisRecord
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionSaveOutcome,
@@ -66,11 +67,14 @@ class WorkflowActionService:
                 if analysis is None:
                     raise AnalysisNotFoundError()
                 proposed = _usable_draft_body(analysis.draft_reply)
+                connector_account_id, provider_message_id = _execution_target(analysis)
                 action = WorkflowAction(
                     action_type=WorkflowActionType.REPLY,
                     analysis_id=analysis.id,
                     owner_user_id=user_id,
                     proposed_reply_body=proposed,
+                    connector_account_id=connector_account_id,
+                    provider_message_id=provider_message_id,
                 )
                 stored = uow.workflow_actions.add(action)
                 uow.commit()
@@ -93,6 +97,7 @@ class WorkflowActionService:
             operation="create",
             workflow_action_id=str(stored.id),
             analysis_id=str(analysis_id),
+            has_execution_target=stored.has_execution_target,
             duration_ms=elapsed_ms(started_at),
         )
         return stored
@@ -273,3 +278,11 @@ def _usable_draft_body(draft_reply: dict[str, Any] | None) -> str:
         return require_non_empty_text(body, "proposed_reply_body")
     except ValueError:
         raise AnalysisHasNoDraftReplyError() from None
+
+
+def _execution_target(analysis: AnalysisRecord) -> tuple[UUID | None, str | None]:
+    connector_account_id = analysis.connector_account_id
+    provider_message_id = analysis.message_id
+    if connector_account_id is None or provider_message_id is None:
+        return None, None
+    return connector_account_id, provider_message_id

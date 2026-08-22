@@ -24,6 +24,7 @@ def _new_analysis(
     message_id: str | None = "msg-100",
     request_id: UUID | None = None,
     analysis_id: UUID | None = None,
+    connector_account_id: UUID | None = None,
 ) -> NewAnalysis:
     return NewAnalysis(
         user_id=user_id,
@@ -40,6 +41,7 @@ def _new_analysis(
         summary_confidence=summary_confidence,
         draft_reply=draft_reply,
         analysis_id=analysis_id,
+        connector_account_id=connector_account_id,
     )
 
 
@@ -223,3 +225,24 @@ def test_analysis_does_not_store_raw_message_or_tokens(session_factory: sessionm
     assert not hasattr(loaded, "refresh_token")
     assert not hasattr(loaded, "email")
     assert "Authorization" not in loaded.summary_text
+
+
+def test_connector_account_id_round_trips(session_factory: sessionmaker) -> None:
+    """PostgreSQL stores nullable mailbox provenance without a connector FK."""
+    user_a, _user_b = _create_users(session_factory)
+    orphan_account_id = uuid4()
+    with session_factory() as session:
+        repository = SqlAlchemyAnalysisRepository(session)
+        stored = repository.save(
+            _new_analysis(user_a, connector_account_id=orphan_account_id)
+        )
+        session.commit()
+
+    with session_factory() as session:
+        repository = SqlAlchemyAnalysisRepository(session)
+        loaded = repository.get_by_id_for_user(stored.id, user_a)
+        listed = repository.list_for_user(user_a, limit=20, offset=0)
+
+    assert loaded is not None
+    assert loaded.connector_account_id == orphan_account_id
+    assert listed[0].connector_account_id == orphan_account_id

@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 11D. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. The fake executor occupies the `CommunicationActionExecutor` slot below HTTP.
+These diagrams describe the request flows implemented as of Phase 12A. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. The fake executor occupies the `CommunicationActionExecutor` slot below HTTP.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -294,7 +294,7 @@ sequenceDiagram
     participant Port as CommunicationActionExecutor
 
     Caller->>Exec: execute(principal, action_id)
-    Exec->>UoW: TX1 mark EXECUTING
+    Exec->>UoW: TX1 validate target, mark EXECUTING
     UoW-->>Exec: commit and close
     Exec->>Port: execute(CommunicationActionExecution)
     alt Fake success
@@ -313,7 +313,7 @@ sequenceDiagram
     end
 ```
 
-The command carries `approved_reply_body` only. Analysis is not loaded. `CommunicationConnector` is not used. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 11 does not add retry, outbox, or `EXECUTION_UNKNOWN`.
+The command carries `approved_reply_body` plus provider-neutral routing from the snapshotted target and the owned `ConnectorAccount`. Analysis is not loaded. `CommunicationConnector` is not used. Targetless or unusable mailbox accounts fail inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 12A does not add retry, outbox, `EXECUTION_UNKNOWN`, or an HTTP execute route.
 
 The domain state machine is unchanged:
 

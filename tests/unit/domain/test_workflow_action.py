@@ -43,6 +43,8 @@ def _snapshot(action: WorkflowAction) -> tuple[object, ...]:
         action.failed_at,
         action.proposed_reply_body,
         action.approved_reply_body,
+        action.connector_account_id,
+        action.provider_message_id,
     )
 
 
@@ -61,6 +63,8 @@ def _rehydrate(**overrides: object) -> WorkflowAction:
         "executed_at": None,
         "failed_at": None,
         "approved_reply_body": None,
+        "connector_account_id": None,
+        "provider_message_id": None,
     }
     payload.update(overrides)
     return WorkflowAction.rehydrate(**payload)
@@ -97,6 +101,9 @@ def test_valid_workflow_action_starts_pending() -> None:
     assert action.executed_at is None
     assert action.failed_at is None
     assert action.approved_reply_body is None
+    assert action.connector_account_id is None
+    assert action.provider_message_id is None
+    assert action.has_execution_target is False
     assert action.is_terminal is False
 
 
@@ -656,3 +663,76 @@ def test_public_constructor_is_not_rehydrate() -> None:
             approved_reply_body=_PROPOSED_REPLY,
             approved_at=datetime.now(UTC),
         )
+
+
+def test_complete_execution_target_is_executable() -> None:
+    """Both routing identifiers make has_execution_target true."""
+    connector_account_id = uuid4()
+    action = _pending_action(
+        connector_account_id=connector_account_id,
+        provider_message_id="provider-msg-001",
+    )
+    assert action.has_execution_target is True
+    assert action.connector_account_id == connector_account_id
+    assert action.provider_message_id == "provider-msg-001"
+
+
+def test_legacy_targetless_row_rehydrates() -> None:
+    """Phase 11 rows with both routing fields unset remain valid and non-executable."""
+    action = _rehydrate()
+    assert action.connector_account_id is None
+    assert action.provider_message_id is None
+    assert action.has_execution_target is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"connector_account_id": uuid4()},
+        {"provider_message_id": "provider-msg-001"},
+    ],
+)
+def test_half_populated_execution_target_is_rejected(overrides: dict[str, object]) -> None:
+    """A partial execution target cannot be constructed or treated as executable."""
+    with pytest.raises(ValidationError):
+        _pending_action(**overrides)
+    with pytest.raises(ValidationError):
+        _rehydrate(**overrides)
+
+
+def test_approve_and_reject_do_not_change_execution_target() -> None:
+    """Lifecycle transitions keep the snapshotted routing identifiers."""
+    connector_account_id = uuid4()
+    action = _pending_action(
+        connector_account_id=connector_account_id,
+        provider_message_id="provider-msg-001",
+    )
+    action.approve()
+    assert action.connector_account_id == connector_account_id
+    assert action.provider_message_id == "provider-msg-001"
+    assert action.has_execution_target is True
+
+    rejected = _pending_action(
+        connector_account_id=connector_account_id,
+        provider_message_id="provider-msg-001",
+    )
+    rejected.reject()
+    assert rejected.connector_account_id == connector_account_id
+    assert rejected.provider_message_id == "provider-msg-001"
+    assert rejected.has_execution_target is True
+
+
+def test_rehydrate_approved_preserves_execution_target() -> None:
+    """Persisted routing identifiers survive lifecycle rehydration."""
+    connector_account_id = uuid4()
+    now = datetime.now(UTC)
+    action = _rehydrate(
+        status=WorkflowActionStatus.APPROVED,
+        approved_reply_body=_PROPOSED_REPLY,
+        approved_at=now,
+        connector_account_id=connector_account_id,
+        provider_message_id="provider-msg-001",
+    )
+    assert action.has_execution_target is True
+    assert action.connector_account_id == connector_account_id
+    assert action.provider_message_id == "provider-msg-001"

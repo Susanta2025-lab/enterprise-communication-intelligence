@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 11C. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 11D added an internal deterministic execution boundary below HTTP. There is no execute, retry, PATCH, or DELETE workflow endpoint.
+All HTTP endpoints implemented in the repository as of Phase 12A. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 11D added an internal deterministic execution boundary below HTTP. Phase 12A adds `has_execution_target` to workflow responses. There is no execute, retry, PATCH, or DELETE workflow endpoint.
 
 ## `GET /health`
 
@@ -178,7 +178,7 @@ Cross-user access is indistinguishable from an unknown id.
 - **Authentication:** always required. Uses `require_authenticated_communications_workflow`: `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, send `Authorization: Bearer <JWT>` with permission `communications:workflow`.
 - **Response model:** `WorkflowActionResponse`
 - **Status codes:**
-  - `201 Created` — pending workflow action created; `proposed_reply_body` is the draft snapshot; `approved_reply_body` is `null`
+  - `201 Created` — pending workflow action created; `proposed_reply_body` is the draft snapshot; `approved_reply_body` is `null`; `has_execution_target` is `true` only when mailbox routing provenance was snapshotted. That flag does not mean a real provider can send the message.
   - `401` / `403` — authentication/authorization failure (`AUTH_MODE=disabled` is `401`)
   - `404 Not Found` — analysis unknown or not owned by the caller. Body: `{"detail": "Analysis not found."}`
   - `409 Conflict` — analysis has no usable draft reply. Body: `{"detail": "Analysis has no usable draft reply."}`

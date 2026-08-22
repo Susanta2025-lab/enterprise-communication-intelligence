@@ -100,6 +100,8 @@ def test_foreign_keys_cascade_to_users(sqlite_engine: Engine) -> None:
         for fk in workflow_fks
     )
     assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in analysis_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in workflow_fks)
 
 
 def test_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -121,11 +123,12 @@ def test_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
         "summary_confidence",
         "action_items",
         "draft_reply",
+        "connector_account_id",
     }
     assert expected <= columns
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
     assert "subject" not in columns
-    assert "connector_account_id" not in columns
+    assert "connector_account_id" in columns
 
 
 def test_subject_exists_only_on_external_identities(sqlite_engine: Engine) -> None:
@@ -212,6 +215,8 @@ def test_workflow_action_columns_are_minimized(sqlite_engine: Engine) -> None:
         "rejected_at",
         "executed_at",
         "failed_at",
+        "connector_account_id",
+        "provider_message_id",
     }
     assert "proposed_reply_body" in columns
     assert "approved_reply_body" in columns
@@ -223,6 +228,8 @@ def test_workflow_action_columns_are_minimized(sqlite_engine: Engine) -> None:
     assert "token" not in columns
     assert "credential" not in columns
     assert "credential_ref" not in columns
+    assert "thread_id" not in columns
+    assert "conversation_id" not in columns
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
 
 

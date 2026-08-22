@@ -47,3 +47,14 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Analysis has no usable draft reply.")
+
+
+class WorkflowActionNotExecutableError(ECIPlatformError):
+    """Raised when an owned action cannot begin external execution.
+
+    Covers missing execution targets and unusable mailbox accounts. The
+    public message does not distinguish those cases.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Workflow action is not executable.")

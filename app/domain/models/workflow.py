@@ -71,6 +71,8 @@ class WorkflowAction(BaseModel):
     executed_at: datetime | None = None
     failed_at: datetime | None = None
     approved_reply_body: str | None = None
+    connector_account_id: UUID | None = None
+    provider_message_id: str | None = None
 
     @field_validator("proposed_reply_body")
     @classmethod
@@ -86,12 +88,21 @@ class WorkflowAction(BaseModel):
             return None
         return require_non_empty_text(value, "approved_reply_body")
 
+    @field_validator("provider_message_id")
+    @classmethod
+    def validate_provider_message_id(cls, value: str | None) -> str | None:
+        """Normalize an optional provider message identifier."""
+        if value is None:
+            return None
+        return require_non_empty_text(value, "provider_message_id")
+
     @model_validator(mode="after")
     def validate_lifecycle(self, info: ValidationInfo) -> Self:
         """Enforce PENDING-only public construction or persisted lifecycle invariants."""
         rehydrate = bool(info.context and info.context.get(_REHYDRATE_CONTEXT_KEY))
         if not rehydrate and self.status is not WorkflowActionStatus.PENDING:
             raise ValueError("workflow actions must be created with pending status")
+        _validate_execution_target(self)
         _validate_status_invariants(self)
         return self
 
@@ -104,6 +115,18 @@ class WorkflowAction(BaseModel):
     def is_terminal(self) -> bool:
         """Whether Phase 11 allows no further transitions from the current status."""
         return self.status in TERMINAL_WORKFLOW_STATUSES
+
+    @property
+    def has_execution_target(self) -> bool:
+        """Whether both mailbox-routing identifiers are present.
+
+        A half-populated pair is rejected at construction. Legacy and
+        direct-text actions keep both fields unset and are not externally
+        executable.
+        """
+        return (
+            self.connector_account_id is not None and self.provider_message_id is not None
+        )
 
     def approve(self) -> None:
         """Move ``PENDING`` → ``APPROVED`` by copying the proposed reply snapshot."""
@@ -139,6 +162,15 @@ class WorkflowAction(BaseModel):
         allowed = _ALLOWED_TRANSITIONS[self.status]
         if target not in allowed:
             raise InvalidWorkflowTransitionError()
+
+
+def _validate_execution_target(action: WorkflowAction) -> None:
+    account_present = action.connector_account_id is not None
+    message_present = action.provider_message_id is not None
+    if account_present != message_present:
+        raise ValueError(
+            "execution target requires both connector_account_id and provider_message_id"
+        )
 
 
 def _validate_status_invariants(action: WorkflowAction) -> None:

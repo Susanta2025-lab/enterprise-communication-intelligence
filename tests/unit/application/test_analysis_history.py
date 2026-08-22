@@ -4,10 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from app.application.exceptions import AnalysisNotFoundError
+from app.application.exceptions import AnalysisNotFoundError, ConnectorAccountNotFoundError
 from app.application.services.analysis_history import AnalysisHistoryService
 from app.core.exceptions import PersistenceError, ServiceUnavailableError
-from app.domain.enums import MessageCategory, PriorityLevel, SourceType
+from app.domain.enums import ConnectorAccountStatus, MessageCategory, PriorityLevel, SourceType
 from app.domain.models import (
     ActionItem,
     CommunicationAnalysis,
@@ -20,6 +20,7 @@ from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
     UnitOfWorkFactory,
     sample_analysis_record,
+    sample_connector_account,
 )
 from tests.unit.application.conftest import RequestFactory
 
@@ -123,6 +124,7 @@ def test_save_maps_analysis_without_raw_body(make_request: RequestFactory) -> No
     assert saved.summary_text == "Status summary"
     assert saved.provider == "mock"
     assert saved.source_type == SourceType.EMAIL.value
+    assert saved.connector_account_id is None
     assert saved.action_items[0]["description"] == "Review notes"
     assert saved.draft_reply is not None
     assert "SECRET_RAW_BODY_SENTINEL" not in saved.summary_text
@@ -140,3 +142,94 @@ def test_no_identity_mapping_is_represented_by_empty_or_not_found() -> None:
         service.get_for_user(uuid4(), user_id)
     with pytest.raises(AnalysisNotFoundError):
         service.delete_for_user(uuid4(), user_id)
+
+
+def test_save_persists_owned_connector_account_provenance(
+    make_request: RequestFactory,
+) -> None:
+    """Owned connector-account ids round-trip into analysis history."""
+    user_id = uuid4()
+    account = sample_connector_account(user_id)
+    unit = InMemoryUnitOfWork(connector_accounts={account.id: account})
+    service = AnalysisHistoryService(UnitOfWorkFactory(unit))
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+
+    saved = service.save(
+        user_id,
+        request,
+        _result(),
+        connector_account_id=account.id,
+    )
+
+    assert saved.connector_account_id == account.id
+    stored = unit.analyses[saved.id]
+    assert stored.connector_account_id == account.id
+
+
+def test_save_persists_disconnected_owned_connector_account_provenance(
+    make_request: RequestFactory,
+) -> None:
+    """Analysis provenance is not execution eligibility; ACTIVE is not required at save."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        status=ConnectorAccountStatus.DISCONNECTED,
+        credential_ref=None,
+    )
+    unit = InMemoryUnitOfWork(connector_accounts={account.id: account})
+    service = AnalysisHistoryService(UnitOfWorkFactory(unit))
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+
+    saved = service.save(
+        user_id,
+        request,
+        _result(),
+        connector_account_id=account.id,
+    )
+
+    assert saved.connector_account_id == account.id
+    assert unit.commit_calls == 1
+
+
+def test_save_rejects_unowned_connector_account_id(
+    make_request: RequestFactory,
+) -> None:
+    """Arbitrary unowned account ids must not enter analysis persistence."""
+    user_id = uuid4()
+    other = uuid4()
+    account = sample_connector_account(other)
+    unit = InMemoryUnitOfWork(connector_accounts={account.id: account})
+    service = AnalysisHistoryService(UnitOfWorkFactory(unit))
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+
+    with pytest.raises(ConnectorAccountNotFoundError):
+        service.save(
+            user_id,
+            request,
+            _result(),
+            connector_account_id=account.id,
+        )
+
+    assert unit.analyses == {}
+    assert unit.commit_calls == 0
+
+
+def test_save_rejects_missing_connector_account_id(
+    make_request: RequestFactory,
+) -> None:
+    """Unknown account ids are the same not-found outcome as unowned ids."""
+    user_id = uuid4()
+    unit = InMemoryUnitOfWork()
+    service = AnalysisHistoryService(UnitOfWorkFactory(unit))
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+
+    with pytest.raises(ConnectorAccountNotFoundError):
+        service.save(
+            user_id,
+            request,
+            _result(),
+            connector_account_id=uuid4(),
+        )
+
+    assert unit.analyses == {}
+    assert unit.commit_calls == 0

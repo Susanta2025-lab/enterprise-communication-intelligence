@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from uuid import UUID
 
-from app.application.exceptions import AnalysisNotFoundError
+from app.application.exceptions import AnalysisNotFoundError, ConnectorAccountNotFoundError
 from app.core.exceptions import PersistenceError, ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.telemetry import bound_request_id_as_uuid, elapsed_ms, error_class
@@ -30,8 +30,14 @@ class AnalysisHistoryService:
         user_id: UUID,
         request: CommunicationRequest,
         result: CommunicationAnalysisResult,
+        *,
+        connector_account_id: UUID | None = None,
     ) -> AnalysisRecord:
-        """Store a successful analysis result. Does not persist the raw message body."""
+        """Store a successful analysis result. Does not persist the raw message body.
+
+        ``connector_account_id`` is mailbox provenance. Direct-text analysis
+        omits it. When present, the id must already be owned by ``user_id``.
+        """
         started_at = time.perf_counter()
         record = NewAnalysis(
             user_id=user_id,
@@ -51,11 +57,21 @@ class AnalysisHistoryService:
                 if result.analysis.draft_reply is not None
                 else None
             ),
+            connector_account_id=connector_account_id,
         )
         try:
             with self._unit_of_work_factory() as uow:
+                if connector_account_id is not None:
+                    owned_account = uow.connector_accounts.get_owned(
+                        connector_account_id,
+                        user_id,
+                    )
+                    if owned_account is None:
+                        raise ConnectorAccountNotFoundError()
                 saved = uow.analysis_repository.save(record)
                 uow.commit()
+        except ConnectorAccountNotFoundError:
+            raise
         except PersistenceError as exc:
             logger.warning(
                 "analysis_persistence_failed",

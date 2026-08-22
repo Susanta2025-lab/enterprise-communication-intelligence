@@ -7,6 +7,7 @@ import pytest
 
 from app.application.exceptions import (
     WorkflowActionConflictError,
+    WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
 from app.application.services.identity import IdentityResolver
@@ -17,7 +18,7 @@ from app.core.exceptions import (
     ServiceUnavailableError,
 )
 from app.core.security import AuthenticatedPrincipal
-from app.domain.enums import WorkflowActionStatus, WorkflowActionType
+from app.domain.enums import ConnectorAccountStatus, WorkflowActionStatus, WorkflowActionType
 from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
@@ -33,6 +34,7 @@ from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
     UnitOfWorkFactory,
     sample_analysis_record,
+    sample_connector_account,
 )
 from tests.support.jwt_tokens import TEST_PERMISSION
 
@@ -42,6 +44,8 @@ _SUBJECT_A = "subject-a"
 _SUBJECT_B = "subject-b"
 _DRAFT_BODY = "Thanks, I will review the report and respond by Friday."
 _APPROVED_BODY = "Authorized reply snapshot that differs from the proposal."
+_PROVIDER_MESSAGE_ID = "provider-msg-001"
+_PROVIDER = "fake"
 
 
 def _principal(
@@ -56,8 +60,17 @@ def _principal(
     )
 
 
-def _analysis(user_id: UUID, *, draft_body: str | None = _DRAFT_BODY):
+def _analysis(
+    user_id: UUID,
+    *,
+    draft_body: str | None = _DRAFT_BODY,
+    connector_account_id: UUID | None = None,
+    message_id: str | None = "msg-001",
+):
     extra: dict[str, object] = {}
+    if connector_account_id is not None:
+        extra["connector_account_id"] = connector_account_id
+    extra["message_id"] = message_id
     if draft_body is None:
         extra["draft_reply"] = None
     else:
@@ -89,7 +102,23 @@ def _execution_service(
 
 def _seeded_unit() -> tuple[InMemoryUnitOfWork, UUID, UUID]:
     user_id = uuid4()
-    analysis = _analysis(user_id)
+    account = sample_connector_account(user_id, provider=_PROVIDER)
+    analysis = _analysis(
+        user_id,
+        connector_account_id=account.id,
+        message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        analyses={analysis.id: analysis},
+        connector_accounts={account.id: account},
+    )
+    return unit, user_id, analysis.id
+
+
+def _targetless_unit() -> tuple[InMemoryUnitOfWork, UUID, UUID]:
+    user_id = uuid4()
+    analysis = _analysis(user_id, connector_account_id=None, message_id="msg-001")
     unit = InMemoryUnitOfWork(
         identities={(_ISSUER_A, _SUBJECT_A): user_id},
         analyses={analysis.id: analysis},
@@ -121,6 +150,8 @@ def _rehydrate(**overrides: object) -> WorkflowAction:
         "executed_at": None,
         "failed_at": None,
         "approved_reply_body": _DRAFT_BODY,
+        "connector_account_id": None,
+        "provider_message_id": None,
     }
     payload.update(overrides)
     return WorkflowAction.rehydrate(**payload)
@@ -134,6 +165,7 @@ def _shared_unit(
     return InMemoryUnitOfWork(
         identities=unit.identities,
         analyses=unit.analyses,
+        connector_accounts=unit.connector_account_store,
         workflow_actions=unit.workflow_action_store,
         fail_on_enter=fail_on_enter,
     )
@@ -197,6 +229,9 @@ def test_execute_success_persists_executed() -> None:
     assert len(executor.calls) == 1
     assert executor.calls[0].action_id == approved.id
     assert executor.calls[0].approved_reply_body == _DRAFT_BODY
+    assert executor.calls[0].provider_message_id == _PROVIDER_MESSAGE_ID
+    assert executor.calls[0].provider == _PROVIDER
+    assert executor.calls[0].connector_account_id is not None
     assert unit.analysis_repository.get_calls == 0
     assert unit.identity_repository.create_calls == 0
     stored = unit.workflow_action_store[approved.id]
@@ -314,11 +349,13 @@ def test_tx1_conflict_does_not_call_executor() -> None:
     """Optimistic TX1 conflict fails closed before the side effect."""
     unit, _user_id, analysis_id = _seeded_unit()
     approved = _approved_action(unit, analysis_id)
+    captured: list[object] = []
 
     def _conflict(
         action: WorkflowAction,
         expected_status: object,
     ) -> WorkflowActionSaveResult:
+        captured.append(expected_status)
         return WorkflowActionSaveResult(outcome=WorkflowActionSaveOutcome.CONFLICT)
 
     unit.workflow_actions.save_owned = _conflict  # type: ignore[method-assign]
@@ -327,6 +364,7 @@ def test_tx1_conflict_does_not_call_executor() -> None:
     with pytest.raises(WorkflowActionConflictError):
         service.execute(_principal(), approved.id)
 
+    assert captured == [WorkflowActionStatus.APPROVED]
     assert executor.calls == []
 
 
@@ -436,7 +474,12 @@ def test_analysis_hard_delete_does_not_block_execution() -> None:
 
     assert result.status is WorkflowActionStatus.EXECUTED
     assert result.approved_reply_body == _DRAFT_BODY
+    assert result.has_execution_target is True
     assert len(executor.calls) == 1
+    command = executor.calls[0]
+    assert command.provider_message_id == _PROVIDER_MESSAGE_ID
+    assert command.provider == _PROVIDER
+    assert command.connector_account_id == approved.connector_account_id
     assert unit.analysis_repository.get_calls == 0
     assert analysis_id not in unit.analyses
 
@@ -444,13 +487,17 @@ def test_analysis_hard_delete_does_not_block_execution() -> None:
 def test_executor_receives_approved_snapshot_not_proposal() -> None:
     """The write command is built from approved_reply_body, even when it differs."""
     user_id = uuid4()
+    account = sample_connector_account(user_id, provider=_PROVIDER)
     action = _rehydrate(
         owner_user_id=user_id,
         proposed_reply_body=_DRAFT_BODY,
         approved_reply_body=_APPROVED_BODY,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
     )
     unit = InMemoryUnitOfWork(
         identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
         workflow_actions={action.id: action},
     )
     service, executor = _execution_service(unit)
@@ -462,11 +509,18 @@ def test_executor_receives_approved_snapshot_not_proposal() -> None:
     command = executor.calls[0]
     assert command.approved_reply_body == _APPROVED_BODY
     assert command.approved_reply_body != _DRAFT_BODY
+    assert command.connector_account_id == account.id
+    assert command.provider_message_id == _PROVIDER_MESSAGE_ID
+    assert command.provider == _PROVIDER
     assert not hasattr(command, "proposed_reply_body")
+    assert not hasattr(command, "credential_ref")
     assert set(CommunicationActionExecution.model_fields) == {
         "action_id",
         "action_type",
         "approved_reply_body",
+        "connector_account_id",
+        "provider_message_id",
+        "provider",
     }
 
 
@@ -477,6 +531,7 @@ def test_tx2_persistence_failure_after_success_leaves_executing() -> None:
     tx2 = InMemoryUnitOfWork(
         identities=unit.identities,
         analyses=unit.analyses,
+        connector_accounts=unit.connector_account_store,
         workflow_actions=unit.workflow_action_store,
         fail_on_enter=PersistenceError("Could not persist workflow action."),
     )
@@ -501,6 +556,7 @@ def test_tx2_persistence_failure_after_fake_failure_leaves_executing() -> None:
     tx2 = InMemoryUnitOfWork(
         identities=unit.identities,
         analyses=unit.analyses,
+        connector_accounts=unit.connector_account_store,
         workflow_actions=unit.workflow_action_store,
         fail_on_enter=PersistenceError("Could not persist workflow action."),
     )
@@ -617,3 +673,164 @@ def test_tx2_save_not_found_does_not_return_terminal_or_retry() -> None:
     assert stored.status is WorkflowActionStatus.EXECUTING
     assert stored.executed_at is None
     assert stored.failed_at is None
+
+
+def test_targetless_approved_action_fails_before_execution_state_write() -> None:
+    """Direct-text and Phase 11 rows are not executable and do not change state."""
+    unit, _user_id, analysis_id = _targetless_unit()
+    approved = _approved_action(unit, analysis_id)
+    commits_before = unit.commit_calls
+    saves_before = unit.workflow_actions.save_calls
+    service, executor = _execution_service(unit)
+
+    with pytest.raises(WorkflowActionNotExecutableError) as exc_info:
+        service.execute(_principal(), approved.id)
+
+    assert exc_info.value.message == "Workflow action is not executable."
+    assert "connector" not in exc_info.value.message.lower()
+    assert executor.calls == []
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_actions.save_calls == saves_before
+    stored = unit.workflow_action_store[approved.id]
+    assert stored.status is WorkflowActionStatus.APPROVED
+    assert stored.has_execution_target is False
+
+
+def test_cross_user_connector_account_is_not_executable() -> None:
+    """An owned action whose snapshotted account belongs to another user fails closed."""
+    owner = uuid4()
+    other = uuid4()
+    foreign_account = sample_connector_account(other, provider=_PROVIDER)
+    action = _rehydrate(
+        owner_user_id=owner,
+        connector_account_id=foreign_account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): owner},
+        connector_accounts={foreign_account.id: foreign_account},
+        workflow_actions={action.id: action},
+    )
+    commits_before = unit.commit_calls
+    saves_before = unit.workflow_actions.save_calls
+    service, executor = _execution_service(unit)
+
+    with pytest.raises(WorkflowActionNotExecutableError) as exc_info:
+        service.execute(_principal(), action.id)
+
+    assert exc_info.value.message == "Workflow action is not executable."
+    assert str(other) not in exc_info.value.message
+    assert str(foreign_account.id) not in exc_info.value.message
+    assert executor.calls == []
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_actions.save_calls == saves_before
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
+def test_disconnected_connector_account_is_not_executable() -> None:
+    """A snapshotted account that is now disconnected fails before the EXECUTING write."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        provider=_PROVIDER,
+        status=ConnectorAccountStatus.DISCONNECTED,
+        credential_ref=None,
+    )
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    commits_before = unit.commit_calls
+    saves_before = unit.workflow_actions.save_calls
+    service, executor = _execution_service(unit)
+
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), action.id)
+
+    assert executor.calls == []
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_actions.save_calls == saves_before
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
+def test_missing_connector_account_is_not_executable() -> None:
+    """A snapshotted account that no longer exists fails before the EXECUTING write."""
+    user_id = uuid4()
+    missing_account_id = uuid4()
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=missing_account_id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        workflow_actions={action.id: action},
+    )
+    commits_before = unit.commit_calls
+    saves_before = unit.workflow_actions.save_calls
+    service, executor = _execution_service(unit)
+
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), action.id)
+
+    assert executor.calls == []
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_actions.save_calls == saves_before
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
+def test_provider_is_resolved_from_owned_connector_account() -> None:
+    """Mailbox provider comes from ConnectorAccount, not the caller or AI provider."""
+    user_id = uuid4()
+    account = sample_connector_account(user_id, provider="microsoft_graph")
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    service, executor = _execution_service(unit)
+
+    result = service.execute(_principal(), action.id)
+
+    assert result.status is WorkflowActionStatus.EXECUTED
+    assert executor.calls[0].provider == "microsoft_graph"
+    assert executor.calls[0].provider != "mock"
+
+
+def test_active_account_without_credential_ref_is_structurally_executable() -> None:
+    """12A treats ACTIVE as executable without inspecting credential_ref."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        provider=_PROVIDER,
+        credential_ref=None,
+    )
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    service, executor = _execution_service(unit)
+
+    result = service.execute(_principal(), action.id)
+
+    assert result.status is WorkflowActionStatus.EXECUTED
+    assert len(executor.calls) == 1
+    assert executor.calls[0].provider == _PROVIDER
+    assert "credential_ref" not in CommunicationActionExecution.model_fields

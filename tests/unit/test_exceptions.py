@@ -7,6 +7,7 @@ from app.application.exceptions import (
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
     WorkflowActionConflictError,
+    WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
 from app.core.exceptions import (
@@ -40,6 +41,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(WorkflowActionNotFoundError, ECIPlatformError)
     assert issubclass(WorkflowActionConflictError, ECIPlatformError)
     assert issubclass(AnalysisHasNoDraftReplyError, ECIPlatformError)
+    assert issubclass(WorkflowActionNotExecutableError, ECIPlatformError)
     assert issubclass(ConnectorError, ECIPlatformError)
     assert issubclass(ConnectorAuthenticationError, ConnectorError)
     assert issubclass(ConnectorPermissionError, ConnectorError)
@@ -73,6 +75,8 @@ def test_workflow_action_errors_have_generic_messages() -> None:
     assert str(WorkflowActionNotFoundError()) == "Workflow action not found."
     assert WorkflowActionConflictError().message == "Workflow action was updated concurrently."
     assert AnalysisHasNoDraftReplyError().message == "Analysis has no usable draft reply."
+    assert WorkflowActionNotExecutableError().message == "Workflow action is not executable."
+    assert "connector" not in WorkflowActionNotExecutableError().message.lower()
 
 
 def test_exception_message_is_preserved() -> None:

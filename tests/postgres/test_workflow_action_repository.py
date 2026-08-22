@@ -48,12 +48,20 @@ _FORBIDDEN_COLUMNS = frozenset(
 )
 
 
-def _pending(owner_user_id: UUID, *, analysis_id: UUID | None = None) -> WorkflowAction:
+def _pending(
+    owner_user_id: UUID,
+    *,
+    analysis_id: UUID | None = None,
+    connector_account_id: UUID | None = None,
+    provider_message_id: str | None = None,
+) -> WorkflowAction:
     return WorkflowAction(
         action_type=WorkflowActionType.REPLY,
         analysis_id=analysis_id or uuid4(),
         owner_user_id=owner_user_id,
         proposed_reply_body=_PROPOSAL,
+        connector_account_id=connector_account_id,
+        provider_message_id=provider_message_id,
     )
 
 
@@ -88,6 +96,8 @@ def test_workflow_action_column_types(postgres_engine: Engine) -> None:
     assert types[("workflow_actions", "status")] == "text"
     assert types[("workflow_actions", "proposed_reply_body")] == "text"
     assert types[("workflow_actions", "approved_reply_body")] == "text"
+    assert types[("workflow_actions", "connector_account_id")] == "uuid"
+    assert types[("workflow_actions", "provider_message_id")] == "text"
     inspector = inspect(postgres_engine)
     columns = {
         column["name"]: column["nullable"]
@@ -97,6 +107,8 @@ def test_workflow_action_column_types(postgres_engine: Engine) -> None:
     assert columns["approved_reply_body"] is True
     assert columns["analysis_id"] is False
     assert columns["user_id"] is False
+    assert columns["connector_account_id"] is True
+    assert columns["provider_message_id"] is True
     assert set(columns).isdisjoint(_FORBIDDEN_COLUMNS)
     assert "proposed_reply_body" in columns
     assert "approved_reply_body" in columns
@@ -122,6 +134,7 @@ def test_no_analysis_foreign_key(postgres_engine: Engine) -> None:
     fks = inspector.get_foreign_keys("workflow_actions")
     assert all(fk["referred_table"] != "analyses" for fk in fks)
     assert all("analysis_id" not in fk["constrained_columns"] for fk in fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in fks)
 
 
 def test_check_constraints_and_list_index(postgres_engine: Engine) -> None:
@@ -133,6 +146,16 @@ def test_check_constraints_and_list_index(postgres_engine: Engine) -> None:
     }
     assert "ck_workflow_actions_action_type" in checks
     assert "ck_workflow_actions_status" in checks
+    assert "ck_workflow_actions_execution_target" in checks
+    target = next(
+        constraint
+        for constraint in inspector.get_check_constraints("workflow_actions")
+        if constraint["name"] == "ck_workflow_actions_execution_target"
+    )
+    sqltext = str(target.get("sqltext") or "")
+    assert "connector_account_id" in sqltext
+    assert "provider_message_id" in sqltext
+    assert "IS NULL" in sqltext.upper()
     indexes = {index["name"] for index in inspector.get_indexes("workflow_actions")}
     assert "ix_workflow_actions_user_id_created_at_id" in indexes
 
@@ -310,6 +333,99 @@ def test_orphan_analysis_id_is_allowed(session_factory: sessionmaker) -> None:
         assert loaded.analysis_id == missing_analysis_id
         count = session.scalar(select(func.count()).select_from(Analysis))
         assert count == 0
+
+
+def test_execution_target_round_trips(session_factory: sessionmaker) -> None:
+    """PostgreSQL persists mailbox routing identifiers and rehydrates them."""
+    user_a, _user_b = _create_users(session_factory)
+    account_id = uuid4()
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        created = repository.add(
+            _pending(
+                user_a,
+                connector_account_id=account_id,
+                provider_message_id="provider-msg-001",
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        found = repository.get_owned(created.id, user_a)
+        listed = repository.list_owned(user_a, limit=20, offset=0)
+
+    assert found is not None
+    assert found.connector_account_id == account_id
+    assert found.provider_message_id == "provider-msg-001"
+    assert found.has_execution_target is True
+    assert listed[0].connector_account_id == account_id
+    assert listed[0].provider_message_id == "provider-msg-001"
+
+
+def test_partial_execution_target_is_rejected(session_factory: sessionmaker) -> None:
+    """PostgreSQL CHECK must reject a half-populated execution target."""
+    user_a, _user_b = _create_users(session_factory)
+    with session_factory() as session:
+        with pytest.raises(IntegrityError):
+            session.add(
+                WorkflowActionRow(
+                    id=uuid4(),
+                    user_id=user_a,
+                    analysis_id=uuid4(),
+                    action_type="reply",
+                    status="pending",
+                    proposed_reply_body=_PROPOSAL,
+                    connector_account_id=uuid4(),
+                    provider_message_id=None,
+                )
+            )
+            session.commit()
+        session.rollback()
+        with pytest.raises(IntegrityError):
+            session.add(
+                WorkflowActionRow(
+                    id=uuid4(),
+                    user_id=user_a,
+                    analysis_id=uuid4(),
+                    action_type="reply",
+                    status="pending",
+                    proposed_reply_body=_PROPOSAL,
+                    connector_account_id=None,
+                    provider_message_id="provider-msg-orphan",
+                )
+            )
+            session.commit()
+
+
+def test_save_owned_does_not_rewrite_execution_target(
+    session_factory: sessionmaker,
+) -> None:
+    """Conditional lifecycle updates must leave PostgreSQL routing columns unchanged."""
+    user_a, _user_b = _create_users(session_factory)
+    account_id = uuid4()
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        created = repository.add(
+            _pending(
+                user_a,
+                connector_account_id=account_id,
+                provider_message_id="provider-msg-001",
+            )
+        )
+        created.approve()
+        result = repository.save_owned(created, expected_status=WorkflowActionStatus.PENDING)
+        session.commit()
+
+    assert result.action is not None
+    assert result.action.connector_account_id == account_id
+    assert result.action.provider_message_id == "provider-msg-001"
+    with session_factory() as session:
+        repository = SqlAlchemyWorkflowActionRepository(session)
+        loaded = repository.get_owned(result.action.id, user_a)
+        assert loaded is not None
+        assert loaded.connector_account_id == account_id
+        assert loaded.provider_message_id == "provider-msg-001"
 
 
 def _udt_types(engine: Engine) -> dict[tuple[str, str], str]:

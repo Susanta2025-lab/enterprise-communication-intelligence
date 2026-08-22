@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 11D. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 12A. Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -123,7 +123,7 @@ tests/
 └── postgres/                    # skipped locally unless ECI_POSTGRES_TEST_DATABASE_URL is set
 
 alembic/
-└── versions/                    # 9a0001, 10b0001, 11b0001
+└── versions/                    # 9a0001, 10b0001, 11b0001, 12a0001
 
 docs/
 ├── roadmap/                     # phase-by-phase roadmap

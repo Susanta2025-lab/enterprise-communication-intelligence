@@ -52,7 +52,7 @@ Identifier classes:
 | `message_id` | business request | Caller-supplied source message identifier |
 | `user_id` | persistence | Internal ownership UUID |
 
-`source_type` and optional `message_id` are stored so connectors can correlate analyses. Phase 9 did not store connection records, OAuth tokens, ingested messages, or sync cursors. Phase 10 added `connector_accounts` only. It still does not store OAuth tokens, ingested messages, or sync cursors.
+`source_type` and optional `message_id` are stored so connectors can correlate analyses. Phase 12A adds optional `analyses.connector_account_id` mailbox provenance. That field is not the AI provider identity (`mock` / Foundry / Bedrock). Direct-text analysis leaves it `NULL`. Phase 9 did not store connection records, OAuth tokens, ingested messages, or sync cursors. Phase 10 added `connector_accounts` only. It still does not store OAuth tokens, ingested messages, or sync cursors.
 
 ## Data minimization
 
@@ -134,7 +134,7 @@ Do not auto-migrate from FastAPI startup. Do not let every Azure Container Apps 
 
 Alembic reads `DATABASE_URL` through a storage-level resolver. It does not load application Settings or OIDC configuration.
 
-Current head revision: `11b0001` (follows `10b0001`, which follows `9a0001`).
+Current head revision: `12a0001` (follows `11b0001`, which follows `10b0001`, which follows `9a0001`).
 
 ## Rollback and expand/contract
 
@@ -258,7 +258,7 @@ Phase 11B added `workflow_actions`:
 | `approved_reply_body` | Authorization snapshot written on approve; null until then |
 | timestamps | `created_at` required; `approved_at` / `rejected_at` / `executed_at` / `failed_at` nullable |
 
-There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. An APPROVED action remains executable after the source analysis is gone because execution uses `approved_reply_body`. Conditional updates require the stored `status` to match `expected_status`.
+There is no `updated_at`, inbound mail, recipient, subject, token, or `credential_ref` column. Analysis hard-delete leaves the workflow row intact. A PENDING action remains approvable after the source analysis is gone. Phase 12A additionally requires a snapshotted execution target and an owned active `ConnectorAccount` before `APPROVED` → `EXECUTING`; targetless Phase 11 rows stay valid historical records but are not externally executable. Conditional updates require the stored `status` to match `expected_status`.
 
 Phase 11C exposes this table over HTTP. It does not change the schema, Alembic revisions, or `WorkflowActionRepository`.
 
@@ -276,6 +276,35 @@ resolve owner identity
 ```
 
 Known fake failure becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`. If the executor completes and TX2 fails, or the process crashes between them, the row may remain `EXECUTING`. Phase 11 does not add retry, outbox, reconciliation, or `EXECUTION_UNKNOWN`.
+
+## Phase 12A execution-target provenance
+
+Phase 12A adds mailbox routing identifiers without changing the two-transaction execution boundary.
+
+`analyses.connector_account_id` is nullable provenance for connector-ingested analyses. Direct-text analyses remain `NULL`. There is no database FK to `connector_accounts`, so analysis history is not coupled to connector-account lifecycle. Analysis provenance is not execution eligibility: storing the id does not require `ACTIVE`, and a later disconnect does not rewrite historical analysis rows.
+
+`workflow_actions` snapshots at create:
+
+| Field | Purpose |
+|---|---|
+| `connector_account_id` | Owned mailbox account that produced the source communication; nullable |
+| `provider_message_id` | Opaque provider message identifier; nullable |
+
+Both are `NULL` on legacy Phase 11 rows. Those rows remain valid and are not externally executable. A half-populated pair is rejected by the domain and by `ck_workflow_actions_execution_target`. There is no FK from `workflow_actions.connector_account_id` to `connector_accounts`. Execution validates the account with owner-scoped `get_owned` before `APPROVED` → `EXECUTING`.
+
+```text
+resolve owner identity
+→ TX1: load owned WorkflowAction
+  require has_execution_target
+  load owned active ConnectorAccount
+  APPROVED → EXECUTING, commit, close
+→ CommunicationActionExecutor.execute(command)
+→ TX2: EXECUTING → EXECUTED or FAILED, commit
+```
+
+`ACTIVE` is structural executability in 12A. Execution does not inspect `credential_ref`. An `ACTIVE` account may have a null locator; credential resolution is Phase 12B.
+
+The command carries `approved_reply_body` plus `connector_account_id`, `provider_message_id`, and `provider` resolved from the owned `ConnectorAccount`. It does not carry credentials or tokens. Analysis is not reloaded. Fake execution remains the only write implementation in 12A.
 
 ## Performance and operations (deferred)
 

@@ -1,8 +1,9 @@
 """Execute an already-approved workflow action through a write port.
 
 ``WorkflowActionService`` remains the proposal/approval lifecycle. This service
-commits ``APPROVED`` → ``EXECUTING`` before any executor call, holds no unit of
-work across that call, then records ``EXECUTED`` or ``FAILED``.
+validates mailbox routing before ``APPROVED`` → ``EXECUTING``, commits that
+transition before any executor call, holds no unit of work across that call,
+then records ``EXECUTED`` or ``FAILED``.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from uuid import UUID
 
 from app.application.exceptions import (
     WorkflowActionConflictError,
+    WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
 from app.application.services.identity import IdentityResolver
@@ -24,11 +26,12 @@ from app.core.exceptions import (
 from app.core.logging import get_logger
 from app.core.security import AuthenticatedPrincipal
 from app.core.telemetry import elapsed_ms, error_class
-from app.domain.enums import WorkflowActionStatus
+from app.domain.enums import ConnectorAccountStatus, WorkflowActionStatus
 from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
 )
+from app.domain.interfaces.connector_account_repository import ConnectorAccountRecord
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionSaveOutcome,
@@ -99,6 +102,8 @@ class WorkflowActionExecutionService:
             "workflow_action_executed",
             operation="execute",
             workflow_action_id=str(saved.id),
+            connector_account_id=str(command.connector_account_id),
+            provider=command.provider,
             duration_ms=elapsed_ms(started_at),
             status=saved.status.value,
         )
@@ -115,15 +120,44 @@ class WorkflowActionExecutionService:
                 action = uow.workflow_actions.get_owned(action_id, user_id)
                 if action is None:
                     raise WorkflowActionNotFoundError()
+                if action.status is not WorkflowActionStatus.APPROVED:
+                    action.mark_executing()
+                if not action.has_execution_target:
+                    logger.info(
+                        "workflow_action_not_executable",
+                        operation="execute",
+                        workflow_action_id=str(action.id),
+                        has_execution_target=False,
+                        status=action.status.value,
+                        duration_ms=elapsed_ms(started_at),
+                    )
+                    raise WorkflowActionNotExecutableError()
+                connector_account_id = action.connector_account_id
+                if connector_account_id is None:
+                    raise WorkflowActionNotExecutableError()
+                account = uow.connector_accounts.get_owned(connector_account_id, user_id)
+                if not _connector_account_is_usable(account):
+                    logger.info(
+                        "workflow_action_not_executable",
+                        operation="execute",
+                        workflow_action_id=str(action.id),
+                        connector_account_id=str(connector_account_id),
+                        has_execution_target=True,
+                        status=action.status.value,
+                        duration_ms=elapsed_ms(started_at),
+                    )
+                    raise WorkflowActionNotExecutableError()
                 action.mark_executing()
                 result = uow.workflow_actions.save_owned(
                     action,
                     expected_status=WorkflowActionStatus.APPROVED,
                 )
                 saved = _require_save_success(result)
+                command = _execution_command(saved, provider=account.provider)
                 uow.commit()
-                command = _execution_command(saved)
         except WorkflowActionNotFoundError:
+            raise
+        except WorkflowActionNotExecutableError:
             raise
         except WorkflowActionConflictError:
             raise
@@ -141,6 +175,9 @@ class WorkflowActionExecutionService:
             "workflow_action_execution_started",
             operation="execute",
             workflow_action_id=str(command.action_id),
+            connector_account_id=str(command.connector_account_id),
+            provider=command.provider,
+            has_execution_target=True,
             duration_ms=elapsed_ms(started_at),
             status=WorkflowActionStatus.EXECUTING.value,
         )
@@ -191,14 +228,31 @@ class WorkflowActionExecutionService:
         return user_id
 
 
-def _execution_command(action: WorkflowAction) -> CommunicationActionExecution:
+def _connector_account_is_usable(account: ConnectorAccountRecord | None) -> bool:
+    return account is not None and account.status is ConnectorAccountStatus.ACTIVE
+
+
+def _execution_command(
+    action: WorkflowAction,
+    *,
+    provider: str,
+) -> CommunicationActionExecution:
     approved_reply_body = action.approved_reply_body
-    if approved_reply_body is None:
+    connector_account_id = action.connector_account_id
+    provider_message_id = action.provider_message_id
+    if (
+        approved_reply_body is None
+        or connector_account_id is None
+        or provider_message_id is None
+    ):
         raise PersistenceError("Could not persist workflow action.")
     return CommunicationActionExecution(
         action_id=action.id,
         action_type=action.action_type,
         approved_reply_body=approved_reply_body,
+        connector_account_id=connector_account_id,
+        provider_message_id=provider_message_id,
+        provider=provider,
     )
 
 

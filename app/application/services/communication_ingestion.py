@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from uuid import UUID
 
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
@@ -21,15 +22,20 @@ class CommunicationIngestionService:
 
     Identity remains on ``CommunicationAnalysisWorkflowService``. This service
     does not perform AI analysis, persist analyses, or interpret vendor SDKs.
+    ``connector_account_id`` is mailbox provenance from an already owned
+    connector-account context. Direct-text analysis never supplies it.
     """
 
     def __init__(
         self,
         connector: CommunicationConnector,
         analysis_workflow: CommunicationAnalysisWorkflowService,
+        *,
+        connector_account_id: UUID | None = None,
     ) -> None:
         self._connector = connector
         self._analysis_workflow = analysis_workflow
+        self._connector_account_id = connector_account_id
 
     def analyze_message(self, provider_message_id: str) -> PersistedAnalysisOutcome:
         """Fetch one message and analyze it through the injected workflow."""
@@ -56,4 +62,7 @@ class CommunicationIngestionService:
         )
 
         request = CommunicationRequest(message=message)
-        return self._analysis_workflow.analyze(request)
+        return self._analysis_workflow.analyze(
+            request,
+            connector_account_id=self._connector_account_id,
+        )

@@ -107,24 +107,35 @@ def test_communication_action_executor_interface_is_abstract() -> None:
 def test_communication_action_execution_is_immutable_and_validated() -> None:
     """The executor command is a frozen approved-snapshot, not a workflow entity."""
     action_id = uuid4()
+    connector_account_id = uuid4()
     command = CommunicationActionExecution(
         action_id=action_id,
         action_type=WorkflowActionType.REPLY,
         approved_reply_body="  Thanks, I will review the report and respond by Friday.  ",
+        connector_account_id=connector_account_id,
+        provider_message_id="provider-msg-001",
+        provider="fake",
     )
     assert command.action_id == action_id
     assert command.action_type is WorkflowActionType.REPLY
     assert command.approved_reply_body == (
         "Thanks, I will review the report and respond by Friday."
     )
+    assert command.connector_account_id == connector_account_id
+    assert command.provider_message_id == "provider-msg-001"
+    assert command.provider == "fake"
     assert set(CommunicationActionExecution.model_fields) == {
         "action_id",
         "action_type",
         "approved_reply_body",
+        "connector_account_id",
+        "provider_message_id",
+        "provider",
     }
     assert "proposed_reply_body" not in CommunicationActionExecution.model_fields
     assert "analysis_id" not in CommunicationActionExecution.model_fields
     assert "owner_user_id" not in CommunicationActionExecution.model_fields
+    assert "credential_ref" not in CommunicationActionExecution.model_fields
     with pytest.raises(ValidationError):
         command.action_id = uuid4()  # type: ignore[misc]
     with pytest.raises(ValidationError):
@@ -132,10 +143,19 @@ def test_communication_action_execution_is_immutable_and_validated() -> None:
     with pytest.raises(ValidationError):
         command.approved_reply_body = "mutated"  # type: ignore[misc]
     with pytest.raises(ValidationError):
+        command.connector_account_id = uuid4()  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        command.provider_message_id = "mutated"  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        command.provider = "gmail"  # type: ignore[misc]
+    with pytest.raises(ValidationError):
         CommunicationActionExecution(
             action_id=action_id,
             action_type=WorkflowActionType.REPLY,
             approved_reply_body="   ",
+            connector_account_id=connector_account_id,
+            provider_message_id="provider-msg-001",
+            provider="fake",
         )
     with pytest.raises(ValidationError):
         CommunicationActionExecution.model_validate(
@@ -143,6 +163,9 @@ def test_communication_action_execution_is_immutable_and_validated() -> None:
                 "action_id": action_id,
                 "action_type": WorkflowActionType.REPLY,
                 "approved_reply_body": "Thanks, I will review the report.",
+                "connector_account_id": str(connector_account_id),
+                "provider_message_id": "provider-msg-001",
+                "provider": "fake",
                 "proposed_reply_body": "ignored",
             }
         )

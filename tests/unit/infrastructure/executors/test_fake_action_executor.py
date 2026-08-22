@@ -32,6 +32,9 @@ def _command(**overrides: object) -> CommunicationActionExecution:
         "action_id": uuid4(),
         "action_type": WorkflowActionType.REPLY,
         "approved_reply_body": _REPLY,
+        "connector_account_id": uuid4(),
+        "provider_message_id": "provider-msg-001",
+        "provider": "fake",
     }
     payload.update(overrides)
     return CommunicationActionExecution.model_validate(payload)

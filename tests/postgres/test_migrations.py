@@ -101,6 +101,8 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
     assert connector_ok
     assert workflow_ok
     assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in analysis_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in workflow_fks)
 
 
 def test_external_identity_unique_constraint_named(postgres_engine: Engine) -> None:
@@ -151,6 +153,7 @@ def test_nullability(postgres_engine: Engine) -> None:
     assert analyses["message_id"] is True
     assert analyses["summary_confidence"] is True
     assert analyses["draft_reply"] is True
+    assert analyses["connector_account_id"] is True
 
 
 def test_uuid_column_types(postgres_engine: Engine) -> None:
@@ -164,6 +167,7 @@ def test_uuid_column_types(postgres_engine: Engine) -> None:
             ("analyses", "id"),
             ("analyses", "user_id"),
             ("analyses", "request_id"),
+            ("analyses", "connector_account_id"),
         },
     )
     assert set(types.values()) == {"uuid"}
@@ -238,6 +242,7 @@ def _udt_types(engine: Engine, columns: set[tuple[str, str]]) -> dict[tuple[str,
                       ('analyses', 'id'),
                       ('analyses', 'user_id'),
                       ('analyses', 'request_id'),
+                      ('analyses', 'connector_account_id'),
                       ('analyses', 'created_at'),
                       ('analyses', 'updated_at'),
                       ('analyses', 'action_items'),

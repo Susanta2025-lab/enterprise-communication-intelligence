@@ -51,9 +51,16 @@ class _RecordingWorkflow:
     def __init__(self, outcome: PersistedAnalysisOutcome) -> None:
         self.outcome = outcome
         self.calls: list[CommunicationRequest] = []
+        self.connector_account_ids: list[object] = []
 
-    def analyze(self, request: CommunicationRequest) -> PersistedAnalysisOutcome:
+    def analyze(
+        self,
+        request: CommunicationRequest,
+        *,
+        connector_account_id=None,
+    ) -> PersistedAnalysisOutcome:
         self.calls.append(request)
+        self.connector_account_ids.append(connector_account_id)
         return self.outcome
 
 
@@ -61,7 +68,12 @@ class _FailingWorkflow:
     def __init__(self) -> None:
         self.calls: list[CommunicationRequest] = []
 
-    def analyze(self, request: CommunicationRequest) -> PersistedAnalysisOutcome:
+    def analyze(
+        self,
+        request: CommunicationRequest,
+        *,
+        connector_account_id=None,
+    ) -> PersistedAnalysisOutcome:
         self.calls.append(request)
         raise AnalysisFailedError("AI provider failed to analyze the communication.")
 
@@ -210,6 +222,43 @@ def test_fetch_telemetry_omits_content_and_cursor(
     assert request.message.body not in serialized
     assert (request.message.metadata.subject or "") not in serialized
     assert "fake-msg-001" not in serialized
+
+
+def test_ingestion_forwards_connector_account_provenance(
+    make_request: RequestFactory,
+) -> None:
+    """Mailbox ingestion supplies connector_account_id to analysis persistence."""
+    from uuid import uuid4
+
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+    connector = _RecordingConnector(request.message)
+    workflow = _RecordingWorkflow(_outcome())
+    account_id = uuid4()
+    service = CommunicationIngestionService(
+        connector,
+        workflow,  # type: ignore[arg-type]
+        connector_account_id=account_id,
+    )
+
+    service.analyze_message("fake-msg-001")
+
+    assert workflow.connector_account_ids == [account_id]
+
+
+def test_ingestion_without_account_does_not_fabricate_provenance(
+    make_request: RequestFactory,
+) -> None:
+    """Ingestion constructed without an account id must not invent one."""
+    request = make_request("Please review the Q3 budget proposal before Friday.")
+    workflow = _RecordingWorkflow(_outcome())
+    service = CommunicationIngestionService(
+        _RecordingConnector(request.message),
+        workflow,  # type: ignore[arg-type]
+    )
+
+    service.analyze_message("fake-msg-001")
+
+    assert workflow.connector_account_ids == [None]
 
 
 def test_fetch_failure_telemetry_uses_error_class(
