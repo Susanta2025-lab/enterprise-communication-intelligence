@@ -14,10 +14,13 @@ from app.domain.interfaces import (
     CommunicationActionExecutor,
     CommunicationActionExecutorFactory,
     CommunicationConnector,
+    CommunicationCredentialRecord,
     CommunicationCredentialResolver,
+    CommunicationCredentialStore,
     ConnectorAccountRepository,
     IdentityRepository,
     MailboxAuthorizationSessionRepository,
+    NewCommunicationCredential,
     PersistenceUnitOfWork,
     WorkflowActionRepository,
 )
@@ -80,6 +83,7 @@ def test_repository_interfaces_are_abstract() -> None:
     assert issubclass(ConnectorAccountRepository, ABC)
     assert issubclass(WorkflowActionRepository, ABC)
     assert issubclass(MailboxAuthorizationSessionRepository, ABC)
+    assert issubclass(CommunicationCredentialStore, ABC)
     assert issubclass(PersistenceUnitOfWork, ABC)
     with pytest.raises(TypeError):
         IdentityRepository()  # type: ignore[abstract]
@@ -91,6 +95,8 @@ def test_repository_interfaces_are_abstract() -> None:
         WorkflowActionRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         MailboxAuthorizationSessionRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        CommunicationCredentialStore()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         PersistenceUnitOfWork()  # type: ignore[abstract]
 
@@ -124,6 +130,31 @@ def test_communication_credential_resolver_interface_is_abstract() -> None:
     assert "resolve" in CommunicationCredentialResolver.__abstractmethods__
     with pytest.raises(TypeError):
         CommunicationCredentialResolver()  # type: ignore[abstract]
+
+
+def test_communication_credential_store_records_are_opaque() -> None:
+    """The store holds opaque bytes plus common metadata, not provider token fields."""
+    assert set(CommunicationCredentialRecord.__dataclass_fields__) == {
+        "credential_ref",
+        "provider",
+        "version",
+        "secret_material",
+    }
+    assert set(NewCommunicationCredential.__dataclass_fields__) == {
+        "credential_ref",
+        "provider",
+        "secret_material",
+    }
+    for fields in (
+        CommunicationCredentialRecord.__dataclass_fields__,
+        NewCommunicationCredential.__dataclass_fields__,
+    ):
+        assert "access_token" not in fields
+        assert "refresh_token" not in fields
+        assert "token_response" not in fields
+        assert "oauth_cache" not in fields
+        assert "client_secret" not in fields
+        assert "authorization_code" not in fields
 
 
 def test_communication_action_execution_is_immutable_and_validated() -> None:
@@ -203,6 +234,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
     import app.domain.interfaces.communication_connector as communication_connector
     import app.domain.interfaces.communication_credential_resolver as credential_resolver
+    import app.domain.interfaces.communication_credential_store as credential_store
     import app.domain.interfaces.connector_account_repository as connector_account_repository
     import app.domain.interfaces.identity_repository as identity_repository
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
@@ -221,6 +253,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         executor_factory_port,
         communication_connector,
         credential_resolver,
+        credential_store,
         connector_account_repository,
         identity_repository,
         persistence_unit_of_work,

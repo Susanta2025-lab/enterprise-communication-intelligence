@@ -44,6 +44,7 @@ app/
 │   │   ├── communication_action_executor.py  # CommunicationActionExecutor, CommunicationActionExecution
 │   │   ├── communication_action_executor_factory.py  # CommunicationActionExecutorFactory
 │   │   ├── communication_credential_resolver.py  # CommunicationCredentialResolver, AccessTokenProvider
+│   │   ├── communication_credential_store.py     # CommunicationCredentialStore, opaque records
 │   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
 │   │   ├── analysis_repository.py
@@ -79,7 +80,12 @@ app/
 │   │       ├── connector.py   # MicrosoftGraphCommunicationConnector (REST v1.0)
 │   │       └── normalization.py
 │   ├── credentials/
-│   │   └── environment.py     # EnvironmentCommunicationCredentialResolver (local/dev env lookup)
+│   │   ├── environment.py     # EnvironmentCommunicationCredentialResolver (local/dev env lookup)
+│   │   ├── validation.py      # shared locator/provider checks
+│   │   ├── memory.py          # InMemoryCommunicationCredentialStore
+│   │   ├── locators.py        # server-generated credential_ref issuance
+│   │   ├── refresh.py         # RefreshableCredentialAdapter boundary
+│   │   └── oauth.py           # OAuthCommunicationCredentialResolver (not execute default)
 │   ├── executors/
 │   │   ├── factory.py         # ProviderCommunicationActionExecutorFactory (account-driven routing)
 │   │   ├── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)
@@ -153,9 +159,9 @@ deployment/
 - **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete Gmail/Graph executor. Phase 10 added no connector routes. Phase 11C adds `app/api/routes/workflow_actions.py` over `WorkflowActionService`. Phase 12E adds execute over `WorkflowActionExecutionService`. Analyze/history keep `communications:analyze`; proposal/approval require `communications:workflow`; execute requires `communications:send` and a real principal.
 - **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `WorkflowActionService` creates, lists, retrieves, approves, and rejects durable workflow actions. `WorkflowActionExecutionService` executes an approved action through `CommunicationActionExecutorFactory`. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
-- **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, `CommunicationActionExecutor`, `CommunicationCredentialResolver`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
+- **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, `CommunicationActionExecutor`, `CommunicationCredentialResolver`, `CommunicationCredentialStore`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
-- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`, `ProviderCommunicationActionExecutorFactory`). `monitoring/` and `parsers/` remain empty scaffolds.
+- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`, in-memory `CommunicationCredentialStore`, `OAuthCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`, `ProviderCommunicationActionExecutorFactory`). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, workflow actions, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
 - **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. Connector ingestion-boundary tests live under `tests/integration/`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, AWS, Gmail, or Microsoft Graph network calls.

@@ -37,6 +37,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-019](ADR-019-production-communication-write-architecture.md) | Production Communication Write Architecture | Accepted |
 | [ADR-020](ADR-020-uncertain-communication-execution-semantics.md) | Uncertain Communication Execution Semantics | Accepted |
 | [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md) | Mailbox Delegated OAuth Authorization Architecture | Accepted |
+| [ADR-022](ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md) | Opaque Communication Credential Store and Refreshable Access Tokens | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -67,6 +68,8 @@ ADR-019 records production write architecture. `CommunicationConnector` stays re
 ADR-020 records uncertain external-side-effect semantics. Definite provider rejection becomes durable `FAILED`. Confirmed success becomes durable `EXECUTED`. Uncertain or unavailable outcomes after TX1 remain `EXECUTING` and the execute API returns HTTP 503. Automatic retry and `EXECUTION_UNKNOWN` are rejected. Duplicate-send prevention takes priority over automatic recovery. Operator reconciliation remains future work.
 
 ADR-021 records mailbox delegated OAuth as a server-side authorization transaction separate from ECI application-user OIDC. Raw OAuth state is not persisted; SHA-256(state) is. State is single-use via a conditional consume compare-and-set and bound to the internal user plus mailbox provider. PKCE is S256. `communications:connect` is distinct from analyze/workflow/send. `credential_ref` remains non-unique at the database level in 13A. Disconnect clears locator and grant metadata without provider token revocation. Real Google/Microsoft OAuth and secret-store backends remain later Phase 13 slices.
+
+ADR-022 records the provider-neutral credential store and refreshable access-token foundation. `ConnectorAccount` stores only an opaque `credential_ref`. Secrets live outside PostgreSQL. `resolve()` performs no secret or token I/O. Compare-and-set replacement provides multi-instance rotation safety. The environment resolver remains the local/dev execute default. Google OAuth, Microsoft OAuth, Key Vault, and Secrets Manager remain later Phase 13 slices.
 
 ## Template
 

@@ -35,6 +35,24 @@ class CommunicationCredentialUnavailableError(ECIPlatformError):
         super().__init__(message)
 
 
+class CommunicationCredentialReauthorizationRequiredError(
+    CommunicationCredentialUnavailableError
+):
+    """Raised when stored refreshable credential material is permanently unusable.
+
+    Compatible with existing unavailable execution semantics. Token resolution
+    must not mutate ConnectorAccount. Mapping onto REAUTH_REQUIRED is later
+    credential-lifecycle work.
+    """
+
+
+class CommunicationCredentialConflictError(ECIPlatformError):
+    """Raised when a credential locator already exists and must not be overwritten."""
+
+    def __init__(self, message: str = "Communication credential could not be stored.") -> None:
+        super().__init__(message)
+
+
 class UnsupportedCommunicationCredentialProviderError(ECIPlatformError):
     """Raised when credential resolution is requested for an unsupported provider."""
 

@@ -22,6 +22,11 @@ from app.domain.interfaces.communication_credential_resolver import (
     AccessTokenProvider,
     CommunicationCredentialResolver,
 )
+from app.domain.interfaces.communication_credential_store import (
+    CommunicationCredentialRecord,
+    CommunicationCredentialStore,
+    NewCommunicationCredential,
+)
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     ConnectorAccountRepository,
@@ -50,7 +55,9 @@ __all__ = [
     "CommunicationActionExecutor",
     "CommunicationActionExecutorFactory",
     "CommunicationConnector",
+    "CommunicationCredentialRecord",
     "CommunicationCredentialResolver",
+    "CommunicationCredentialStore",
     "ConnectorAccountRecord",
     "ConnectorAccountRepository",
     "ConnectorMessageQuery",
@@ -61,6 +68,7 @@ __all__ = [
     "NewMailboxAuthorizationSession",
     "MessagePage",
     "NewAnalysis",
+    "NewCommunicationCredential",
     "NewConnectorAccount",
     "PersistenceUnitOfWork",
     "WorkflowActionRepository",

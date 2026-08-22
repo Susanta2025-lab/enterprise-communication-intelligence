@@ -178,6 +178,36 @@ def test_credentials_package_does_not_use_external_account_id() -> None:
         assert "external_account_id" not in source
 
 
+def test_api_composition_root_does_not_default_to_oauth_resolver() -> None:
+    source = (_API_ROOT / "dependencies.py").read_text(encoding="utf-8")
+    assert "OAuthCommunicationCredentialResolver" not in source
+    assert "InMemoryCommunicationCredentialStore" not in source
+    assert "EnvironmentCommunicationCredentialResolver" in source
+
+
+def test_domain_store_port_stays_provider_neutral() -> None:
+    source = (
+        _DOMAIN_ROOT / "interfaces" / "communication_credential_store.py"
+    ).read_text(encoding="utf-8")
+    assert "import os" not in source
+    assert "fastapi" not in source
+    assert "httpx" not in source
+    assert "google" not in source.lower()
+    assert "azure" not in source.lower()
+    assert "boto" not in source.lower()
+    assert "msal" not in source.lower()
+    assert "infrastructure" not in source
+    assert "access_token" not in source
+    assert "refresh_token" not in source
+
+
+def test_no_phase_13b_alembic_migration() -> None:
+    versions = _REPO_ROOT / "alembic" / "versions"
+    names = {path.name for path in versions.glob("*.py")}
+    assert any(name.startswith("13a0001") for name in names)
+    assert not any("13b" in name for name in names)
+
+
 def test_credential_ref_is_not_uniquely_constrained() -> None:
     from sqlalchemy import UniqueConstraint
 

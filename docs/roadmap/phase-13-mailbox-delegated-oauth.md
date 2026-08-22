@@ -33,7 +33,7 @@ No OAuth or credential fields are added to `CommunicationActionExecution`.
 Phase 13 is **In Progress**.
 
 - **13A is Completed:** OAuth domain, authorization session, `communications:connect`, PKCE S256, provider-neutral capabilities, `REAUTH_REQUIRED`, schema/migration, ADR-021. No real Google or Microsoft OAuth.
-- **13B is Not Started:** credential store and refreshable access-token foundation.
+- **13B is Completed:** opaque credential store, server-generated locators, in-memory store, refreshable `AccessTokenProvider` foundation, in-process cache/locks, CAS rotation, ADR-022. No real Google or Microsoft OAuth. Environment-backed execute remains the runtime default.
 - **13C is Not Started:** Google OAuth / Gmail credential lifecycle.
 - **13D is Not Started:** Microsoft Entra OAuth / Graph credential lifecycle.
 - **13E is Not Started:** Azure Key Vault + AWS Secrets Manager production backends.
@@ -82,7 +82,7 @@ Operational disconnect/reauthorize flows, documentation consolidation, and regre
 ## Deliverables
 
 - [x] Phase 13A — OAuth Domain, Authorization Session & Security Foundation (completed)
-- [ ] Phase 13B — Credential Store + Refreshable Access-Token Foundation (not started)
+- [x] Phase 13B — Credential Store + Refreshable Access-Token Foundation (completed)
 - [ ] Phase 13C — Google OAuth / Gmail Credential Lifecycle (not started)
 - [ ] Phase 13D — Microsoft Entra OAuth / Graph Credential Lifecycle (not started)
 - [ ] Phase 13E — Azure Key Vault + AWS Secrets Manager Production Backends (not started)

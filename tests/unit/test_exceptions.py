@@ -14,6 +14,8 @@ from app.application.exceptions import (
 )
 from app.core.exceptions import (
     CommunicationActionExecutionError,
+    CommunicationCredentialConflictError,
+    CommunicationCredentialReauthorizationRequiredError,
     CommunicationCredentialUnavailableError,
     ConfigurationError,
     ConnectorAuthenticationError,
@@ -39,6 +41,11 @@ def test_exception_hierarchy() -> None:
     assert issubclass(PersistenceError, ECIPlatformError)
     assert issubclass(CommunicationActionExecutionError, ECIPlatformError)
     assert issubclass(CommunicationCredentialUnavailableError, ECIPlatformError)
+    assert issubclass(
+        CommunicationCredentialReauthorizationRequiredError,
+        CommunicationCredentialUnavailableError,
+    )
+    assert issubclass(CommunicationCredentialConflictError, ECIPlatformError)
     assert issubclass(UnsupportedCommunicationCredentialProviderError, ECIPlatformError)
     assert issubclass(AnalysisFailedError, ECIPlatformError)
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
@@ -149,11 +156,15 @@ def test_communication_credential_errors_have_generic_messages() -> None:
     """Credential failures must not leak locators, tokens, or secret names."""
     unavailable = CommunicationCredentialUnavailableError()
     unsupported = UnsupportedCommunicationCredentialProviderError()
+    reauthorization = CommunicationCredentialReauthorizationRequiredError()
+    conflict = CommunicationCredentialConflictError()
     assert unavailable.message == "Communication credential is unavailable."
     assert str(unavailable) == "Communication credential is unavailable."
+    assert reauthorization.message == "Communication credential is unavailable."
     assert unsupported.message == "Communication credential provider is not supported."
     assert str(unsupported) == "Communication credential provider is not supported."
-    for error in (unavailable, unsupported):
+    assert conflict.message == "Communication credential could not be stored."
+    for error in (unavailable, unsupported, reauthorization, conflict):
         lowered = error.message.lower()
         assert "gmail" not in lowered
         assert "graph" not in lowered
@@ -163,6 +174,7 @@ def test_communication_credential_errors_have_generic_messages() -> None:
         assert "credential_ref" not in lowered
         assert "key vault" not in lowered
         assert "secrets manager" not in lowered
+        assert "refresh_token" not in lowered
 
 
 def test_invalid_workflow_transition_has_generic_message() -> None:

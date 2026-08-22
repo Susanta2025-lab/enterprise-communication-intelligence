@@ -52,18 +52,21 @@ API does not import executor implementations. The composition root in `app/api/d
 
 ## Credential resolution dependency direction
 
-Domain defines `CommunicationCredentialResolver` and `AccessTokenProvider`. Infrastructure implements the environment-backed resolver. `WorkflowActionExecutionService` does not import the resolver. The production factory resolves the locator before TX1 and does not invoke the returned token callable.
+Domain defines `CommunicationCredentialResolver`, `AccessTokenProvider`, and `CommunicationCredentialStore`. Infrastructure implements the environment-backed resolver, an in-memory store, and the refreshable OAuth resolver. `WorkflowActionExecutionService` does not import the resolver. The production factory resolves the locator before TX1 and does not invoke the returned token callable. Execute composition currently injects the environment resolver.
 
 ```text
                     Domain
            CommunicationCredentialResolver
+           CommunicationCredentialStore
               ↗                 ↖
  Application                     Infrastructure
- depends on factory port         implements env resolver
- (does not import resolver)      (credentials/)
+ depends on factory port         implements env resolver,
+ (does not import resolver)      in-memory store, and
+                                 refreshable resolver
+                                 (credentials/)
 ```
 
-The environment resolver does not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`.
+The environment resolver and refreshable resolver do not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`. Real Google/Microsoft adapters and cloud secret backends remain later Phase 13 slices.
 
 ## Explicit Rules (Verified Against Source)
 
