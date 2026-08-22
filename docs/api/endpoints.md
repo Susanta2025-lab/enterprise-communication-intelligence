@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 12E. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 12E adds `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. There is no retry, PATCH, or DELETE workflow endpoint.
+All HTTP endpoints implemented in the repository as of Phase 12. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 12E adds `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. There is no retry, PATCH, or DELETE workflow endpoint.
 
 ## `GET /health`
 
@@ -275,11 +275,13 @@ Repeated reject is not idempotent. Rejecting an already rejected or approved act
 - **Authentication:** always required. Uses `require_authenticated_communications_send`: `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, send `Authorization: Bearer <JWT>` with permission `communications:send`.
 - **Response model:** `WorkflowActionResponse`
 - **Status codes:**
-  - `200 OK` — terminal `executed` or `failed` resource. `failed` means the provider definitely rejected the send and that outcome was stored.
+  - `200 OK` — terminal `executed` or `failed` resource.
+    - `executed` means Graph accepted `/reply` with 202, or Gmail accepted profile + metadata + send with 200, and that outcome was stored.
+    - `failed` means the provider definitely rejected the send (completed 3xx or non-408 4xx) and that outcome was stored. HTTP 200 + FAILED is a completed execution request, not a transport failure.
   - `401` — missing or invalid bearer token (`AUTH_MODE=disabled` included)
   - `403` — authenticated caller lacks `communications:send`
   - `404 Not Found` — unknown id or owned by a different user. Body: `{"detail": "Workflow action not found."}`
-  - `409 Conflict` — not APPROVED, not executable, or concurrent update. Body for not-executable: `{"detail": "Workflow action is not executable."}`
-  - `503` — persistence, credential material, or the mailbox provider is unavailable. If provider execution had already begun, the action may remain `executing`.
+  - `409 Conflict` — not APPROVED, already `executing`/`executed`/`failed`, not executable, or concurrent update. Body for not-executable: `{"detail": "Workflow action is not executable."}`
+  - `503` — persistence unavailable before TX1 (prior status unchanged; execution did not reach the provider stage), missing mailbox secret after TX1 (stored `executing`; the provider request did not occur), Gmail pre-send unavailability, or uncertain provider outcome after TX1. HTTP 503 + EXECUTING means ECI cannot safely establish or complete execution; do not retry automatically. Not every 503 means a provider send may have occurred.
 
-Unauthorized and forbidden requests do not open an execution unit of work, resolve credentials, retrieve tokens, or call the mailbox provider. Create, list, get, approve, and reject remain `communications:workflow`.
+Unauthorized and forbidden requests do not open an execution unit of work, resolve credentials, retrieve tokens, or call the mailbox provider. Create, list, get, approve, and reject remain `communications:workflow`. Provider-specific error bodies are not returned. There is no retry route.

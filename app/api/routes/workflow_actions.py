@@ -66,8 +66,11 @@ _SEND_AUTH_RESPONSES = {
         "model": ErrorResponse,
         "description": (
             "Persistence, credential material, or the mailbox provider is currently "
-            "unavailable. If provider execution had already begun, the action may "
-            "remain EXECUTING."
+            "unavailable. Persistence failure before TX1 leaves the previous workflow "
+            "state unchanged and does not reach the provider. If TX1 has already "
+            "committed EXECUTING, the stored row remains EXECUTING and must not be "
+            "retried automatically. Missing mailbox secret after TX1 means the "
+            "provider request did not occur."
         ),
     },
 }
@@ -224,9 +227,14 @@ def reject_workflow_action(
         "Executes an owned APPROVED workflow action through the mailbox account "
         "snapshotted at proposal time. The request has no body. Callers cannot "
         "supply reply text, provider, connector account, credentials, or a "
-        "provider message id. A recorded terminal FAILED outcome is returned as "
-        "HTTP 200 with status FAILED. Uncertain provider or credential failures "
-        "return 503 and may leave the action EXECUTING."
+        "provider message id. HTTP 200 with status FAILED means execution "
+        "completed and a definite provider rejection was stored. HTTP 503 after "
+        "TX1 means ECI cannot safely complete or establish the outcome; the "
+        "stored row remains EXECUTING and must not be retried automatically. "
+        "HTTP 503 before TX1 means persistence failed, execution did not reach "
+        "the provider stage, and the previous workflow state remains. Not every "
+        "503 means a provider send may have occurred. Missing mailbox secret "
+        "after TX1 means the provider request did not occur."
     ),
     responses={
         **_SEND_AUTH_RESPONSES,

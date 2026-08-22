@@ -1,6 +1,7 @@
 """Integration tests for OpenAPI documentation endpoints."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -140,6 +141,18 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "404" in workflow_execute["post"]["responses"]
     assert "409" in workflow_execute["post"]["responses"]
     assert "503" in workflow_execute["post"]["responses"]
+    execute_200 = workflow_execute["post"]["responses"]["200"]["description"].lower()
+    execute_503 = workflow_execute["post"]["responses"]["503"]["description"].lower()
+    assert "failed" in execute_200
+    assert "rejected" in execute_200
+    assert "executing" in execute_503
+    assert "retried" in execute_503
+    execute_summary = (
+        f"{workflow_execute['post'].get('description', '')} "
+        f"{execute_200} {execute_503}"
+    ).lower()
+    assert "exactly-once" not in execute_summary
+    assert "idempotent" not in execute_summary
     assert "/api/v1/workflow-actions/{action_id}/retry" not in schema["paths"]
 
     serialized = repr(schema)
@@ -221,3 +234,38 @@ def test_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> Non
     assert docs.status_code == 404
     assert redoc.status_code == 404
     assert openapi.status_code == 404
+
+
+def test_adr_020_records_uncertain_execution_without_unknown_state() -> None:
+    """Phase 12F documents EXECUTING as the uncertainty marker, not a new state."""
+    root = Path(__file__).resolve().parents[2]
+    adr = (
+        root
+        / "docs"
+        / "decisions"
+        / "ADR-020-uncertain-communication-execution-semantics.md"
+    )
+    text = adr.read_text(encoding="utf-8")
+    lowered = text.lower()
+    assert "## Status" in text
+    assert "Accepted" in text
+    assert "EXECUTING" in text
+    assert "ServiceUnavailableError" in text
+    assert "duplicate" in lowered
+    assert "does not claim exactly-once" in lowered
+    assert "idempotent send" in lowered
+    assert "`EXECUTION_UNKNOWN` is not implemented" in text
+    assert "the provider request did not occur" in lowered
+    assert "reconciliation" in lowered
+    assert "outbox" in lowered
+    phase12 = (
+        root / "docs" / "roadmap" / "phase-12-production-communication-execution.md"
+    ).read_text(encoding="utf-8")
+    assert "Phase 12 is **Completed**" in phase12
+    assert "**12F is Completed:**" in phase12
+    assert "user-approved real communication execution" in phase12
+    index = (root / "docs" / "decisions" / "README.md").read_text(encoding="utf-8")
+    assert "ADR-020" in index
+    assert "Uncertain Communication Execution Semantics" in index
+    assert "ADR-018" in index
+    assert "ADR-019" in index

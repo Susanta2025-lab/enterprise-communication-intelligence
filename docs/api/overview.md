@@ -83,6 +83,7 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `GET /api/v1/workflow-actions/{action_id}`
 - `POST /api/v1/workflow-actions/{action_id}/approve`
 - `POST /api/v1/workflow-actions/{action_id}/reject`
+- `POST /api/v1/workflow-actions/{action_id}/execute`
 
 Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Analyze, workflow, and send do not imply each other. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
 

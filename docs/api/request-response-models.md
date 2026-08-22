@@ -65,7 +65,7 @@ Only `email` is exercised by any implemented behavior; the remaining values exis
 | `pending` | Proposal exists; not authorized |
 | `approved` | User authorized the stored snapshot; not sent |
 | `rejected` | User denied execution; terminal in Phase 11 |
-| `executing` | Authorized execution attempt has begun |
+| `executing` | Authorized execution attempt has begun; after TX1 this is also the conservative marker that the external outcome is not known to ECI |
 | `executed` | Provider accepted the send and the outcome was stored |
 | `failed` | Provider definitely rejected the send and that outcome was stored |
 
@@ -230,7 +230,7 @@ Owned workflow-action resource. Mapped explicitly from the domain `WorkflowActio
 | `failed_at` | `datetime \| None` | Set when status is `failed` |
 | `has_execution_target` | `bool` | `true` when mailbox routing provenance exists (`connector_account_id` and `provider_message_id` both present). This is not a claim that the current account can send. |
 
-The response omits `owner_user_id`, `connector_account_id`, `provider_message_id`, and `credential_ref`.
+The response omits `owner_user_id`, `connector_account_id`, `provider_message_id`, `credential_ref`, tokens, mailbox address, recipient, and provider response bodies.
 
 ## `WorkflowActionListResponse` (`app/schemas/workflow.py`)
 
@@ -251,7 +251,7 @@ Total count is omitted.
 - `ReadinessResponse` — `status: str`
 - `CommunicationAnalysisResponse` — analyze HTTP body, including optional `analysis_id`
 - `AnalysisHistoryItem` / `AnalysisHistoryListResponse` — owned history
-- `WorkflowActionCreateRequest` / `WorkflowActionResponse` / `WorkflowActionListResponse` — workflow proposal and approval
+- `WorkflowActionCreateRequest` / `WorkflowActionResponse` / `WorkflowActionListResponse` — workflow proposal, approval, and execute
 - `ErrorResponse` (`app/schemas/errors.py`) — `detail: str`; used only for OpenAPI documentation of error responses (see [Error Handling](error-handling.md))
 
 These are not reused as domain models; they exist purely to describe the shape of the health/readiness/error responses in OpenAPI.

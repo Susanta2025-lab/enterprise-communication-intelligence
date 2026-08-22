@@ -33,7 +33,7 @@ Automatic (push/tag) cloud deployment is not enabled.
 
 ## Secrets and identity
 
-Cloud AI authentication uses platform identity rather than application-stored static keys. Application-user authentication uses provider-independent OIDC JWT. Live authenticated Azure deployment is verified. AWS real bearer is deferred until TLS. Azure Key Vault and AWS Secrets Manager are not implemented.
+Cloud AI authentication uses platform identity rather than application-stored static keys. Application-user authentication uses provider-independent OIDC JWT. Live authenticated Azure deployment is verified. AWS real bearer is deferred until TLS. Azure Key Vault and AWS Secrets Manager are not implemented mailbox or database secret backends.
 
 See [Authentication](authentication.md).
 
@@ -55,12 +55,14 @@ Cloud runtimes still do **not** provide:
 
 - production Gmail OAuth
 - production Microsoft Graph OAuth
-- credential resolver
+- Azure Key Vault / AWS Secrets Manager mailbox secret backends
 - cloud mailbox onboarding
 - connector HTTP APIs
 - background mailbox sync
-- send/reply from cloud-hosted ECI
+- automatic replies from cloud-hosted ECI
 
-Controlled live adapter verification was local. This document does not claim Azure or AWS connector deployment verification.
+Environment-backed `CommunicationCredentialResolver` and user-approved Graph/Gmail execute exist in the application. This document does not claim Azure or AWS connector or send-path deployment verification.
 
-Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). It adds proposal/approval HTTP and an internal deterministic execution boundary. Do not add cloud send/reply, OAuth write scopes, or provider write executors here. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.
+Controlled live adapter verification was local and stopped at `CommunicationMessage`.
+
+Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). Phase 12 adds user-approved Gmail and Microsoft Graph reply execution through `POST /api/v1/workflow-actions/{action_id}/execute`. Cloud-hosted production OAuth, managed secret stores, and automatic replies remain later work. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, Key Vault, Secrets Manager, managed PostgreSQL, and advanced observability remain later work.

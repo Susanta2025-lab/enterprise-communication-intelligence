@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 12A. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. The fake executor occupies the `CommunicationActionExecutor` slot below HTTP.
+These diagrams describe the request flows implemented as of Phase 12. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. Production execute routes Graph or Gmail writers through `CommunicationActionExecutor`; the fake executor remains an isolated test double.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -93,7 +93,7 @@ CommunicationMessage
 
 Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, or background-sync sequences.
 
-The following are **not implemented** and are not shown as current flows: OAuth callback, production secret stores, background sync, automatic replies, sending. Phase 12B adds `CommunicationCredentialResolver` as a below-HTTP local/dev boundary; it is not a user-facing sequence.
+The following are **not implemented** as connector-ingestion or live-adapter flows: OAuth callback, production secret stores, background sync, and automatic replies. User-approved sending is a separate execute flow documented below. `CommunicationCredentialResolver` is a below-HTTP local/dev boundary; it is not a user-facing sequence.
 
 ## Identity failure before AI
 
@@ -272,52 +272,74 @@ sequenceDiagram
 
 Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, concurrent update, and not-executable execute attempts return `409`. Persistence unavailable returns `503`.
 
-## Workflow action execution (Phase 12E)
+## Workflow action execution (Phase 12E/12F)
 
-`POST /api/v1/workflow-actions/{action_id}/execute` requires `communications:send`. The stored approved snapshot is executed:
+`POST /api/v1/workflow-actions/{action_id}/execute` requires `communications:send`. The stored approved snapshot is executed after TX1 commits and the unit of work is closed:
 
 ```text
-APPROVED WorkflowAction
+User
         ↓
-owned ACTIVE ConnectorAccount
+API (communications:send)
         ↓
-CommunicationActionExecutorFactory
+WorkflowActionExecutionService
         ↓
-TX1 APPROVED → EXECUTING (commit, close UoW)
+TX1: owned APPROVED + owned ACTIVE account
+     factory.create_for_account
+     APPROVED → EXECUTING
+     commit, close UoW
         ↓
-CommunicationActionExecutor.execute(command)
+AccessTokenProvider()   (after TX1)
         ↓
-TX2 EXECUTING → EXECUTED | FAILED
+Graph /reply  or  Gmail profile + metadata + send
+        ↓
+TX2 EXECUTED | FAILED   or   503 + EXECUTING
 ```
 
 ```mermaid
 sequenceDiagram
-    participant Caller as Application caller
+    participant User
+    participant API as FastAPI execute route
+    participant Auth as communications:send
     participant Exec as WorkflowActionExecutionService
     participant UoW as PersistenceUnitOfWork
-    participant Port as CommunicationActionExecutor
+    participant Factory as Executor factory
+    participant Token as AccessTokenProvider
+    participant Provider as Graph or Gmail executor
 
-    Caller->>Exec: execute(principal, action_id)
-    Exec->>UoW: TX1 validate target, mark EXECUTING
+    User->>API: POST /workflow-actions/{id}/execute
+    API->>Auth: require communications:send
+    Auth-->>API: AuthenticatedPrincipal
+    API->>Exec: execute(principal, action_id)
+    Exec->>UoW: TX1 validate owned target and account
+    Exec->>Factory: create_for_account(owned account)
+    Factory-->>Exec: Graph or Gmail executor
+    Exec->>UoW: APPROVED → EXECUTING
     UoW-->>Exec: commit and close
-    Exec->>Port: execute(CommunicationActionExecution)
-    alt Provider success
-        Port-->>Exec: None
+    Exec->>Provider: execute(command)
+    Provider->>Token: AccessTokenProvider()
+    Token-->>Provider: access token
+    alt Confirmed success
+        Provider->>Provider: Graph /reply or Gmail profile + metadata + send
+        Provider-->>Exec: Graph 202 or Gmail send 200
         Exec->>UoW: TX2 mark EXECUTED
         UoW-->>Exec: commit
-        Exec-->>Caller: WorkflowAction EXECUTED
-    else Known CommunicationActionExecutionError
-        Port--xExec: CommunicationActionExecutionError
+        Exec-->>API: WorkflowAction EXECUTED
+        API-->>User: HTTP 200 status=executed
+    else Definite provider rejection
+        Provider--xExec: CommunicationActionExecutionError
         Exec->>UoW: TX2 mark FAILED
         UoW-->>Exec: commit
-        Exec-->>Caller: WorkflowAction FAILED
-    else Unexpected exception
-        Port--xExec: RuntimeError
-        Exec--xCaller: propagate (row may remain EXECUTING)
+        Exec-->>API: WorkflowAction FAILED
+        API-->>User: HTTP 200 status=failed
+    else Uncertain or unavailable after TX1
+        Provider--xExec: ServiceUnavailableError
+        Note over Exec,UoW: no TX2 terminal write
+        Exec--xAPI: ServiceUnavailableError
+        API-->>User: HTTP 503 (row remains EXECUTING)
     end
 ```
 
-The command carries `approved_reply_body` plus provider-neutral routing from the snapshotted target and the owned `ConnectorAccount`. Analysis is not loaded. `CommunicationConnector` is not used. Targetless or unusable mailbox accounts fail inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 12E does not add retry, outbox, or `EXECUTION_UNKNOWN`.
+The command carries `approved_reply_body` plus provider-neutral routing from the snapshotted target and the owned `ConnectorAccount`. Analysis is not loaded. `CommunicationConnector` is not used. Targetless or unusable mailbox accounts fail inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Missing mailbox secret after TX1 raises `ServiceUnavailableError` with HTTP 503 and stored `EXECUTING`; the provider request did not occur. If TX2 persistence fails after a completed executor call, or the provider outcome is uncertain, the stored row remains `EXECUTING`. Automatic retry is prohibited. `EXECUTING` cannot be re-executed. There is no `EXECUTION_UNKNOWN` state. See [ADR-020](../decisions/ADR-020-uncertain-communication-execution-semantics.md).
 
 The domain state machine is unchanged:
 

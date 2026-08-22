@@ -124,7 +124,7 @@ curl -sS -X POST http://localhost:8000/api/v1/workflow-actions/<action-id>/execu
   -H "Authorization: Bearer <access-token>"
 ```
 
-Unknown and cross-user workflow actions both return `404`. Responses omit `owner_user_id`. There is no retry, PATCH, or DELETE workflow route.
+Unknown and cross-user workflow actions both return `404`. Responses omit `owner_user_id`. Execute 200 with `status=failed` means a definite provider rejection was stored. Execute 503 before TX1 leaves the previous workflow state unchanged and does not reach the provider. Execute 503 after TX1 means the row remains `executing` and must not be retried automatically; a missing mailbox secret in that window means the provider request did not occur. Not every 503 means a send may have occurred. There is no retry, PATCH, or DELETE workflow route.
 
 ## Urgent Communication
 

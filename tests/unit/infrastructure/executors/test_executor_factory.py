@@ -256,3 +256,24 @@ def test_unexpected_resolver_error_is_non_executable(
     assert marker not in serialized
     assert "ECI_COMMUNICATION_CREDENTIAL" not in serialized
     assert "SECRET_ACCESS_TOKEN" not in serialized
+
+
+def test_phase12f_credential_ref_marker_is_absent_from_factory_logs(
+    log_events: list[dict],
+) -> None:
+    marker = "SUPER_SECRET_PHASE12_CREDENTIAL_REF"
+    factory, resolver, transport, client = _factory()
+    try:
+        executor = factory.create_for_account(
+            _account(provider="gmail", credential_ref=marker),
+        )
+    finally:
+        client.close()
+
+    assert executor is None
+    assert resolver.token_calls == 0
+    assert transport.calls == 0
+    serialized = repr(log_events)
+    assert marker not in serialized
+    assert "SUPER_SECRET_PHASE12_TOKEN" not in serialized
+    assert "credential_ref" not in serialized.lower()

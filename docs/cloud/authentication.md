@@ -7,7 +7,7 @@ ECI has six identity paths. They must not be mixed.
 3. **AWS workload → Amazon Bedrock.** ECS Task Role `eci-bedrock-task-role-dev` through boto3's standard credential chain.
 4. **GitHub Actions → Azure / AWS deploy identities.** GitHub OIDC federation to Azure user-assigned managed identity `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`. Same display name, different cloud object types. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
 5. **ECI runtime → PostgreSQL database identity.** Application contract is `DATABASE_URL` when persistence is configured. Runtime DML credentials should be separate from migration DDL credentials. No managed Azure or AWS database is provisioned in Phase 9, so this cloud identity remains future until a colocated database exists. See [PostgreSQL persistence](persistence.md).
-6. **Mailbox credentials → Gmail / Microsoft Graph access tokens.** Opaque `ConnectorAccount.credential_ref` is resolved by `CommunicationCredentialResolver` into an on-demand `AccessTokenProvider`. Local/development uses environment-backed token material (`ECI_COMMUNICATION_CREDENTIAL_<PROVIDER>_<NORMALIZED_REF>_ACCESS_TOKEN`). This is not the ECI API JWT, not AI workload identity, and not database identity. Phase 12B does not implement production OAuth, refresh, Azure Key Vault, or AWS Secrets Manager for mailbox tokens.
+6. **Mailbox credentials → Gmail / Microsoft Graph access tokens.** Opaque `ConnectorAccount.credential_ref` is resolved by `CommunicationCredentialResolver` into an on-demand `AccessTokenProvider`. Local/development uses environment-backed token material (`ECI_COMMUNICATION_CREDENTIAL_<PROVIDER>_<NORMALIZED_REF>_ACCESS_TOKEN`). This is not the ECI API JWT, not AI workload identity, and not database identity. Production OAuth, refresh, Azure Key Vault, and AWS Secrets Manager for mailbox tokens are not implemented. Key Vault and Secrets Manager remain future credential-resolver implementations, not currently integrated mailbox secret backends.
 
 The rest of this document describes application-user OIDC and cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
 
@@ -22,7 +22,7 @@ Client
 → POST /api/v1/communications/analyze
 ```
 
-Analyze and history require `communications:analyze`. Workflow proposal and approval require `communications:workflow`. Execute requires `communications:send`. These are distinct capabilities; `OIDC_REQUIRED_PERMISSION` remains the analyze permission.
+Analyze and history require `communications:analyze`. Workflow proposal and approval require `communications:workflow`. Execute requires `communications:send`. These are distinct capabilities; `OIDC_REQUIRED_PERMISSION` remains the analyze permission. Least privilege: a workflow-only token cannot send mail, and a send-only token cannot create or approve a workflow action. `communications:workflow` does not authorize external sending.
 
 Live Entra configuration is conceptual here (placeholders only; no tenant or client IDs):
 
@@ -130,7 +130,7 @@ See [Deployment](deployment.md) and the [AWS runbook](../../deployment/aws/READM
 
 Neither cloud adapter stores static access keys in ECI configuration.
 
-Key Vault, Secrets Manager, and production secret management are not implemented in this phase.
+Key Vault, Secrets Manager, and production mailbox secret management are not implemented. Environment-backed mailbox credentials remain local/dev. Future credential-resolver implementations may use Key Vault or Secrets Manager; they are not currently integrated.
 
 ## What is not implemented
 
@@ -139,3 +139,5 @@ Key Vault, Secrets Manager, and production secret management are not implemented
 - Storing or caching Entra tokens or AWS credentials in application code
 - Hard-coded AWS profile selection
 - AWS real-bearer authorized requests over TLS (deferred until domain/ACM)
+- Production mailbox OAuth authorization/refresh
+- Azure Key Vault or AWS Secrets Manager as mailbox secret backends

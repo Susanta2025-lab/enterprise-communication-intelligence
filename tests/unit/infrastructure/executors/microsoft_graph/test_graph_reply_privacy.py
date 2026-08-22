@@ -168,3 +168,31 @@ def test_credential_unavailable_logs_omit_token_and_body(
     _assert_secrets_absent(_serialized(log_events))
     _assert_secrets_absent(exc_info.value.message)
     _assert_secrets_absent(str(exc_info.value))
+
+
+def test_phase12f_markers_are_absent_from_graph_logs_and_exceptions(
+    graph_reply_executor: tuple,
+    log_events: list[dict],
+) -> None:
+    token = "SUPER_SECRET_PHASE12_TOKEN"
+    body = "SUPER_SECRET_PHASE12_REPLY_BODY"
+    provider_error = "SUPER_SECRET_PHASE12_PROVIDER_ERROR"
+    _executor, stub, client, _tokens = graph_reply_executor
+    stub.status = 403
+    stub.error_json = {"error": {"message": provider_error}}
+    executor = MicrosoftGraphCommunicationActionExecutor(
+        http_client=client,
+        access_token_provider=CountingTokenProvider(token),
+    )
+    command = execution_command(approved_reply_body=body)
+
+    with pytest.raises(CommunicationActionExecutionError) as exc_info:
+        executor.execute(command)
+
+    blob = f"{_serialized(log_events)}{exc_info.value.message}{exc_info.value!r}"
+    assert token not in blob
+    assert body not in blob
+    assert provider_error not in blob
+    assert "SUPER_SECRET_PHASE12_CREDENTIAL_REF" not in blob
+    assert "authorization" not in blob.lower()
+    assert stub.requests[0].headers.get("authorization") == f"Bearer {token}"

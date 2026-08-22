@@ -1322,3 +1322,241 @@ def test_unauthorized_execute_does_not_construct_production_http_client(
     assert resolver.resolve_calls == 0
     assert stub.requests == []
 
+
+@pytest.mark.parametrize(
+    ("fail_stage", "expected_profile", "expected_metadata", "expected_send"),
+    [
+        ("profile", 1, 0, 0),
+        ("metadata", 1, 1, 0),
+    ],
+)
+def test_gmail_presend_unavailable_returns_503_executing_without_send(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+    fail_stage: str,
+    expected_profile: int,
+    expected_metadata: int,
+    expected_send: int,
+) -> None:
+    stub = GmailReplyHttpStub()
+    if fail_stage == "profile":
+        stub.profile_status = 500
+    else:
+        stub.metadata_status = 500
+    session_factory = _sqlite_session_factory()
+    analysis_id, _account_id = _seed_owned_workflow(
+        session_factory,
+        subject=_SUBJECT_A,
+        provider="gmail",
+    )
+    client, _uow_factory = _build_production_path_client(
+        monkeypatch,
+        private_key,
+        session_factory=session_factory,
+        transport=httpx.MockTransport(stub),
+        token_env={_GMAIL_ENV: _GMAIL_TOKEN},
+    )
+    with client:
+        approved = _approve_action(client, private_key, analysis_id)
+        response = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+        stored = client.get(
+            f"{_WORKFLOW_URL}/{approved['id']}",
+            headers=_setup_headers(private_key),
+        )
+        retry = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+
+    assert response.status_code == 503
+    assert stored.json()["status"] == "executing"
+    assert retry.status_code == 409
+    assert len(stub.profile_requests()) == expected_profile
+    assert len(stub.metadata_requests()) == expected_metadata
+    assert len(stub.send_requests()) == expected_send
+
+
+def test_gmail_send_unavailable_returns_503_executing_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    stub = GmailReplyHttpStub()
+    stub.send_status = 500
+    session_factory = _sqlite_session_factory()
+    analysis_id, _account_id = _seed_owned_workflow(
+        session_factory,
+        subject=_SUBJECT_A,
+        provider="gmail",
+    )
+    client, _uow_factory = _build_production_path_client(
+        monkeypatch,
+        private_key,
+        session_factory=session_factory,
+        transport=httpx.MockTransport(stub),
+        token_env={_GMAIL_ENV: _GMAIL_TOKEN},
+    )
+    with client:
+        approved = _approve_action(client, private_key, analysis_id)
+        response = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+        stored = client.get(
+            f"{_WORKFLOW_URL}/{approved['id']}",
+            headers=_setup_headers(private_key),
+        )
+        retry = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Communication action execution is currently unavailable."
+    }
+    assert stored.json()["status"] == "executing"
+    assert retry.status_code == 409
+    assert len(stub.profile_requests()) == 1
+    assert len(stub.metadata_requests()) == 1
+    assert len(stub.send_requests()) == 1
+
+
+def test_graph_timeout_returns_503_executing_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    stub = GraphReplyHttpStub()
+    stub.transport_error = httpx.TimeoutException("timed out contacting Graph")
+    session_factory = _sqlite_session_factory()
+    analysis_id, _account_id = _seed_owned_workflow(
+        session_factory,
+        subject=_SUBJECT_A,
+        provider="microsoft_graph",
+    )
+    client, _uow, resolver = _build_client(
+        monkeypatch,
+        private_key,
+        session_factory=session_factory,
+        transport=httpx.MockTransport(stub),
+        environ={_GRAPH_ENV: _GRAPH_TOKEN},
+    )
+    with client:
+        approved = _approve_action(client, private_key, analysis_id)
+        response = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+        stored = client.get(
+            f"{_WORKFLOW_URL}/{approved['id']}",
+            headers=_setup_headers(private_key),
+        )
+        retry = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+
+    assert response.status_code == 503
+    assert stored.json()["status"] == "executing"
+    assert retry.status_code == 409
+    assert len(stub.requests) == 1
+    assert resolver.token_calls == 1
+    assert "timed out" not in response.json()["detail"]
+
+
+def test_execute_privacy_markers_are_absent_from_http_and_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+    log_events: list[dict],
+) -> None:
+    token = "SUPER_SECRET_PHASE12_TOKEN"
+    reply_body = "SUPER_SECRET_PHASE12_REPLY_BODY"
+    mailbox = "secret-mailbox-phase12@example.test"
+    provider_error = "SUPER_SECRET_PHASE12_PROVIDER_ERROR"
+    stub = GmailReplyHttpStub()
+    stub.profile_json = {"emailAddress": mailbox}
+    stub.send_status = 403
+    stub.send_json = {"error": {"message": provider_error}}
+    session_factory = _sqlite_session_factory()
+    analysis_id, _account_id = _seed_owned_workflow(
+        session_factory,
+        subject=_SUBJECT_A,
+        provider="gmail",
+        draft_body=reply_body,
+    )
+    client, _uow = _build_production_path_client(
+        monkeypatch,
+        private_key,
+        session_factory=session_factory,
+        transport=httpx.MockTransport(stub),
+        token_env={_GMAIL_ENV: token},
+    )
+    with client:
+        approved = _approve_action(client, private_key, analysis_id)
+        response = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+        stored = client.get(
+            f"{_WORKFLOW_URL}/{approved['id']}",
+            headers=_setup_headers(private_key),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    blob = f"{response.json()}{stored.json()}{log_events!r}"
+    assert token not in blob
+    assert mailbox not in blob
+    assert provider_error not in blob
+    assert "SUPER_SECRET_PHASE12_CREDENTIAL_REF" not in blob
+    assert "Authorization" not in blob
+    assert "Bearer " not in blob
+    assert _GMAIL_ENV not in blob
+    _assert_execute_privacy(response.json())
+    assert stored.json()["approved_reply_body"] == reply_body
+    assert reply_body not in repr(log_events)
+
+
+def test_malformed_phase12_credential_ref_is_absent_from_http_and_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+    log_events: list[dict],
+) -> None:
+    marker = "SUPER_SECRET_PHASE12_CREDENTIAL_REF"
+    stub = GraphReplyHttpStub()
+    session_factory = _sqlite_session_factory()
+    analysis_id, _account_id = _seed_owned_workflow(
+        session_factory,
+        subject=_SUBJECT_A,
+        provider="microsoft_graph",
+        credential_ref=marker,
+    )
+    client, _uow, resolver = _build_client(
+        monkeypatch,
+        private_key,
+        session_factory=session_factory,
+        transport=httpx.MockTransport(stub),
+        environ={_GRAPH_ENV: "SUPER_SECRET_PHASE12_TOKEN"},
+    )
+    with client:
+        approved = _approve_action(client, private_key, analysis_id)
+        response = client.post(
+            f"{_WORKFLOW_URL}/{approved['id']}/execute",
+            headers=_send_headers(private_key),
+        )
+        stored = client.get(
+            f"{_WORKFLOW_URL}/{approved['id']}",
+            headers=_setup_headers(private_key),
+        )
+
+    assert response.status_code == 409
+    assert stored.json()["status"] == "approved"
+    assert resolver.token_calls == 0
+    assert stub.requests == []
+    blob = f"{response.json()}{stored.json()}{log_events!r}"
+    assert marker not in blob
+    assert "SUPER_SECRET_PHASE12_TOKEN" not in blob
+    assert _GRAPH_ENV not in blob
+

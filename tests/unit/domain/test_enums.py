@@ -63,7 +63,7 @@ def test_workflow_action_type_is_reply_only() -> None:
 
 
 def test_workflow_action_status_values() -> None:
-    """WorkflowActionStatus covers the Phase 11 lifecycle without EXECUTION_UNKNOWN."""
+    """WorkflowActionStatus covers the Phase 12 lifecycle without EXECUTION_UNKNOWN."""
     assert list(WorkflowActionStatus) == [
         WorkflowActionStatus.PENDING,
         WorkflowActionStatus.APPROVED,

@@ -304,7 +304,13 @@ resolve owner identity
 
 `ACTIVE` is structural executability in 12A. Execution does not inspect `credential_ref`. An `ACTIVE` account may have a null locator. Phase 12B adds `CommunicationCredentialResolver` without injecting it into `WorkflowActionExecutionService`; fake execution remains credential-independent.
 
-The command carries `approved_reply_body` plus `connector_account_id`, `provider_message_id`, and `provider` resolved from the owned `ConnectorAccount`. It does not carry credentials or tokens. Analysis is not reloaded. Fake execution remains the only write implementation in 12A.
+The command carries `approved_reply_body` plus `connector_account_id`, `provider_message_id`, and `provider` resolved from the owned `ConnectorAccount`. It does not carry credentials or tokens. Analysis is not reloaded. Later slices route Graph and Gmail writers through the factory; 12A itself still used fake execution only.
+
+## Phase 12E/12F execution persistence
+
+Phase 12E and 12F add no persistence schema, Alembic revision, provider-result table, or sent-message columns. Alembic head remains `12a0001`.
+
+TX1 still commits `EXECUTING` before provider I/O. Confirmed success writes `EXECUTED`. Definite provider rejection writes `FAILED`. Uncertain or unavailable outcomes after TX1 leave the row `EXECUTING`. Raw Graph/Gmail response bodies are not persisted. See [ADR-020](../decisions/ADR-020-uncertain-communication-execution-semantics.md).
 
 ## Performance and operations (deferred)
 

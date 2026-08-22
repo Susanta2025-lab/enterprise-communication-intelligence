@@ -162,6 +162,26 @@ def test_execution_boundary_uses_factory_and_unchanged_command() -> None:
     assert "retry" not in execution_source.lower()
     assert "outbox" not in execution_source.lower()
 
+    factory_source = (_ROOT / "app" / "infrastructure" / "executors" / "factory.py").read_text(
+        encoding="utf-8"
+    )
+    assert "EXECUTION_UNKNOWN" not in factory_source
+    assert "retry" not in factory_source.lower()
+    assert "tenacity" not in factory_source.lower()
+    graph_source = (
+        _ROOT / "app" / "infrastructure" / "executors" / "microsoft_graph.py"
+    ).read_text(encoding="utf-8")
+    gmail_source = (_ROOT / "app" / "infrastructure" / "executors" / "gmail.py").read_text(
+        encoding="utf-8"
+    )
+    credentials_source = (
+        _ROOT / "app" / "infrastructure" / "credentials" / "environment.py"
+    ).read_text(encoding="utf-8")
+    for source in (graph_source, gmail_source, credentials_source):
+        assert "EXECUTION_UNKNOWN" not in source
+        assert "tenacity" not in source.lower()
+        assert "retry-after" not in source.lower()
+
     fake_source = (_ROOT / "app" / "infrastructure" / "executors" / "fake.py").read_text(
         encoding="utf-8"
     )

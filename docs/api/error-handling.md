@@ -81,7 +81,7 @@ When `AUTH_MODE=oidc`, analyze requires a bearer token. History and workflow rou
 | Unknown or cross-user `analysis_id` | `404` | not set | `{"detail": "Analysis not found."}` |
 | Unknown or cross-user workflow action | `404` | not set | `{"detail": "Workflow action not found."}` |
 
-Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. None of those permissions implies another.
+Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. None of those permissions implies another. `communications:workflow` does not authorize external sending.
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -114,7 +114,7 @@ AI success plus history save failure returns HTTP `200` with the analysis and om
 
 History get/delete of an unknown or cross-user id returns `404` with `{"detail": "Analysis not found."}`, not `403`.
 
-Workflow create against an unknown or cross-user analysis returns the same analysis `404`. Workflow get/approve/reject/execute of an unknown or cross-user action returns `404` with `{"detail": "Workflow action not found."}`. Create against an owned analysis with no usable draft returns `409`. Invalid approve/reject/execute transitions return `409` with `{"detail": "Invalid workflow state transition."}`. Concurrent updates return `409` with `{"detail": "Workflow action was updated concurrently."}`. Not-executable execute attempts return `409` with `{"detail": "Workflow action is not executable."}`. Execute without persistence, with a missing mailbox secret after `EXECUTING`, or with an uncertain provider outcome returns `503`. Workflow routes without persistence return the same generic `503` body.
+Workflow create against an unknown or cross-user analysis returns the same analysis `404`. Workflow get/approve/reject/execute of an unknown or cross-user action returns `404` with `{"detail": "Workflow action not found."}`. Create against an owned analysis with no usable draft returns `409`. Invalid approve/reject/execute transitions return `409` with `{"detail": "Invalid workflow state transition."}`. Concurrent updates return `409` with `{"detail": "Workflow action was updated concurrently."}`. Not-executable execute attempts return `409` with `{"detail": "Workflow action is not executable."}`. Execute without persistence before TX1 returns `503` with the previous workflow state unchanged; execution did not reach the provider stage. A missing mailbox secret after `EXECUTING` returns `503` with stored `EXECUTING`; the provider request did not occur. An uncertain provider outcome after TX1 also returns `503` with stored `EXECUTING`. Workflow routes without persistence return the same generic `503` body.
 
 Readiness returns the same generic `503` body when persistence is configured and the database probe fails. Database host, driver, and SQL details are not returned.
 
@@ -128,13 +128,13 @@ Readiness returns the same generic `503` body when persistence is configured and
 
 | Status | Meaning | Source |
 |---|---|---|
-| `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject/execute return the updated action. Execute may return stored `failed`. |
+| `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject/execute return the updated action. Execute 200 + `failed` is a recorded definite provider rejection. |
 | `201` | Workflow action created | `POST /api/v1/workflow-actions` |
 | `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
 | `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, and execute always (`AUTH_MODE=disabled` included) |
 | `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute |
 | `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError` or `WorkflowActionNotFoundError` |
-| `409` | Workflow conflict | No usable draft, invalid transition, concurrent update, or not executable |
+| `409` | Workflow conflict | No usable draft, invalid transition, concurrent update, not executable, or re-execute of EXECUTING/EXECUTED/FAILED |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
-| `503` | Persistence unavailable, missing mailbox secret after `EXECUTING`, uncertain provider outcome, or readiness probe failure (`ServiceUnavailableError` / `PersistenceError`) | `app/main.py` exception handlers |
+| `503` | Persistence unavailable, missing mailbox secret after `EXECUTING` (provider request did not occur), uncertain provider outcome, or readiness probe failure (`ServiceUnavailableError` / `PersistenceError`). Execute 503 after TX1 leaves the row `EXECUTING`; do not retry automatically. Persistence failure before TX1 leaves the prior status unchanged and does not reach the provider. Not every 503 means a send may have occurred. | `app/main.py` exception handlers |

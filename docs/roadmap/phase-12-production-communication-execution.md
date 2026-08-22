@@ -33,14 +33,18 @@ TX2 EXECUTING → EXECUTED | FAILED
 
 ## Status
 
-Phase 12 is **In Progress**.
+Phase 12 is **Completed**.
 
-- **12A is Completed:** analysis `connector_account_id` provenance, workflow execution-target snapshot (`connector_account_id` + `provider_message_id`), owned `ACTIVE` ConnectorAccount validation before `APPROVED` → `EXECUTING`, expanded frozen execution command, Alembic `12a0001`, ADR-018. Fake execution only.
+- **12A is Completed:** analysis `connector_account_id` provenance, workflow execution-target snapshot (`connector_account_id` + `provider_message_id`), owned `ACTIVE` ConnectorAccount validation before `APPROVED` → `EXECUTING`, expanded frozen execution command, Alembic `12a0001`, ADR-018. Fake execution only in that slice; later slices routed production writers.
 - **12B is Completed:** provider-neutral `CommunicationCredentialResolver`, environment-backed local/dev resolver, shared `AccessTokenProvider` contract, write-scope readiness documentation. Environment-backed local/dev lookup only. Fake execution remains credential-independent.
-- **12C is Completed:** Microsoft Graph reply adapter implemented as `MicrosoftGraphCommunicationActionExecutor`. Production workflow routing/composition is deferred to the provider-routing/execute integration slice. The adapter is not reachable from the REST API. ADR-019.
-- **12D is Completed:** Gmail reply adapter implemented as `GmailCommunicationActionExecutor`. Production workflow routing/composition remains deferred. The adapter is not reachable from the REST API. ADR-019 extended.
-- **12E is Completed:** Execute API, `communications:send`, and account-driven production executor factory. Gmail sender identity from `users/me/profile`. ADR-019 extended for factory routing. Production OAuth, retry, and `EXECUTION_UNKNOWN` remain deferred.
-- **12F is Not started:** Failure semantics, privacy, documentation, and regression.
+- **12C is Completed:** Microsoft Graph reply adapter implemented as `MicrosoftGraphCommunicationActionExecutor`. ADR-019. Routing and HTTP reachability were added later in 12E.
+- **12D is Completed:** Gmail reply adapter implemented as `GmailCommunicationActionExecutor`. ADR-019 extended. That slice originally injected constructor `mailbox_address`; 12E replaced sender identity with `GET users/me/profile` → `emailAddress`. Routing and HTTP reachability were added later in 12E.
+- **12E is Completed:** Execute API, `communications:send`, and account-driven production executor factory. Gmail sender identity from `users/me/profile`. ADR-019 extended for factory routing.
+- **12F is Completed:** Failure semantics, privacy, documentation, and regression. ADR-020. `EXECUTION_UNKNOWN` is not implemented. Raw provider-result persistence is not added.
+
+Phase 12 delivered **user-approved real communication execution**.
+
+Phase 12 did not deliver automatic replies, production OAuth refresh, managed secret stores, retry/reconciliation, `EXECUTION_UNKNOWN`, exactly-once execution, or live-provider certification.
 
 Phase 11 remains **Completed**.
 
@@ -144,7 +148,7 @@ Credential resolution boundary implemented ≠ production OAuth implemented.
 = Microsoft Graph reply adapter implemented
 
 production workflow routing/composition
-= deferred to the provider-routing/execute integration slice
+= deferred in this slice; completed later in 12E
 ```
 
 Implemented in this slice:
@@ -174,14 +178,14 @@ Not implemented in 12C:
 = Gmail reply adapter implemented
 
 production workflow routing/composition
-= deferred to the provider-routing/execute integration slice
+= deferred in this slice; completed later in 12E
 ```
 
 Implemented in this slice:
 
 - Infrastructure `GmailCommunicationActionExecutor` in `app/infrastructure/executors/gmail.py`
 - Metadata GET `format=metadata`, RFC 2822 reply construction, then `POST /gmail/v1/users/me/messages/send` with `raw` + `threadId`
-- Injected `httpx.Client`, `AccessTokenProvider`, and trusted `mailbox_address`; token lookup happens at execute time
+- Injected `httpx.Client` and `AccessTokenProvider`; token lookup happens at execute time. This slice originally accepted constructor `mailbox_address`; current production composition discovers sender identity from `GET /gmail/v1/users/me/profile` (`emailAddress`) as of 12E.
 - Ordinary `REPLY` only: `Reply-To` else `From`; original subject preserved; no reply-all, drafts, or attachments
 - Conservative failure mapping aligned with 12C: definite provider rejection → `CommunicationActionExecutionError`; timeout/transport/5xx/408/credential-unavailable/blank-token → `ServiceUnavailableError`
 - ADR-019 extended for Gmail threading/send
@@ -204,7 +208,7 @@ Not implemented in 12D:
 = production routing + execute API + communications:send
 
 retry / EXECUTION_UNKNOWN / outbox
-= deferred to 12F
+= not implemented; documented in 12F / ADR-020
 ```
 
 Implemented in this slice:
@@ -227,7 +231,50 @@ Not implemented in 12E:
 
 ### 12F — Failure Semantics, Privacy, Documentation & Regression
 
-Provider-result persistence, uncertain-outcome documentation, and Phase 12 closure. Not implemented in this slice.
+```text
+12F
+= failure semantics + privacy + documentation + regression
+
+EXECUTION_UNKNOWN / retry / outbox / provider-result persistence
+= not implemented
+```
+
+This slice consolidates the production failure model already implemented by 12C–12E. It does not add a new workflow state, schema, or reconciliation worker.
+
+Authoritative failure matrix:
+
+| Class | Examples | External request | HTTP | Stored status | Automatic retry |
+|---|---|---|---|---|---|
+| Pre-execution structural | targetless, missing/cross-user/disconnected account, unsupported provider, missing/malformed `credential_ref` | NO | 409 | APPROVED | NO |
+| Pre-TX1 persistence unavailable | identity/DB failure before the `APPROVED` → `EXECUTING` commit | NO | 503 | previous (typically APPROVED) | NO |
+| Confirmed success | Graph 202; Gmail profile 200 + metadata 200 + send 200 | YES | 200 | EXECUTED | NO |
+| Definite external rejection | completed 3xx; non-408 4xx including 400/401/403/404/409/422/429 | YES | 200 | FAILED | NO |
+| Token/secret unavailable after TX1 | valid locator; `AccessTokenProvider` fails | NO | 503 | EXECUTING | NO |
+| Gmail pre-send unavailable after TX1 | profile/metadata timeout, 408, 5xx, transport, or malformed success | profile/metadata maybe; send POST = 0 | 503 | EXECUTING | NO |
+| Side-effect uncertain after TX1 | Graph `/reply` or Gmail send timeout, transport, 408, 5xx, unexpected 2xx | YES (may or may not have been accepted) | 503 | EXECUTING | NO |
+
+Missing mailbox secret after TX1 means the provider request did not occur. Gmail pre-send unavailable (profile/metadata) is not the same as send-outcome uncertain. Both remain `EXECUTING` after TX1 because no safe general retry/reconciliation protocol exists yet. Do not roll back to `APPROVED`. Do not automatically resend. Pre-TX1 persistence 503 did not reach the provider stage. See [ADR-020](../decisions/ADR-020-uncertain-communication-execution-semantics.md).
+
+Phase 12 persists only workflow execution state (`EXECUTING` / `EXECUTED` / `FAILED`). It does not persist raw Graph or Gmail response bodies, sent-message ids, mailbox addresses, recipients, subjects, Message-IDs, MIME, tokens, or `credential_ref`. Graph 202 has no required body. Gmail 200 success is accepted without parsing the returned Message. Earlier "provider-result persistence" wording is therefore clarified as workflow-state persistence, not provider payload storage. Alembic head remains `12a0001`.
+
+Implemented in this slice:
+
+- ADR-020 uncertain external-side-effect semantics
+- documentation of 200 FAILED versus 503 EXECUTING
+- privacy/data-minimization consolidation
+- architecture, API, and security documentation alignment
+- regression hardening for uncertain outcomes, definite rejection, no re-execution, and marker privacy
+
+Not implemented in 12F:
+
+- `EXECUTION_UNKNOWN`
+- automatic retry, backoff, or `Retry-After` resend
+- outbox / execution-attempts / reconciliation worker
+- raw provider-result persistence or success-response parsing for persistence
+- schema migration
+- production OAuth, token refresh, or managed secret stores
+- automatic replies
+- live provider send validation
 
 ## Deliverables
 
@@ -236,10 +283,15 @@ Provider-result persistence, uncertain-outcome documentation, and Phase 12 closu
 - [x] Phase 12C — Microsoft Graph Reply Executor (completed)
 - [x] Phase 12D — Gmail Reply Executor (completed)
 - [x] Phase 12E — Execute API + communications:send (completed)
-- [ ] Phase 12F — Failure Semantics, Privacy, Documentation & Regression
+- [x] Phase 12F — Failure Semantics, Privacy, Documentation & Regression (completed)
 
-## Unavailable until later Phase 12 slices
+## Deferred beyond Phase 12
 
-- production OAuth, token refresh, Azure Key Vault, AWS Secrets Manager
-- retry, `EXECUTION_UNKNOWN`, outbox, workers
+- production OAuth authorization/refresh
+- Azure Key Vault / AWS Secrets Manager mailbox secret backends
+- operator reconciliation tooling
+- execution-attempt / outbox model if later justified
+- safe retry strategy if later justified
+- `EXECUTION_UNKNOWN` if a richer attempt model is later justified
+- live provider validation
 - automatic replies

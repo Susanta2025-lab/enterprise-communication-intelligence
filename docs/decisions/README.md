@@ -35,6 +35,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-017](ADR-017-communication-action-execution-boundary.md) | Communication Action Execution Boundary | Accepted |
 | [ADR-018](ADR-018-workflow-execution-target-provenance.md) | Workflow Execution Target Provenance | Accepted |
 | [ADR-019](ADR-019-production-communication-write-architecture.md) | Production Communication Write Architecture | Accepted |
+| [ADR-020](ADR-020-uncertain-communication-execution-semantics.md) | Uncertain Communication Execution Semantics | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -60,7 +61,9 @@ ADR-017 records the Phase 11D execution boundary: `CommunicationActionExecutor` 
 
 ADR-018 records Phase 12A execution-target provenance. `WorkflowAction` snapshots `connector_account_id` and `provider_message_id` at create. Analyses store optional mailbox `connector_account_id`. Execution validates an owned active connector account inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Legacy targetless rows remain valid and non-executable. Credentials are not stored on workflow or analysis rows.
 
-ADR-019 records production write architecture. `CommunicationConnector` stays read-only. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` implement `CommunicationActionExecutor` with injected `httpx.Client` and `AccessTokenProvider`. Graph uses native `/reply`. Gmail fetches metadata, constructs an RFC 2822 reply, and posts `messages.send`. Tokens and `credential_ref` stay off the execution command. Production workflow routing and the HTTP execute route remain deferred.
+ADR-019 records production write architecture. `CommunicationConnector` stays read-only. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` implement `CommunicationActionExecutor` with injected `httpx.Client` and `AccessTokenProvider`. Graph uses native `/reply`. Gmail discovers sender identity from `users/me/profile`, fetches metadata, constructs an RFC 2822 reply, and posts `messages.send`. Tokens and `credential_ref` stay off the execution command. Phase 12E routes those writers through `CommunicationActionExecutorFactory` and `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`.
+
+ADR-020 records uncertain external-side-effect semantics. Definite provider rejection becomes durable `FAILED`. Confirmed success becomes durable `EXECUTED`. Uncertain or unavailable outcomes after TX1 remain `EXECUTING` and the execute API returns HTTP 503. Automatic retry and `EXECUTION_UNKNOWN` are rejected. Duplicate-send prevention takes priority over automatic recovery. Operator reconciliation remains future work.
 
 ## Template
 

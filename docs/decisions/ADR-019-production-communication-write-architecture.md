@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 12C and extended in Phase 12D and Phase 12E. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` are provider-specific write adapters behind `CommunicationActionExecutor`. Phase 12E routes them through `CommunicationActionExecutorFactory` from an owned `ConnectorAccount` and exposes `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. Credential lookup remains the environment-backed local/dev resolver. Retry, `EXECUTION_UNKNOWN`, and outbox work remain deferred to Phase 12F.
+The decision is implemented for Phase 12C and extended in Phase 12D and Phase 12E. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` are provider-specific write adapters behind `CommunicationActionExecutor`. Phase 12E routes them through `CommunicationActionExecutorFactory` from an owned `ConnectorAccount` and exposes `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. Credential lookup remains the environment-backed local/dev resolver. Uncertain-outcome semantics are recorded in [ADR-020](ADR-020-uncertain-communication-execution-semantics.md): retry, `EXECUTION_UNKNOWN`, and outbox work are not implemented.
 
 ## Date
 
@@ -76,7 +76,7 @@ POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send
 - Token lookup failure, a blank returned token, and credential-resolver errors raise `ServiceUnavailableError`. They are not converted into `CommunicationActionExecutionError` because no provider send request has occurred.
 - Graph HTTP `202` is success. Gmail send HTTP `200` is success. Success does not parse or persist a response body. `execute` continues to return `None`.
 - Definite provider rejection raises `CommunicationActionExecutionError`: ordinary 4xx except `408`, plus 3xx responses that are not followed. Provider `429` is a definite refusal of that request; the adapter does not retry, sleep on `Retry-After`, or resend. Graph `409` is treated as a definite conflict rejection of that request, not an uncertain completion.
-- Transport failure, timeout, provider `408`, provider 5xx, and unexpected non-success 2xx responses raise `ServiceUnavailableError`. They are not coerced into a definite `FAILED` signal. For Gmail, that mapping applies to the profile GET, metadata GET, and send POST. A profile or metadata failure never issues send. A malformed successful profile response (missing/invalid `emailAddress`) is `ServiceUnavailableError`. Phase 12F will finalize uncertain-outcome reconciliation. This slice does not introduce `EXECUTION_UNKNOWN`, retry, or an outbox.
+- Transport failure, timeout, provider `408`, provider 5xx, and unexpected non-success 2xx responses raise `ServiceUnavailableError`. They are not coerced into a definite `FAILED` signal. For Gmail, that mapping applies to the profile GET, metadata GET, and send POST. A profile or metadata failure never issues send. A malformed successful profile response (missing/invalid `emailAddress`) is `ServiceUnavailableError`. [ADR-020](ADR-020-uncertain-communication-execution-semantics.md) retains `EXECUTING` as the conservative uncertainty marker. This architecture does not introduce `EXECUTION_UNKNOWN`, retry, or an outbox.
 - Redirects are not followed. Each provider request sets `follow_redirects=False` so an injected client cannot forward `Authorization` to another host.
 - The adapters do not retry timeout, 429, 5xx, or connection errors. Graph `/reply` and Gmail `messages.send` are not treated as idempotent.
 - Gmail threading requires the original `threadId`, the original `Subject` without automatic `Re:` prefixing, `In-Reply-To` set to the original RFC `Message-ID`, and `References` preserving any existing chain plus that `Message-ID` when it is not already the last identifier. A malformed `Message-ID` or `References` chain fails closed before send. The reply target is a valid `Reply-To` when present; otherwise `From`. A present but malformed, multi-recipient, or group `Reply-To` does not fall back to `From`. The action is ordinary `REPLY` only: recipients are not derived from `To`, `Cc`, or `Bcc`.
@@ -102,7 +102,7 @@ POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send
 - **Treat every Graph 4xx as definite `FAILED`, including 408** — rejected. 408 can leave the side-effect outcome uncertain.
 - **Map timeout, transport failure, or 5xx to `CommunicationActionExecutionError`** — rejected. That would persist `FAILED` and encourage unsafe resend.
 - **Map credential unavailability or a blank token to `CommunicationActionExecutionError`** — rejected. No provider send request has occurred, so that would be a false definite send failure.
-- **Add `EXECUTION_UNKNOWN`, retry, or an outbox in 12C or 12D** — rejected. Phase 12F owns uncertain-outcome documentation and reconciliation.
+- **Add `EXECUTION_UNKNOWN`, retry, or an outbox in 12C or 12D** — rejected. Uncertain-outcome semantics are documented in [ADR-020](ADR-020-uncertain-communication-execution-semantics.md) without adding a new state or reconciliation worker.
 - **Add Microsoft Graph SDK, MSAL, Azure Identity, or a Google API SDK** — rejected. Writers use `httpx` REST like the read adapters. Mailbox OAuth remains external configuration.
 
 ## Consequences
@@ -127,7 +127,7 @@ MicrosoftGraphCommunicationActionExecutor
 
 - Fake execution stays credential-independent in isolated tests. The production execute API does not route `fake`.
 - Graph `/reply` requires delegated `Mail.Send` against the real service. Gmail send requires `gmail.readonly` plus `gmail.send`. Those consents remain documentation-only.
-- `CommunicationActionExecutionError` remains the definite `FAILED` path. Uncertain failures remain `ServiceUnavailableError` so stored status can stay `EXECUTING` until Phase 12F.
+- `CommunicationActionExecutionError` remains the definite `FAILED` path. Uncertain failures remain `ServiceUnavailableError` so stored status can stay `EXECUTING`. See [ADR-020](ADR-020-uncertain-communication-execution-semantics.md).
 
 ## Benefits
 
@@ -141,7 +141,7 @@ MicrosoftGraphCommunicationActionExecutor
 - Production workflow routing exists for Graph and Gmail through the execute API. Operators still cannot rely on managed secret stores or OAuth refresh.
 - There is no live Graph or Gmail send validation in normal pytest.
 - Graph `/reply` returns no resource body. Gmail send returns a Message resource that is ignored. No provider result identifier is stored.
-- Uncertain external side effects are not yet reconciled. The workflow status model is unchanged.
+- Uncertain external side effects are not reconciled automatically. The workflow status model is unchanged: `EXECUTING` after TX1 marks unknown completion. See [ADR-020](ADR-020-uncertain-communication-execution-semantics.md).
 
 ## Related Components
 
@@ -157,4 +157,5 @@ MicrosoftGraphCommunicationActionExecutor
 - `app/infrastructure/connectors/gmail/connector.py`
 - [ADR-017](ADR-017-communication-action-execution-boundary.md)
 - [ADR-018](ADR-018-workflow-execution-target-provenance.md)
+- [ADR-020](ADR-020-uncertain-communication-execution-semantics.md)
 - [Phase 12](../roadmap/phase-12-production-communication-execution.md)

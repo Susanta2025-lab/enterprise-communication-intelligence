@@ -47,7 +47,7 @@ Framework and infrastructure concerns live at the outer edges:
 - **SQLAlchemy and Alembic** are confined to `app/infrastructure/storage/` and `alembic/`. Application services depend on repository interfaces.
 - **Communication connector adapters** are confined to `app/infrastructure/connectors/`. Application ingestion depends on `CommunicationConnector`, not Gmail or Graph types. There is no connector factory.
 - **Action executor adapters** are confined to `app/infrastructure/executors/`. Application execution depends on `CommunicationActionExecutorFactory`, not a concrete fake, Graph, or Gmail class. The production factory selects Graph or Gmail from an owned account.
-- **Mailbox credential resolution** is confined to `app/infrastructure/credentials/`. Application execution does not call the resolver in Phase 12B. Mailbox tokens are not loaded into `Settings`.
+- **Mailbox credential resolution** is confined to `app/infrastructure/credentials/`. The production factory calls the resolver to obtain an `AccessTokenProvider`; the application execution service does not import the resolver or invoke tokens. Mailbox tokens are not loaded into `Settings`.
 - **Configuration and logging setup** (`app/core/config.py`, `app/core/logging.py`) are the only places application Settings and structlog configuration are touched. Mailbox credential environment variables are looked up individually by the environment-backed resolver when resolution is requested; they are not Settings fields.
 
 ## Why Domain Code Is Independent of FastAPI and Cloud SDKs

@@ -44,7 +44,7 @@ def _assert_profile_and_metadata_only(stub: object) -> None:
     assert stub.send_requests() == []  # type: ignore[attr-defined]
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 429])
 def test_profile_4xx_is_definite_execution_error_without_metadata(
     gmail_reply_executor: tuple,
     status: int,
@@ -138,7 +138,7 @@ def test_profile_redirect_is_not_followed(gmail_reply_executor: tuple) -> None:
     assert all(request.url.host != "evil.example" for request in stub.requests)
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 429])
 def test_metadata_4xx_is_definite_execution_error_without_send(
     gmail_reply_executor: tuple,
     status: int,
@@ -232,7 +232,7 @@ def test_metadata_transport_error_is_unavailable_without_send(
     _assert_profile_and_metadata_only(stub)
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 429])
 def test_send_4xx_is_definite_execution_error(
     gmail_reply_executor: tuple,
     status: int,

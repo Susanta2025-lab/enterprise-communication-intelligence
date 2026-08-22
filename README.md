@@ -67,7 +67,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 ### Authentication
 
 * Provider-independent OIDC JWT validation
-* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for workflow routes)
+* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute)
 * Fail-closed production (`APP_ENV=production` requires `AUTH_MODE=oidc`)
 * First live identity provider: Microsoft Entra ID (single-tenant resource application)
 
@@ -94,7 +94,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * `GET /api/v1/analyses` and `GET/DELETE /api/v1/analyses/{analysis_id}`
 * `POST /api/v1/workflow-actions`, `GET /api/v1/workflow-actions`, `GET /api/v1/workflow-actions/{action_id}`
 * `POST /api/v1/workflow-actions/{action_id}/approve` and `.../reject`
-* No HTTP execute, retry, PATCH, or DELETE workflow routes
+* `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
 * Request validation
 * Structured error handling
 * Reusable domain schemas
@@ -119,7 +119,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Connector ingestion into the existing analysis workflow (below the HTTP surface)
 * Controlled local live adapter verification for Gmail and Microsoft Graph, stopping at `CommunicationMessage`
 
-Phase 10 does not include production OAuth, connector HTTP APIs, background synchronization, sending, or automatic replies.
+Phase 10 does not include production OAuth, connector HTTP APIs, background synchronization, or automatic replies.
 
 ### Workflow Automation
 
@@ -128,10 +128,15 @@ Phase 10 does not include production OAuth, connector HTTP APIs, background sync
 * Explicit proposal creation snapshots `draft_reply.body` into a PENDING action
 * User approval copies the proposed snapshot; rejection retains it and cannot execute
 * HTTP proposal/approval API under `/api/v1/workflow-actions` (`communications:workflow`)
-* Internal deterministic execution boundary: `WorkflowActionExecutionService` → `CommunicationActionExecutor` → `FakeCommunicationActionExecutor`
-* Execution uses only `approved_reply_body`; analysis deletion does not block it
+* User-approved execute API under `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
+* Provider-neutral executor factory routes owned Gmail or Microsoft Graph accounts
+* Real Gmail reply execution (`users/me/profile` + metadata + `messages.send`)
+* Real Microsoft Graph reply execution (`POST /me/messages/{id}/reply`)
+* Credential abstraction via `CommunicationCredentialResolver` (environment-backed local/dev lookup)
+* Distinct analyze / workflow / send permissions
+* Uncertain provider outcomes remain `EXECUTING` and return HTTP 503; they are not automatically retried
 
-Phase 11 does not include a public execute endpoint, real Gmail/Graph send/reply, automatic replies, `communications:send`, OAuth write scopes, retry, or reconciliation.
+Phase 12 does not include automatic replies, production OAuth lifecycle, managed secret-store mailbox backends, retry/reconciliation, or exactly-once delivery.
 
 ### Engineering
 
@@ -183,6 +188,13 @@ Phase 11 does not include a public execute endpoint, real Gmail/Graph send/reply
 * ✅ Phase 11D – Action Execution Port + Deterministic Fake Executor
 * ✅ Phase 11E – Integration, Documentation & Regression
 * ✅ Phase 11 – Workflow Automation
+* ✅ Phase 12A – Execution Target, Routing & Executability Foundation
+* ✅ Phase 12B – Credential Resolution + Write-Scope Readiness
+* ✅ Phase 12C – Microsoft Graph Reply Executor
+* ✅ Phase 12D – Gmail Reply Executor
+* ✅ Phase 12E – Execute API + communications:send
+* ✅ Phase 12F – Failure Semantics, Privacy, Documentation & Regression
+* ✅ Phase 12 – Production Communication Execution
 
 ---
 
@@ -242,15 +254,31 @@ explicit WorkflowAction proposal (PENDING)
 user approve / reject
         ↓
 approved snapshot (APPROVED) or REJECTED
-        ↓
-WorkflowActionExecutionService (below HTTP)
-        ↓
-FakeCommunicationActionExecutor
-        ↓
-EXECUTED / FAILED
 ```
 
-`CommunicationConnector` remains read-only. `CommunicationActionExecutor` is a separate write port. The current executor is deterministic and fake; it does not send Gmail or Microsoft Graph mail. There is no HTTP execute route.
+Phase 12 adds user-approved real communication execution:
+
+```text
+POST /api/v1/workflow-actions/{id}/execute
+        ↓
+communications:send
+        ↓
+WorkflowActionExecutionService
+        ↓
+owned ACTIVE ConnectorAccount
+        ↓
+CommunicationActionExecutorFactory
+        ↓
+TX1 APPROVED → EXECUTING (commit, close UoW)
+        ↓
+credential resolver / access token
+        ↓
+Graph /reply  or  Gmail profile + metadata + send
+        ↓
+TX2 EXECUTED | FAILED
+```
+
+`CommunicationConnector` remains read-only. `CommunicationActionExecutor` is a separate write port. Uncertain provider or credential failure after TX1 returns HTTP 503 and leaves the row `EXECUTING`. There is no retry route and no automatic reply.
 
 Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, AI workload identity, and GitHub deploy identity.
 
@@ -395,8 +423,7 @@ deployment/
 
 **Later**
 
-* Azure Key Vault
-* AWS Secrets Manager
+* Azure Key Vault / AWS Secrets Manager mailbox secret backends (environment-backed local/dev credential lookup exists)
 * Managed Azure PostgreSQL / Amazon RDS
 * Distributed tracing / OpenTelemetry
 * Custom metrics, dashboards, and alerts
@@ -504,6 +531,13 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 11C – Proposal & Approval API    | ✅ Completed   |
 | ↳ Phase 11D – Fake Execution Boundary    | ✅ Completed   |
 | ↳ Phase 11E – Integration & Documentation| ✅ Completed   |
+| Phase 12 – Production Communication Execution | ✅ Completed   |
+| ↳ Phase 12A – Execution Target Foundation | ✅ Completed   |
+| ↳ Phase 12B – Credential Resolution      | ✅ Completed   |
+| ↳ Phase 12C – Graph Reply Executor       | ✅ Completed   |
+| ↳ Phase 12D – Gmail Reply Executor       | ✅ Completed   |
+| ↳ Phase 12E – Execute API + send         | ✅ Completed   |
+| ↳ Phase 12F – Semantics, Privacy & Docs  | ✅ Completed   |
 
 ---
 
@@ -528,9 +562,10 @@ The current implementation intentionally focuses on architecture and application
 Not yet implemented:
 
 * Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
-* Production Gmail/Microsoft OAuth, credential resolver, and connector HTTP APIs
+* Production Gmail/Microsoft OAuth lifecycle, token refresh, and connector HTTP APIs
 * Mailbox synchronization, webhooks, and attachments
-* Real Gmail/Graph send/reply, HTTP execute/retry, `communications:send`, OAuth write scopes, and automatic replies (Phase 11 execution is an internal deterministic fake boundary only)
+* Automatic replies, retry/reconciliation, exactly-once delivery, or live-provider send validation
+* Managed secret-store mailbox backends (Key Vault / Secrets Manager)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached
