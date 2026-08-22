@@ -1,12 +1,13 @@
 # Authentication
 
-ECI has five identity paths. They must not be mixed.
+ECI has six identity paths. They must not be mixed.
 
 1. **Application user → Microsoft Entra ID → JWT → ECI API.** Provider-independent OIDC JWT validation at the API boundary. The first live identity provider is a single-tenant Microsoft Entra ID resource application. ECI does not use Easy Auth or a Cognito SDK. Phase 9 maps verified `(issuer, subject)` to an opaque internal user UUID for ownership only; that is not a login user database and not SaaS tenancy. The caller's OIDC token does not authenticate to PostgreSQL. See [API Overview](../api/overview.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), and [ADR-013](../decisions/ADR-013-external-identity-mapping-and-user-owned-data.md).
 2. **Azure workload → Microsoft Foundry.** Container Apps user-assigned identity `eci-ca-identity-dev` through `DefaultAzureCredential`.
 3. **AWS workload → Amazon Bedrock.** ECS Task Role `eci-bedrock-task-role-dev` through boto3's standard credential chain.
 4. **GitHub Actions → Azure / AWS deploy identities.** GitHub OIDC federation to Azure user-assigned managed identity `eci-github-deploy-dev` and AWS IAM role `eci-github-deploy-dev`. Same display name, different cloud object types. These identities must not receive Foundry or Bedrock invoke permissions. GitHub OIDC subjects use the immutable unique-ID format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:environment:…`).
 5. **ECI runtime → PostgreSQL database identity.** Application contract is `DATABASE_URL` when persistence is configured. Runtime DML credentials should be separate from migration DDL credentials. No managed Azure or AWS database is provisioned in Phase 9, so this cloud identity remains future until a colocated database exists. See [PostgreSQL persistence](persistence.md).
+6. **Mailbox credentials → Gmail / Microsoft Graph access tokens.** Opaque `ConnectorAccount.credential_ref` is resolved by `CommunicationCredentialResolver` into an on-demand `AccessTokenProvider`. Local/development uses environment-backed token material (`ECI_COMMUNICATION_CREDENTIAL_<PROVIDER>_<NORMALIZED_REF>_ACCESS_TOKEN`). This is not the ECI API JWT, not AI workload identity, and not database identity. Phase 12B does not implement production OAuth, refresh, Azure Key Vault, or AWS Secrets Manager for mailbox tokens.
 
 The rest of this document describes application-user OIDC and cloud/provider authentication. Deployment OIDC is summarized in [Deployment](deployment.md).
 

@@ -13,6 +13,7 @@ from app.domain.interfaces import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
     CommunicationConnector,
+    CommunicationCredentialResolver,
     ConnectorAccountRepository,
     IdentityRepository,
     PersistenceUnitOfWork,
@@ -104,6 +105,14 @@ def test_communication_action_executor_interface_is_abstract() -> None:
         CommunicationActionExecutor()  # type: ignore[abstract]
 
 
+def test_communication_credential_resolver_interface_is_abstract() -> None:
+    """The credential port must not be instantiable without a resolve implementation."""
+    assert issubclass(CommunicationCredentialResolver, ABC)
+    assert "resolve" in CommunicationCredentialResolver.__abstractmethods__
+    with pytest.raises(TypeError):
+        CommunicationCredentialResolver()  # type: ignore[abstract]
+
+
 def test_communication_action_execution_is_immutable_and_validated() -> None:
     """The executor command is a frozen approved-snapshot, not a workflow entity."""
     action_id = uuid4()
@@ -179,6 +188,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.analysis_repository as analysis_repository
     import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_connector as communication_connector
+    import app.domain.interfaces.communication_credential_resolver as credential_resolver
     import app.domain.interfaces.connector_account_repository as connector_account_repository
     import app.domain.interfaces.identity_repository as identity_repository
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
@@ -195,6 +205,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         analysis_repository,
         communication_action_executor,
         communication_connector,
+        credential_resolver,
         connector_account_repository,
         identity_repository,
         persistence_unit_of_work,

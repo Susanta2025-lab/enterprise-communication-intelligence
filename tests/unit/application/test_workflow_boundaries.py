@@ -137,6 +137,9 @@ def test_execution_boundary_exists_below_http() -> None:
     assert "MicrosoftGraphCommunicationConnector" not in execution_source
     assert "GmailCommunicationActionExecutor" not in execution_source
     assert "MicrosoftGraphCommunicationActionExecutor" not in execution_source
+    assert "CommunicationCredentialResolver" not in execution_source
+    assert "EnvironmentCommunicationCredentialResolver" not in execution_source
+    assert "AccessTokenProvider" not in execution_source
     assert "credential_ref" not in execution_source
     assert "sqlalchemy" not in execution_source
     assert "fastapi" not in execution_source
@@ -148,6 +151,9 @@ def test_execution_boundary_exists_below_http() -> None:
         encoding="utf-8"
     )
     assert "FakeCommunicationActionExecutor" in fake_source
+    assert "CommunicationCredentialResolver" not in fake_source
+    assert "AccessTokenProvider" not in fake_source
+    assert "credential_ref" not in fake_source
     providers = _ROOT / "app" / "providers"
     for path in providers.rglob("*.py"):
         source = path.read_text(encoding="utf-8")

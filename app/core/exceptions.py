@@ -28,6 +28,23 @@ class CommunicationActionExecutionError(ECIPlatformError):
         super().__init__(message)
 
 
+class CommunicationCredentialUnavailableError(ECIPlatformError):
+    """Raised when mailbox credential material cannot be resolved."""
+
+    def __init__(self, message: str = "Communication credential is unavailable.") -> None:
+        super().__init__(message)
+
+
+class UnsupportedCommunicationCredentialProviderError(ECIPlatformError):
+    """Raised when credential resolution is requested for an unsupported provider."""
+
+    def __init__(
+        self,
+        message: str = "Communication credential provider is not supported.",
+    ) -> None:
+        super().__init__(message)
+
+
 class ConnectorError(ECIPlatformError):
     """Raised when a communication connector operation fails."""
 

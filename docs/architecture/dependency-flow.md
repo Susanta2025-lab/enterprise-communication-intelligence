@@ -49,10 +49,25 @@ API does not import the fake executor. There is no executor factory and no HTTP 
 
 `CommunicationConnector` remains read-only. The write port is separate.
 
+## Credential resolution dependency direction
+
+Domain defines `CommunicationCredentialResolver` and `AccessTokenProvider`. Infrastructure implements the environment-backed resolver. Application services do not call the resolver in Phase 12B.
+
+```text
+                    Domain
+           CommunicationCredentialResolver
+              ↗                 ↖
+ Application                     Infrastructure
+ depends on interface            implements env resolver
+ (not invoked in 12B execution)  (credentials/)
+```
+
+The environment resolver does not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`.
+
 ## Explicit Rules (Verified Against Source)
 
 - **Domain does not import API, providers, SQLAlchemy, or connector adapters.** `app/domain/*` imports only `pydantic`, the standard library, and other `app.domain` modules. Persistence and connector contracts are interfaces and dataclasses.
-- **Application does not import FastAPI, the provider factory, SQLAlchemy models, or vendor mailbox types.** Workflow, identity, history, ingestion, connector-account, workflow-action, and workflow-action-execution services depend on domain interfaces. `CommunicationIngestionService` takes `CommunicationConnector`; it does not import `GmailCommunicationConnector` or `MicrosoftGraphCommunicationConnector`. `WorkflowActionService` uses `WorkflowActionRepository`; it does not import connector adapters or an executor. `WorkflowActionExecutionService` depends on `CommunicationActionExecutor`; it does not import the fake class, Gmail, Graph, or `AIProvider`.
+- **Application does not import FastAPI, the provider factory, SQLAlchemy models, or vendor mailbox types.** Workflow, identity, history, ingestion, connector-account, workflow-action, and workflow-action-execution services depend on domain interfaces. `CommunicationIngestionService` takes `CommunicationConnector`; it does not import `GmailCommunicationConnector` or `MicrosoftGraphCommunicationConnector`. `WorkflowActionService` uses `WorkflowActionRepository`; it does not import connector adapters or an executor. `WorkflowActionExecutionService` depends on `CommunicationActionExecutor`; it does not import the fake class, Gmail, Graph, `AIProvider`, or `CommunicationCredentialResolver`.
 - **API does not import concrete AI providers or concrete connectors.** `app/api/dependencies.py` imports `app.providers.factory.create_ai_provider` (the factory), not `MockAIProvider`, `MicrosoftFoundryProvider`, or `AmazonBedrockProvider`. Storage implementations are constructed in API dependencies, not in routes. Connector adapters are not wired in the API. Phase 11C adds workflow routes that depend on `WorkflowActionService` and `require_authenticated_communications_workflow`.
 - **Provider implementations depend on domain interfaces.** `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` implement `AIProvider`. The factory imports `AIProvider` as its return type and `app.core.config`/`app.core.exceptions` for settings and error translation. The two real LLM adapters also import `app/providers/common`.
 - **SQLAlchemy stays in infrastructure storage.** ORM models, engine, session, and repository implementations live under `app/infrastructure/storage/`.
@@ -60,7 +75,7 @@ API does not import the fake executor. There is no executor factory and no HTTP 
 
 ## Where FastAPI-Specific Typing Is Allowed
 
-`fastapi.Depends` and `fastapi.APIRouter` appear only in `app/api/dependencies.py` and `app/api/routes/*.py`. Nowhere else in the codebase (`app/application`, `app/domain`, `app/providers`, `app/core`, `app/infrastructure/storage`, `app/infrastructure/connectors`, `app/infrastructure/executors`) is `fastapi` imported.
+`fastapi.Depends` and `fastapi.APIRouter` appear only in `app/api/dependencies.py` and `app/api/routes/*.py`. Nowhere else in the codebase (`app/application`, `app/domain`, `app/providers`, `app/core`, `app/infrastructure/storage`, `app/infrastructure/connectors`, `app/infrastructure/credentials`, `app/infrastructure/executors`) is `fastapi` imported.
 
 ## Where Cloud SDKs Are Allowed
 

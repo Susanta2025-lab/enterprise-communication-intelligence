@@ -1,10 +1,9 @@
 """In-memory access-token injection helpers for connector adapters."""
 
-from collections.abc import Callable
-
 from app.core.exceptions import ConnectorAuthenticationError
+from app.domain.interfaces.communication_credential_resolver import AccessTokenProvider
 
-AccessTokenProvider = Callable[[], str]
+__all__ = ["AccessTokenProvider", "resolve_access_token"]
 
 
 def resolve_access_token(provider: AccessTokenProvider) -> str:

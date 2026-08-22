@@ -302,7 +302,7 @@ resolve owner identity
 → TX2: EXECUTING → EXECUTED or FAILED, commit
 ```
 
-`ACTIVE` is structural executability in 12A. Execution does not inspect `credential_ref`. An `ACTIVE` account may have a null locator; credential resolution is Phase 12B.
+`ACTIVE` is structural executability in 12A. Execution does not inspect `credential_ref`. An `ACTIVE` account may have a null locator. Phase 12B adds `CommunicationCredentialResolver` without injecting it into `WorkflowActionExecutionService`; fake execution remains credential-independent.
 
 The command carries `approved_reply_body` plus `connector_account_id`, `provider_message_id`, and `provider` resolved from the owned `ConnectorAccount`. It does not carry credentials or tokens. Analysis is not reloaded. Fake execution remains the only write implementation in 12A.
 

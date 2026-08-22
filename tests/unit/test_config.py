@@ -62,6 +62,23 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.database_url is None
 
 
+def test_mailbox_credential_env_vars_are_ignored_by_settings(
+    clear_settings_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mailbox secrets must not load into Settings or block ordinary startup."""
+    token = "SUPER_SECRET_TEST_TOKEN_123"
+    env_name = "ECI_COMMUNICATION_CREDENTIAL_GMAIL_DEMO_ACCOUNT_ACCESS_TOKEN"
+    monkeypatch.setenv(env_name, token)
+    settings = Settings(_env_file=None)
+    assert settings.ai_provider == "mock"
+    dumped = settings.model_dump()
+    blob = f"{dumped!s}{settings!r}{settings}"
+    assert token not in blob
+    assert env_name not in blob
+    assert "credential" not in dumped
+
+
 def test_get_settings_returns_cached_instance(monkeypatch: pytest.MonkeyPatch) -> None:
     """get_settings should cache the Settings instance."""
     monkeypatch.delenv("APP_NAME", raising=False)

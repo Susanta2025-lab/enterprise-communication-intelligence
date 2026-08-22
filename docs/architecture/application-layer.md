@@ -98,7 +98,13 @@ Identity, optional analysis persistence, and AI orchestration remain on `Communi
 - store provider identity and opaque `external_account_id`
 - accept optional opaque `credential_ref` without treating it as token material
 
-It does **not** store access tokens, refresh tokens, authorization codes, or secrets. It does not call Gmail, Microsoft Graph, or `AIProvider`. Application-facing `ConnectorAccountResult` omits `user_id` and `credential_ref`. There is no credential resolver joining `credential_ref` to `AccessTokenProvider`.
+It does **not** store access tokens, refresh tokens, authorization codes, or secrets. It does not call Gmail, Microsoft Graph, or `AIProvider`. Application-facing `ConnectorAccountResult` omits `user_id` and `credential_ref`. Credential resolution is a separate domain port (`CommunicationCredentialResolver`) implemented in infrastructure; `ConnectorAccountService` does not perform it.
+
+## Credential resolution
+
+`CommunicationCredentialResolver` (`app/domain/interfaces/communication_credential_resolver.py`) translates an opaque `credential_ref` plus mailbox `provider` into an on-demand `AccessTokenProvider`. It does not decide account ownership, workflow executability, or which message to reply to.
+
+`EnvironmentCommunicationCredentialResolver` (`app/infrastructure/credentials/environment.py`) is the local/development implementation. It maps `(provider, credential_ref)` to `ECI_COMMUNICATION_CREDENTIAL_<PROVIDER>_<NORMALIZED_REF>_ACCESS_TOKEN`. `credential_ref` is not unique on `ConnectorAccount`, so the provider slug is part of the secret key. Locators may use hyphens but not underscores, so hyphen-to-underscore encoding cannot collide. Secret lookup happens when the returned callable is invoked. Mailbox tokens are not loaded into `Settings`. Missing mailbox environment variables do not prevent startup. `WorkflowActionExecutionService` does not call the resolver; fake execution remains credential-independent. This is not production OAuth, refresh, Azure Key Vault, or AWS Secrets Manager.
 
 ## Provider Failure Translation
 
@@ -166,4 +172,4 @@ Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a
 
 The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, and disconnected accounts raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. `ACTIVE` is structural executability in 12A; `credential_ref` is not inspected. Known `CommunicationActionExecutionError` becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`; the row may remain `EXECUTING`.
 
-Phase 12A still implements only `FakeCommunicationActionExecutor` under `app/infrastructure/executors/`. `CommunicationConnector` remains read-only. Real Gmail/Graph writes remain later work.
+Phase 12A still implements only `FakeCommunicationActionExecutor` under `app/infrastructure/executors/`. `CommunicationConnector` remains read-only. Real Gmail/Graph writes remain later work. Phase 12B adds `CommunicationCredentialResolver` without injecting it into this service.

@@ -91,9 +91,9 @@ CommunicationMessage
         STOP
 ```
 
-Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, background-sync, or credential-resolver sequences.
+Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, or background-sync sequences.
 
-The following are **not implemented** and are not shown as current flows: OAuth callback, credential resolver, background sync, automatic replies, sending.
+The following are **not implemented** and are not shown as current flows: OAuth callback, production secret stores, background sync, automatic replies, sending. Phase 12B adds `CommunicationCredentialResolver` as a below-HTTP local/dev boundary; it is not a user-facing sequence.
 
 ## Identity failure before AI
 

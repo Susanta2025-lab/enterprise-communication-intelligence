@@ -15,6 +15,10 @@ from app.domain.interfaces.communication_connector import (
     ConnectorMessageQuery,
     MessagePage,
 )
+from app.domain.interfaces.communication_credential_resolver import (
+    AccessTokenProvider,
+    CommunicationCredentialResolver,
+)
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     ConnectorAccountRepository,
@@ -30,11 +34,13 @@ from app.domain.interfaces.workflow_action_repository import (
 
 __all__ = [
     "AIProvider",
+    "AccessTokenProvider",
     "AnalysisRecord",
     "AnalysisRepository",
     "CommunicationActionExecution",
     "CommunicationActionExecutor",
     "CommunicationConnector",
+    "CommunicationCredentialResolver",
     "ConnectorAccountRecord",
     "ConnectorAccountRepository",
     "ConnectorMessageQuery",

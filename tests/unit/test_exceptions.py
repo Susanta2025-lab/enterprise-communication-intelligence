@@ -12,6 +12,7 @@ from app.application.exceptions import (
 )
 from app.core.exceptions import (
     CommunicationActionExecutionError,
+    CommunicationCredentialUnavailableError,
     ConfigurationError,
     ConnectorAuthenticationError,
     ConnectorError,
@@ -24,6 +25,7 @@ from app.core.exceptions import (
     ECIPlatformError,
     PersistenceError,
     ServiceUnavailableError,
+    UnsupportedCommunicationCredentialProviderError,
 )
 from app.domain.exceptions import InvalidWorkflowTransitionError
 
@@ -34,6 +36,8 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ServiceUnavailableError, ECIPlatformError)
     assert issubclass(PersistenceError, ECIPlatformError)
     assert issubclass(CommunicationActionExecutionError, ECIPlatformError)
+    assert issubclass(CommunicationCredentialUnavailableError, ECIPlatformError)
+    assert issubclass(UnsupportedCommunicationCredentialProviderError, ECIPlatformError)
     assert issubclass(AnalysisFailedError, ECIPlatformError)
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
@@ -121,6 +125,26 @@ def test_communication_action_execution_error_has_generic_message() -> None:
     assert "graph" not in lowered
     assert "http" not in lowered
     assert "token" not in lowered
+
+
+def test_communication_credential_errors_have_generic_messages() -> None:
+    """Credential failures must not leak locators, tokens, or secret names."""
+    unavailable = CommunicationCredentialUnavailableError()
+    unsupported = UnsupportedCommunicationCredentialProviderError()
+    assert unavailable.message == "Communication credential is unavailable."
+    assert str(unavailable) == "Communication credential is unavailable."
+    assert unsupported.message == "Communication credential provider is not supported."
+    assert str(unsupported) == "Communication credential provider is not supported."
+    for error in (unavailable, unsupported):
+        lowered = error.message.lower()
+        assert "gmail" not in lowered
+        assert "graph" not in lowered
+        assert "token" not in lowered
+        assert "environ" not in lowered
+        assert "secret" not in lowered
+        assert "credential_ref" not in lowered
+        assert "key vault" not in lowered
+        assert "secrets manager" not in lowered
 
 
 def test_invalid_workflow_transition_has_generic_message() -> None:
