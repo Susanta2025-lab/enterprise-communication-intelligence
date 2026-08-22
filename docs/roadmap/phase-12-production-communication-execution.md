@@ -38,7 +38,7 @@ Phase 12 is **In Progress**.
 - **12A is Completed:** analysis `connector_account_id` provenance, workflow execution-target snapshot (`connector_account_id` + `provider_message_id`), owned `ACTIVE` ConnectorAccount validation before `APPROVED` → `EXECUTING`, expanded frozen execution command, Alembic `12a0001`, ADR-018. Fake execution only.
 - **12B is Completed:** provider-neutral `CommunicationCredentialResolver`, environment-backed local/dev resolver, shared `AccessTokenProvider` contract, write-scope readiness documentation. Environment-backed local/dev lookup only. Fake execution remains credential-independent.
 - **12C is Completed:** Microsoft Graph reply adapter implemented as `MicrosoftGraphCommunicationActionExecutor`. Production workflow routing/composition is deferred to the provider-routing/execute integration slice. The adapter is not reachable from the REST API. ADR-019.
-- **12D is Not started:** Gmail reply executor.
+- **12D is Completed:** Gmail reply adapter implemented as `GmailCommunicationActionExecutor`. Production workflow routing/composition remains deferred. The adapter is not reachable from the REST API. ADR-019 extended.
 - **12E is Not started:** Execute API and `communications:send`.
 - **12F is Not started:** Failure semantics, privacy, documentation, and regression.
 
@@ -169,7 +169,33 @@ Not implemented in 12C:
 
 ### 12D — Gmail Reply Executor
 
-Real Gmail reply writes. Not implemented in this slice.
+```text
+12D
+= Gmail reply adapter implemented
+
+production workflow routing/composition
+= deferred to the provider-routing/execute integration slice
+```
+
+Implemented in this slice:
+
+- Infrastructure `GmailCommunicationActionExecutor` in `app/infrastructure/executors/gmail.py`
+- Metadata GET `format=metadata`, RFC 2822 reply construction, then `POST /gmail/v1/users/me/messages/send` with `raw` + `threadId`
+- Injected `httpx.Client`, `AccessTokenProvider`, and trusted `mailbox_address`; token lookup happens at execute time
+- Ordinary `REPLY` only: `Reply-To` else `From`; original subject preserved; no reply-all, drafts, or attachments
+- Conservative failure mapping aligned with 12C: definite provider rejection → `CommunicationActionExecutionError`; timeout/transport/5xx/408/credential-unavailable/blank-token → `ServiceUnavailableError`
+- ADR-019 extended for Gmail threading/send
+- Offline `httpx.MockTransport` coverage, including environment-resolver → token provider → Gmail executor composition
+
+Not implemented in 12D:
+
+- injection into `WorkflowActionExecutionService`
+- `RoutedCommunicationActionExecutor`
+- HTTP execute route or `communications:send`
+- live Gmail send tests
+- retry, `EXECUTION_UNKNOWN`, outbox, or reconciliation
+
+`CommunicationConnector` remains read-only. Fake execution remains the workflow test path.
 
 ### 12E — Execute API + communications:send
 
@@ -184,15 +210,14 @@ Provider-result persistence, uncertain-outcome documentation, and Phase 12 closu
 - [x] Phase 12A — Execution Target, Routing & Executability Foundation (completed)
 - [x] Phase 12B — Credential Resolution + Write-Scope Readiness (completed)
 - [x] Phase 12C — Microsoft Graph Reply Executor (completed)
-- [ ] Phase 12D — Gmail Reply Executor
+- [x] Phase 12D — Gmail Reply Executor (completed)
 - [ ] Phase 12E — Execute API + communications:send
 - [ ] Phase 12F — Failure Semantics, Privacy, Documentation & Regression
 
 ## Unavailable until later Phase 12 slices
 
 - production OAuth, token refresh, Azure Key Vault, AWS Secrets Manager
-- Gmail `messages.send` / MIME reply construction
-- production workflow routing of the Graph reply adapter
+- production workflow routing of the Graph or Gmail reply adapters
 - Graph `sendMail`
 - HTTP execute route
 - `communications:send`

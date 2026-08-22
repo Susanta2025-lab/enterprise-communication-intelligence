@@ -38,7 +38,7 @@ WorkflowActionExecutionService
   → TX2 EXECUTED | FAILED
 ```
 
-Phase 12C adds `MicrosoftGraphCommunicationActionExecutor` as a standalone Graph `/reply` adapter. It is not injected into `WorkflowActionExecutionService` and is not reachable from REST.
+Phase 12C adds `MicrosoftGraphCommunicationActionExecutor` as a standalone Graph `/reply` adapter. Phase 12D adds `GmailCommunicationActionExecutor` as a standalone Gmail metadata-plus-send adapter. Neither is injected into `WorkflowActionExecutionService` and neither is reachable from REST.
 
 Connector ingestion path (below the HTTP product surface; no connector routes). Vendor adapters call Gmail or Microsoft Graph REST and implement the domain port:
 
@@ -81,7 +81,7 @@ API
 - **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings, including `DATABASE_URL`), `logging.py` (structlog configuration), `telemetry.py` (request-safe `duration_ms` and `error_class` helpers), `exceptions.py` (the base application exception hierarchy, including `PersistenceError` and connector-neutral errors), `security.py` (OIDC JWT validation, `AuthenticatedPrincipal`, and capability-specific `authorize(principal, required_permission)`). HTTP `request_id` binding lives in `app/api/middleware.py`.
 - **Infrastructure storage (`app/infrastructure/storage`)** — SQLAlchemy models, engine, unit of work, and repository implementations, including `connector_accounts`. Domain and application code do not import these types except through API dependency wiring.
 - **Infrastructure communication connectors (`app/infrastructure/connectors`)** — Vendor adapters that implement `CommunicationConnector`: fake, Gmail REST v1, and Microsoft Graph REST v1.0. They normalize email to `SourceType.EMAIL` while keeping provider identity (`gmail`, `microsoft_graph`) separate. They do not persist raw mail, call `AIProvider`, own OAuth, resolve `credential_ref`, or expose HTTP routes.
-- **Infrastructure executors (`app/infrastructure/executors`)** — Write-port adapters. `FakeCommunicationActionExecutor` remains the workflow test and current composition path. `MicrosoftGraphCommunicationActionExecutor` sends Graph native `/reply` with an injected `httpx.Client` and `AccessTokenProvider`. It is not wired into application execution or HTTP. There is no Gmail writer.
+- **Infrastructure executors (`app/infrastructure/executors`)** — Write-port adapters. `FakeCommunicationActionExecutor` remains the workflow test and current composition path. `MicrosoftGraphCommunicationActionExecutor` sends Graph native `/reply` with an injected `httpx.Client` and `AccessTokenProvider`. `GmailCommunicationActionExecutor` fetches Gmail metadata, constructs an RFC 2822 reply, and posts `users.messages.send` with an injected `httpx.Client`, `AccessTokenProvider`, and trusted `mailbox_address`. Neither writer is wired into application execution or HTTP.
 
 ## Provider Independence
 

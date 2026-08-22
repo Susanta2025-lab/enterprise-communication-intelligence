@@ -24,6 +24,7 @@ _FORBIDDEN_COUPLING = (
     "WorkflowActionExecutionService",
     "FakeCommunicationActionExecutor",
     "MicrosoftGraphCommunicationActionExecutor",
+    "GmailCommunicationActionExecutor",
     "GmailCommunicationConnector",
     "MicrosoftGraphCommunicationConnector",
     "ConnectorAccountService",
@@ -140,13 +141,21 @@ def test_graph_executor_does_not_resolve_credential_ref() -> None:
     assert "EnvironmentCommunicationCredentialResolver" not in source
 
 
-def test_gmail_and_routed_write_executors_are_absent() -> None:
+def test_gmail_executor_does_not_resolve_credential_ref() -> None:
+    source = (_EXECUTOR_ROOT / "gmail.py").read_text(encoding="utf-8")
+    assert "AccessTokenProvider" in source
+    assert "credential_ref" not in source
+    assert "CommunicationCredentialResolver" not in source
+    assert "EnvironmentCommunicationCredentialResolver" not in source
+
+
+def test_routed_write_executor_is_absent() -> None:
     names = {path.name for path in _python_files(_EXECUTOR_ROOT)}
     assert "fake.py" in names
     assert "microsoft_graph.py" in names
+    assert "gmail.py" in names
     for path in _python_files(_EXECUTOR_ROOT):
         source = path.read_text(encoding="utf-8")
-        assert "GmailCommunicationActionExecutor" not in source
         assert "RoutedCommunicationActionExecutor" not in source
 
 

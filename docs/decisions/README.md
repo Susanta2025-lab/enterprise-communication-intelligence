@@ -60,7 +60,7 @@ ADR-017 records the Phase 11D execution boundary: `CommunicationActionExecutor` 
 
 ADR-018 records Phase 12A execution-target provenance. `WorkflowAction` snapshots `connector_account_id` and `provider_message_id` at create. Analyses store optional mailbox `connector_account_id`. Execution validates an owned active connector account inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Legacy targetless rows remain valid and non-executable. Credentials are not stored on workflow or analysis rows.
 
-ADR-019 records Phase 12C production write architecture. `CommunicationConnector` stays read-only. `MicrosoftGraphCommunicationActionExecutor` implements `CommunicationActionExecutor` with injected `httpx.Client` and `AccessTokenProvider`, and sends Graph `POST /me/messages/{id}/reply` using the exact approved snapshot. Tokens and `credential_ref` stay off the execution command. Production workflow routing and the HTTP execute route remain deferred.
+ADR-019 records production write architecture. `CommunicationConnector` stays read-only. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` implement `CommunicationActionExecutor` with injected `httpx.Client` and `AccessTokenProvider`. Graph uses native `/reply`. Gmail fetches metadata, constructs an RFC 2822 reply, and posts `messages.send`. Tokens and `credential_ref` stay off the execution command. Production workflow routing and the HTTP execute route remain deferred.
 
 ## Template
 
