@@ -45,12 +45,13 @@ def _upgrade_head(url: str) -> None:
 
 def _truncate(engine: Engine) -> None:
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "TRUNCATE TABLE workflow_actions, analyses, external_identities, "
-                "connector_accounts, users CASCADE"
-            )
-        )
+                connection.execute(
+                    text(
+                        "TRUNCATE TABLE mailbox_authorization_sessions, "
+                        "workflow_actions, analyses, external_identities, "
+                        "connector_accounts, users CASCADE"
+                    )
+                )
 
 
 @pytest.fixture(scope="session")

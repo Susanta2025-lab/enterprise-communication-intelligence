@@ -21,6 +21,7 @@ from app.core.config import Settings
 ALLOWED_JWT_ALGORITHMS = ("RS256",)
 COMMUNICATIONS_WORKFLOW_PERMISSION = "communications:workflow"
 COMMUNICATIONS_SEND_PERMISSION = "communications:send"
+COMMUNICATIONS_CONNECT_PERMISSION = "communications:connect"
 _PERMISSION_CLAIMS = ("scp", "scope", "roles")
 
 

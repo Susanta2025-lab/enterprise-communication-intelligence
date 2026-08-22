@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import (
+    COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
@@ -179,6 +180,7 @@ def require_communications_analyze(
 
 require_communications_workflow = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
 require_communications_send = require_permission(COMMUNICATIONS_SEND_PERMISSION)
+require_communications_connect = require_permission(COMMUNICATIONS_CONNECT_PERMISSION)
 
 
 def require_authenticated_communications_analyze(
@@ -233,6 +235,29 @@ def require_authenticated_communications_send(
 
     ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
     Missing permission remains 403.
+    """
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
+    return principal
+
+
+def require_authenticated_communications_connect(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(require_communications_connect),
+    ],
+) -> AuthenticatedPrincipal:
+    """Require a real authenticated principal for mailbox connect operations.
+
+    ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
+    Missing permission remains 403. This permission is distinct from
+    ``communications:analyze``, ``communications:workflow``, and
+    ``communications:send``.
     """
     if principal is None:
         logger.warning("authentication_failed", reason="missing_token")

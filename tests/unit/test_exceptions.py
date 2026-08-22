@@ -6,6 +6,8 @@ from app.application.exceptions import (
     AnalysisNotFoundError,
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
+    MailboxAuthorizationSessionInvalidError,
+    UnsupportedMailboxAuthorizationProviderError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
@@ -42,6 +44,8 @@ def test_exception_hierarchy() -> None:
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountInvalidRequestError, ECIPlatformError)
+    assert issubclass(MailboxAuthorizationSessionInvalidError, ECIPlatformError)
+    assert issubclass(UnsupportedMailboxAuthorizationProviderError, ECIPlatformError)
     assert issubclass(WorkflowActionNotFoundError, ECIPlatformError)
     assert issubclass(WorkflowActionConflictError, ECIPlatformError)
     assert issubclass(AnalysisHasNoDraftReplyError, ECIPlatformError)
@@ -71,6 +75,20 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert ConnectorAccountInvalidRequestError().message == (
         "Connector account request is invalid."
     )
+
+
+def test_mailbox_authorization_errors_are_generic() -> None:
+    """State failures must not include state, user, or verifier material."""
+    invalid = MailboxAuthorizationSessionInvalidError()
+    unsupported = UnsupportedMailboxAuthorizationProviderError()
+    assert invalid.message == "Mailbox authorization session is invalid."
+    assert unsupported.message == "Mailbox authorization provider is not supported."
+    for text in (invalid.message, unsupported.message, str(invalid), str(unsupported)):
+        assert "state" not in text.lower() or "session" in text.lower()
+        assert "user_id" not in text
+        assert "pkce" not in text.lower()
+        assert "verifier" not in text.lower()
+        assert "gmail" not in text.lower()
 
 
 def test_workflow_action_errors_have_generic_messages() -> None:

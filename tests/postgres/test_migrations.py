@@ -60,6 +60,7 @@ def test_primary_keys(postgres_engine: Engine) -> None:
         "analyses",
         "connector_accounts",
         "workflow_actions",
+        "mailbox_authorization_sessions",
     ):
         pk = inspector.get_pk_constraint(table)
         assert pk["constrained_columns"] == ["id"]
@@ -72,6 +73,7 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
     analysis_fks = inspector.get_foreign_keys("analyses")
     connector_fks = inspector.get_foreign_keys("connector_accounts")
     workflow_fks = inspector.get_foreign_keys("workflow_actions")
+    session_fks = inspector.get_foreign_keys("mailbox_authorization_sessions")
     identity_ok = any(
         fk["referred_table"] == "users"
         and fk["constrained_columns"] == ["user_id"]
@@ -96,10 +98,24 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
         and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
         for fk in workflow_fks
     )
+    session_user_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in session_fks
+    )
+    session_account_ok = any(
+        fk["referred_table"] == "connector_accounts"
+        and fk["constrained_columns"] == ["connector_account_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in session_fks
+    )
     assert identity_ok
     assert analysis_ok
     assert connector_ok
     assert workflow_ok
+    assert session_user_ok
+    assert session_account_ok
     assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in analysis_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in workflow_fks)

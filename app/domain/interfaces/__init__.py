@@ -28,6 +28,12 @@ from app.domain.interfaces.connector_account_repository import (
     NewConnectorAccount,
 )
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.mailbox_authorization_session_repository import (
+    ConsumedMailboxAuthorizationSession,
+    MailboxAuthorizationSessionRecord,
+    MailboxAuthorizationSessionRepository,
+    NewMailboxAuthorizationSession,
+)
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionRepository,
@@ -48,7 +54,11 @@ __all__ = [
     "ConnectorAccountRecord",
     "ConnectorAccountRepository",
     "ConnectorMessageQuery",
+    "ConsumedMailboxAuthorizationSession",
     "IdentityRepository",
+    "MailboxAuthorizationSessionRecord",
+    "MailboxAuthorizationSessionRepository",
+    "NewMailboxAuthorizationSession",
     "MessagePage",
     "NewAnalysis",
     "NewConnectorAccount",

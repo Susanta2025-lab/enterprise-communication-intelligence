@@ -77,6 +77,7 @@ def test_connector_account_column_types(postgres_engine: Engine) -> None:
     assert columns["provider"] is False
     assert columns["status"] is False
     assert columns["external_account_id"] is False
+    assert columns["granted_capabilities"] is True
     forbidden = {
         "access_token",
         "refresh_token",
@@ -124,6 +125,14 @@ def test_status_check_and_list_index(postgres_engine: Engine) -> None:
     assert named
     indexes = {index["name"] for index in inspector.get_indexes("connector_accounts")}
     assert "ix_connector_accounts_user_id_created_at_id" in indexes
+    uniques = inspector.get_unique_constraints("connector_accounts")
+    unique_indexes = [
+        index for index in inspector.get_indexes("connector_accounts") if index.get("unique")
+    ]
+    for constraint in uniques:
+        assert "credential_ref" not in constraint["column_names"]
+    for index in unique_indexes:
+        assert "credential_ref" not in (index.get("column_names") or [])
 
 
 def test_create_lookup_ownership_and_python_uuid(session_factory: sessionmaker) -> None:
@@ -286,11 +295,13 @@ def test_disconnect_rowcount_and_idempotent_update(session_factory: sessionmaker
         assert disconnected is not None
         assert disconnected.status is ConnectorAccountStatus.DISCONNECTED
         assert disconnected.credential_ref is None
+        assert disconnected.granted_capabilities is None
         again = repository.disconnect_owned(created.id, user_a)
         session.commit()
         assert again is not None
         assert again.status is ConnectorAccountStatus.DISCONNECTED
         assert again.credential_ref is None
+        assert again.granted_capabilities is None
         assert repository.disconnect_owned(created.id, user_b) is None
 
 

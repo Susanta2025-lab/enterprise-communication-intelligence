@@ -799,6 +799,45 @@ def test_disconnected_connector_account_is_not_executable() -> None:
     assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
 
 
+def test_legacy_null_granted_capabilities_remain_executable() -> None:
+    """Phase 12 env-backed accounts with unknown grant metadata stay executable."""
+    unit, _user_id, analysis_id = _seeded_unit()
+    account = next(iter(unit.connector_account_store.values()))
+    assert account.granted_capabilities is None
+    approved = _approved_action(unit, analysis_id)
+    service, executor = _execution_service(unit)
+    result = service.execute(_principal(), approved.id)
+    assert result.status is WorkflowActionStatus.EXECUTED
+    assert len(executor.calls) == 1
+    assert executor.calls[0].action_id == approved.id
+
+
+def test_reauth_required_connector_account_is_not_executable() -> None:
+    """REAUTH_REQUIRED is stored in 13A but is not treated as ACTIVE."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        provider=_PROVIDER,
+        status=ConnectorAccountStatus.REAUTH_REQUIRED,
+        granted_capabilities=None,
+    )
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    service, executor = _execution_service(unit)
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), action.id)
+    assert executor.calls == []
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
 def test_missing_connector_account_is_not_executable() -> None:
     """A snapshotted account that no longer exists fails before the EXECUTING write."""
     user_id = uuid4()

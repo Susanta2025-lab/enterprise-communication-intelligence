@@ -7,6 +7,12 @@ from app.domain.models.analysis import (
     Priority,
     Summary,
 )
+from app.domain.models.capabilities import (
+    normalize_communication_capabilities,
+    parse_stored_communication_capabilities,
+    require_requested_communication_capabilities,
+    serialize_communication_capabilities,
+)
 from app.domain.models.message import CommunicationMessage, MessageMetadata
 from app.domain.models.workflow import WorkflowAction
 
@@ -19,4 +25,8 @@ __all__ = [
     "Priority",
     "Summary",
     "WorkflowAction",
+    "normalize_communication_capabilities",
+    "parse_stored_communication_capabilities",
+    "require_requested_communication_capabilities",
+    "serialize_communication_capabilities",
 ]

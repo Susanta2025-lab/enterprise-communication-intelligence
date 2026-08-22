@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import PersistenceError
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import NewConnectorAccount
 from app.infrastructure.storage.models import ConnectorAccount, User
 from app.infrastructure.storage.repositories.connector_account import (
@@ -42,12 +42,14 @@ def _new_account(
     provider: str = _PROVIDER,
     external_account_id: str = _ACCOUNT_A,
     credential_ref: str | None = _CREDENTIAL_REF,
+    granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
 ) -> NewConnectorAccount:
     return NewConnectorAccount(
         user_id=user_id,
         provider=provider,
         external_account_id=external_account_id,
         credential_ref=credential_ref,
+        granted_capabilities=granted_capabilities,
     )
 
 
@@ -86,6 +88,7 @@ def test_create_and_get_owned_returns_same_account(session_factory: sessionmaker
         assert found.external_account_id == _ACCOUNT_A
         assert found.credential_ref == _CREDENTIAL_REF
         assert found.status is ConnectorAccountStatus.ACTIVE
+        assert found.granted_capabilities is None
 
 
 def test_get_requires_matching_user_id(session_factory: sessionmaker) -> None:
@@ -182,11 +185,19 @@ def test_unrelated_integrity_error_is_generic(session_factory: sessionmaker) -> 
 def test_disconnect_clears_credential_ref_and_is_idempotent(
     session_factory: sessionmaker,
 ) -> None:
-    """Disconnect retains the row, sets disconnected, and nulls the locator."""
+    """Disconnect retains the row, sets disconnected, and nulls locator plus grants."""
     user_a, user_b = _create_users(session_factory)
     with session_factory() as session:
         repository = SqlAlchemyConnectorAccountRepository(session)
-        owned = repository.create(_new_account(user_a))
+        owned = repository.create(
+            _new_account(
+                user_a,
+                granted_capabilities=(
+                    CommunicationCapability.MAIL_READ,
+                    CommunicationCapability.MAIL_SEND,
+                ),
+            )
+        )
         session.commit()
         account_id = owned.id
 
@@ -198,6 +209,7 @@ def test_disconnect_clears_credential_ref_and_is_idempotent(
     assert disconnected is not None
     assert disconnected.status is ConnectorAccountStatus.DISCONNECTED
     assert disconnected.credential_ref is None
+    assert disconnected.granted_capabilities is None
     assert disconnected.id == account_id
     assert disconnected.user_id == user_a
     assert disconnected.provider == _PROVIDER
@@ -212,6 +224,7 @@ def test_disconnect_clears_credential_ref_and_is_idempotent(
         assert again is not None
         assert again.status is ConnectorAccountStatus.DISCONNECTED
         assert again.credential_ref is None
+        assert again.granted_capabilities is None
         assert _aware(again.created_at) == _aware(owned.created_at)
         assert _aware(again.updated_at) >= _aware(disconnected.updated_at)
         assert repository.disconnect_owned(account_id, user_b) is None
@@ -283,7 +296,7 @@ def test_deleting_user_cascades_connector_accounts(session_factory: sessionmaker
 
 
 def test_status_check_rejects_unknown_values(session_factory: sessionmaker) -> None:
-    """Only active and disconnected are valid status values."""
+    """Only active, disconnected, and reauth_required are valid status values."""
     user_a, _user_b = _create_users(session_factory)
     with session_factory() as session:
         with pytest.raises(IntegrityError):
@@ -304,6 +317,35 @@ def test_status_check_rejects_unknown_values(session_factory: sessionmaker) -> N
                 },
             )
             session.commit()
+
+
+def test_reauth_required_status_and_null_capabilities_round_trip(
+    session_factory: sessionmaker,
+) -> None:
+    """REAUTH_REQUIRED persists and legacy granted_capabilities remain NULL."""
+    from sqlalchemy import update
+
+    user_a, _user_b = _create_users(session_factory)
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        created = repository.create(_new_account(user_a))
+        session.commit()
+        session.execute(
+            update(ConnectorAccount)
+            .where(ConnectorAccount.id == created.id)
+            .values(status=ConnectorAccountStatus.REAUTH_REQUIRED.value)
+        )
+        session.commit()
+        found = repository.get_owned(created.id, user_a)
+        restored = repository.reactivate_owned(created.id, user_a, "cred-ref-fake-003")
+        session.commit()
+
+    assert found is not None
+    assert found.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert found.granted_capabilities is None
+    assert restored is not None
+    assert restored.status is ConnectorAccountStatus.ACTIVE
+    assert restored.granted_capabilities is None
 
 
 def test_ownership_is_enforced_in_sql() -> None:

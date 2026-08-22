@@ -64,6 +64,12 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    mailbox_authorization_sessions: Mapped[list["MailboxAuthorizationSession"]] = (
+        relationship(
+            back_populates="user",
+            cascade="all, delete-orphan",
+        )
+    )
     workflow_actions: Mapped[list["WorkflowAction"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -150,7 +156,7 @@ class ConnectorAccount(Base):
             name="uq_connector_accounts_user_provider_external_account",
         ),
         CheckConstraint(
-            "status IN ('active', 'disconnected')",
+            "status IN ('active', 'disconnected', 'reauth_required')",
             name="ck_connector_accounts_status",
         ),
         Index(
@@ -171,6 +177,10 @@ class ConnectorAccount(Base):
     external_account_id: Mapped[str] = mapped_column(Text, nullable=False)
     credential_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_capabilities: Mapped[list[str] | None] = mapped_column(
+        PORTABLE_JSON,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -184,6 +194,81 @@ class ConnectorAccount(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="connector_accounts")
+    mailbox_authorization_sessions: Mapped[list["MailboxAuthorizationSession"]] = (
+        relationship(
+            back_populates="connector_account",
+            passive_deletes=True,
+        )
+    )
+
+
+class MailboxAuthorizationSession(Base):
+    """Short-lived mailbox consent session. Stores state hash, never raw state."""
+
+    __tablename__ = "mailbox_authorization_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "provider IN ('gmail', 'microsoft_graph')",
+            name="ck_mailbox_authorization_sessions_provider",
+        ),
+        CheckConstraint(
+            "purpose IN ('connect', 'reauthorize')",
+            name="ck_mailbox_authorization_sessions_purpose",
+        ),
+        CheckConstraint(
+            "(purpose = 'connect' AND connector_account_id IS NULL) OR "
+            "(purpose = 'reauthorize' AND connector_account_id IS NOT NULL)",
+            name="ck_mailbox_authorization_sessions_purpose_account",
+        ),
+        UniqueConstraint(
+            "state_hash",
+            name="uq_mailbox_authorization_sessions_state_hash",
+        ),
+        Index("ix_mailbox_authorization_sessions_expires_at", "expires_at"),
+        Index(
+            "ix_mailbox_authorization_sessions_user_id_created_at",
+            "user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    connector_account_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("connector_accounts.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    state_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    pkce_verifier: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_capabilities: Mapped[list[str]] = mapped_column(
+        PORTABLE_JSON,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[User] = relationship(back_populates="mailbox_authorization_sessions")
+    connector_account: Mapped[ConnectorAccount | None] = relationship(
+        back_populates="mailbox_authorization_sessions",
+    )
 
 
 class WorkflowAction(Base):

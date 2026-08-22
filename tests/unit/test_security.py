@@ -7,6 +7,7 @@ import pytest
 from jwt.exceptions import PyJWKClientConnectionError
 
 from app.core.security import (
+    COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticationFailedError,
@@ -261,6 +262,59 @@ def test_send_permission_does_not_satisfy_analyze_or_workflow(
     with pytest.raises(AuthorizationFailedError):
         validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
     validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)
+
+
+def test_connect_permission_does_not_satisfy_analyze_workflow_or_send(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:connect is independent of analyze, workflow, and send."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_CONNECT_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    assert COMMUNICATIONS_CONNECT_PERMISSION in principal.permissions
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, TEST_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)
+    validator.authorize(principal, COMMUNICATIONS_CONNECT_PERMISSION)
+
+
+def test_analyze_workflow_and_send_do_not_satisfy_connect(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """Existing capabilities do not imply communications:connect."""
+    for permission in (
+        TEST_PERMISSION,
+        COMMUNICATIONS_WORKFLOW_PERMISSION,
+        COMMUNICATIONS_SEND_PERMISSION,
+    ):
+        token = encode_test_token(private_key, extra_claims={"scp": permission})
+        principal = validator.authenticate(token)
+        with pytest.raises(AuthorizationFailedError):
+            validator.authorize(principal, COMMUNICATIONS_CONNECT_PERMISSION)
+
+
+def test_connect_permission_accepted_from_scp_scope_and_roles(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:connect may arrive through scp, scope, or roles."""
+    for extra_claims in (
+        {"scp": COMMUNICATIONS_CONNECT_PERMISSION},
+        {"scope": COMMUNICATIONS_CONNECT_PERMISSION},
+        {"roles": [COMMUNICATIONS_CONNECT_PERMISSION]},
+    ):
+        token = encode_test_token(private_key, extra_claims=extra_claims)
+        principal = validator.authenticate(token)
+        validator.authorize(principal, COMMUNICATIONS_CONNECT_PERMISSION)
 
 
 def test_workflow_permission_does_not_satisfy_send(

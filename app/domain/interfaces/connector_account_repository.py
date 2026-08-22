@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +16,7 @@ class NewConnectorAccount:
     provider: str
     external_account_id: str
     credential_ref: str | None = None
+    granted_capabilities: tuple[CommunicationCapability, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,7 @@ class ConnectorAccountRecord:
     status: ConnectorAccountStatus
     created_at: datetime
     updated_at: datetime
+    granted_capabilities: tuple[CommunicationCapability, ...] | None = None
 
 
 class ConnectorAccountRepository(ABC):
@@ -78,10 +80,12 @@ class ConnectorAccountRepository(ABC):
         connector_account_id: UUID,
         user_id: UUID,
     ) -> ConnectorAccountRecord | None:
-        """Mark the owned account disconnected and clear ``credential_ref``.
+        """Mark the owned account disconnected and clear locator plus grants.
 
         Repeated disconnect of an owned row remains disconnected with a null
-        locator. Implementations may update ``updated_at`` on each owned write.
+        locator and unknown (``NULL``) ``granted_capabilities``. Capability
+        metadata must not describe a grant after the credential is removed.
+        Implementations may update ``updated_at`` on each owned write.
 
         Returns:
             The updated record when the id is owned by ``user_id``. None when the
@@ -96,4 +100,7 @@ class ConnectorAccountRepository(ABC):
         user_id: UUID,
         credential_ref: str | None,
     ) -> ConnectorAccountRecord | None:
-        """Reactivate an owned disconnected account and replace ``credential_ref``."""
+        """Reactivate an owned disconnected or reauth-required account.
+
+        Replaces ``credential_ref``. ``granted_capabilities`` are unchanged.
+        """

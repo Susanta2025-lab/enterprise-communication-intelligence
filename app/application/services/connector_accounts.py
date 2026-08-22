@@ -23,7 +23,7 @@ from app.core.exceptions import PersistenceError, ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import AuthenticatedPrincipal
 from app.core.telemetry import elapsed_ms, error_class
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     NewConnectorAccount,
@@ -47,6 +47,7 @@ class ConnectorAccountResult:
     provider: str
     external_account_id: str
     status: ConnectorAccountStatus
+    granted_capabilities: tuple[CommunicationCapability, ...] | None
     created_at: datetime
     updated_at: datetime
 
@@ -251,7 +252,10 @@ class ConnectorAccountService:
                     if exc.message != _DUPLICATE:
                         raise
                     uow.rollback()
-            elif existing.status is ConnectorAccountStatus.DISCONNECTED:
+            elif existing.status in {
+                ConnectorAccountStatus.DISCONNECTED,
+                ConnectorAccountStatus.REAUTH_REQUIRED,
+            }:
                 reactivated = uow.connector_accounts.reactivate_owned(
                     existing.id,
                     user_id,
@@ -291,6 +295,7 @@ def _to_result(record: ConnectorAccountRecord) -> ConnectorAccountResult:
         status=record.status,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        granted_capabilities=record.granted_capabilities,
     )
 
 

@@ -17,6 +17,7 @@ from app.domain.interfaces import (
     CommunicationCredentialResolver,
     ConnectorAccountRepository,
     IdentityRepository,
+    MailboxAuthorizationSessionRepository,
     PersistenceUnitOfWork,
     WorkflowActionRepository,
 )
@@ -78,6 +79,7 @@ def test_repository_interfaces_are_abstract() -> None:
     assert issubclass(AnalysisRepository, ABC)
     assert issubclass(ConnectorAccountRepository, ABC)
     assert issubclass(WorkflowActionRepository, ABC)
+    assert issubclass(MailboxAuthorizationSessionRepository, ABC)
     assert issubclass(PersistenceUnitOfWork, ABC)
     with pytest.raises(TypeError):
         IdentityRepository()  # type: ignore[abstract]
@@ -87,6 +89,8 @@ def test_repository_interfaces_are_abstract() -> None:
         ConnectorAccountRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         WorkflowActionRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        MailboxAuthorizationSessionRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         PersistenceUnitOfWork()  # type: ignore[abstract]
 

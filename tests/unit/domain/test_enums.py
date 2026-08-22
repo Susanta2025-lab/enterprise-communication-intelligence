@@ -43,9 +43,14 @@ def test_connector_account_status_values() -> None:
     assert list(ConnectorAccountStatus) == [
         ConnectorAccountStatus.ACTIVE,
         ConnectorAccountStatus.DISCONNECTED,
+        ConnectorAccountStatus.REAUTH_REQUIRED,
     ]
     assert ConnectorAccountStatus.ACTIVE == "active"
     assert ConnectorAccountStatus.DISCONNECTED == "disconnected"
+    assert ConnectorAccountStatus.REAUTH_REQUIRED == "reauth_required"
+    assert not hasattr(ConnectorAccountStatus, "CREDENTIAL_INVALID")
+    assert not hasattr(ConnectorAccountStatus, "TOKEN_EXPIRED")
+    assert not hasattr(ConnectorAccountStatus, "OAUTH_ERROR")
 
 
 def test_workflow_action_type_is_reply_only() -> None:
@@ -99,6 +104,8 @@ def test_message_category_values() -> None:
         (SourceType, "fax"),
         (PriorityLevel, "urgent"),
         (MessageCategory, "spam"),
+        (ConnectorAccountStatus, "revoked"),
+        (ConnectorAccountStatus, "credential_invalid"),
         (WorkflowActionType, "calendar_event"),
         (WorkflowActionStatus, "execution_unknown"),
     ],

@@ -27,6 +27,7 @@ _SETTINGS_ENV_VARS = (
     "OIDC_JWKS_URL",
     "OIDC_REQUIRED_PERMISSION",
     "DATABASE_URL",
+    "OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS",
 )
 
 
@@ -60,6 +61,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.oidc_jwks_url is None
     assert settings.oidc_required_permission == "communications:analyze"
     assert settings.database_url is None
+    assert settings.oauth_authorization_session_ttl_seconds == 600
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -572,3 +574,25 @@ def test_database_url_validation_error_does_not_include_password(
         Settings(_env_file=None)
     assert "DATABASE_URL" in str(exc_info.value)
     assert secret not in str(exc_info.value)
+
+
+def test_oauth_authorization_session_ttl_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mailbox authorization session TTL is bounded and has no network dependency."""
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "60")
+    settings = Settings(_env_file=None)
+    assert settings.oauth_authorization_session_ttl_seconds == 60
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "1800")
+    settings = Settings(_env_file=None)
+    assert settings.oauth_authorization_session_ttl_seconds == 1800
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "59")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "1801")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "not-an-int")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

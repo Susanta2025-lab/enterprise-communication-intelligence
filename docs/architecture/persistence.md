@@ -40,7 +40,8 @@ Internal `users.id` is an ownership key, not a login system and not a tenant.
 | `users` | Opaque UUID primary key and timestamps. No PII columns. |
 | `external_identities` | `issuer`, `subject`, unique `(issuer, subject)`, FK to `users.id` |
 | `analyses` | User-owned structured analysis results |
-| `connector_accounts` | User-owned connector account registry with opaque `credential_ref` |
+| `connector_accounts` | User-owned connector account registry with opaque `credential_ref` and nullable provider-neutral `granted_capabilities` |
+| `mailbox_authorization_sessions` | Short-lived mailbox consent sessions. Persist `state_hash` and a TTL-bounded PKCE verifier. Never persist raw state or tokens. |
 | `workflow_actions` | User-owned approval-gated reply actions with proposed/approved snapshots |
 
 Identifier classes:

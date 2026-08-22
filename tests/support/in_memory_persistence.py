@@ -8,7 +8,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.core.exceptions import PersistenceError
-from app.domain.enums import ConnectorAccountStatus, WorkflowActionStatus
+from app.domain.enums import (
+    ConnectorAccountStatus,
+    MailboxAuthorizationProvider,
+    WorkflowActionStatus,
+)
 from app.domain.interfaces.analysis_repository import AnalysisRecord, NewAnalysis
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
@@ -16,6 +20,12 @@ from app.domain.interfaces.connector_account_repository import (
     NewConnectorAccount,
 )
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.mailbox_authorization_session_repository import (
+    ConsumedMailboxAuthorizationSession,
+    MailboxAuthorizationSessionRecord,
+    MailboxAuthorizationSessionRepository,
+    NewMailboxAuthorizationSession,
+)
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionRepository,
@@ -122,6 +132,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             status=ConnectorAccountStatus.ACTIVE,
             created_at=now,
             updated_at=now,
+            granted_capabilities=account.granted_capabilities,
         )
         self._accounts[record.id] = record
         return record
@@ -173,6 +184,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             status=ConnectorAccountStatus.DISCONNECTED,
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
+            granted_capabilities=None,
         )
         self._accounts[record.id] = updated
         return updated
@@ -186,6 +198,11 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
         record = self.get_owned(connector_account_id, user_id)
         if record is None:
             return None
+        if record.status not in {
+            ConnectorAccountStatus.DISCONNECTED,
+            ConnectorAccountStatus.REAUTH_REQUIRED,
+        }:
+            return None
         updated = ConnectorAccountRecord(
             id=record.id,
             user_id=record.user_id,
@@ -195,6 +212,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             status=ConnectorAccountStatus.ACTIVE,
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
+            granted_capabilities=record.granted_capabilities,
         )
         self._accounts[record.id] = updated
         return updated
@@ -213,6 +231,94 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             ):
                 return record
         return None
+
+
+class InMemoryMailboxAuthorizationSessionRepository(MailboxAuthorizationSessionRepository):
+    """Dict-backed mailbox authorization session store used by unit tests."""
+
+    def __init__(
+        self,
+        sessions: dict[UUID, MailboxAuthorizationSessionRecord],
+    ) -> None:
+        self._sessions = sessions
+        self.create_calls = 0
+
+    def create(
+        self,
+        session: NewMailboxAuthorizationSession,
+    ) -> MailboxAuthorizationSessionRecord:
+        self.create_calls += 1
+        for existing in self._sessions.values():
+            if existing.state_hash == session.state_hash:
+                raise PersistenceError("Could not persist mailbox authorization session.")
+        record = MailboxAuthorizationSessionRecord(
+            id=uuid4(),
+            user_id=session.user_id,
+            provider=session.provider,
+            purpose=session.purpose,
+            connector_account_id=session.connector_account_id,
+            state_hash=session.state_hash,
+            pkce_verifier=session.pkce_verifier,
+            requested_capabilities=session.requested_capabilities,
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            consumed_at=None,
+        )
+        self._sessions[record.id] = record
+        return record
+
+    def consume_valid(
+        self,
+        state_hash: str,
+        provider: MailboxAuthorizationProvider,
+        now: datetime,
+    ) -> ConsumedMailboxAuthorizationSession | None:
+        matching: MailboxAuthorizationSessionRecord | None = None
+        for record in self._sessions.values():
+            if (
+                record.state_hash == state_hash
+                and record.provider == provider
+                and record.consumed_at is None
+                and record.expires_at > now
+                and record.pkce_verifier
+            ):
+                matching = record
+                break
+        if matching is None or matching.pkce_verifier is None:
+            return None
+        consumed = MailboxAuthorizationSessionRecord(
+            id=matching.id,
+            user_id=matching.user_id,
+            provider=matching.provider,
+            purpose=matching.purpose,
+            connector_account_id=matching.connector_account_id,
+            state_hash=matching.state_hash,
+            pkce_verifier=None,
+            requested_capabilities=matching.requested_capabilities,
+            created_at=matching.created_at,
+            expires_at=matching.expires_at,
+            consumed_at=now,
+        )
+        self._sessions[matching.id] = consumed
+        return ConsumedMailboxAuthorizationSession(
+            authorization_session_id=matching.id,
+            user_id=matching.user_id,
+            provider=matching.provider,
+            purpose=matching.purpose,
+            connector_account_id=matching.connector_account_id,
+            pkce_verifier=matching.pkce_verifier,
+            requested_capabilities=matching.requested_capabilities,
+        )
+
+    def delete_expired(self, before: datetime) -> int:
+        expired = [
+            session_id
+            for session_id, record in self._sessions.items()
+            if record.expires_at <= before
+        ]
+        for session_id in expired:
+            del self._sessions[session_id]
+        return len(expired)
 
 
 class InMemoryWorkflowActionRepository(WorkflowActionRepository):
@@ -298,6 +404,9 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         identities: dict[tuple[str, str], UUID] | None = None,
         analyses: dict[UUID, AnalysisRecord] | None = None,
         connector_accounts: dict[UUID, ConnectorAccountRecord] | None = None,
+        mailbox_authorization_sessions: (
+            dict[UUID, MailboxAuthorizationSessionRecord] | None
+        ) = None,
         workflow_actions: dict[UUID, WorkflowAction] | None = None,
         fail_commit: bool = False,
         fail_on_enter: Exception | None = None,
@@ -308,6 +417,11 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self.connector_account_store = (
             connector_accounts if connector_accounts is not None else {}
         )
+        self.mailbox_authorization_session_store = (
+            mailbox_authorization_sessions
+            if mailbox_authorization_sessions is not None
+            else {}
+        )
         self.workflow_action_store = (
             workflow_actions if workflow_actions is not None else {}
         )
@@ -315,6 +429,11 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self._analysis_repository = InMemoryAnalysisRepository(self.analyses)
         self._connector_accounts = InMemoryConnectorAccountRepository(
             self.connector_account_store
+        )
+        self._mailbox_authorization_sessions = (
+            InMemoryMailboxAuthorizationSessionRepository(
+                self.mailbox_authorization_session_store
+            )
         )
         self._workflow_actions = InMemoryWorkflowActionRepository(
             self.workflow_action_store
@@ -338,6 +457,12 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     @property
     def connector_accounts(self) -> InMemoryConnectorAccountRepository:
         return self._connector_accounts
+
+    @property
+    def mailbox_authorization_sessions(
+        self,
+    ) -> InMemoryMailboxAuthorizationSessionRepository:
+        return self._mailbox_authorization_sessions
 
     @property
     def workflow_actions(self) -> InMemoryWorkflowActionRepository:
@@ -423,6 +548,7 @@ def sample_connector_account(
     external_account_id: str = "mailbox-001",
     credential_ref: str | None = "credential-ref-001",
     status: ConnectorAccountStatus = ConnectorAccountStatus.ACTIVE,
+    granted_capabilities: tuple | None = None,
 ) -> ConnectorAccountRecord:
     """Build a synthetic connector account for execution-target tests."""
     now = datetime.now(UTC)
@@ -435,4 +561,5 @@ def sample_connector_account(
         status=status,
         created_at=now,
         updated_at=now,
+        granted_capabilities=granted_capabilities,
     )

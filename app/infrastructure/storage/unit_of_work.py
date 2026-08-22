@@ -13,6 +13,9 @@ from app.core.exceptions import PersistenceError
 from app.domain.interfaces.analysis_repository import AnalysisRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.mailbox_authorization_session_repository import (
+    MailboxAuthorizationSessionRepository,
+)
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import WorkflowActionRepository
 from app.infrastructure.storage.repositories.analysis import SqlAlchemyAnalysisRepository
@@ -20,6 +23,9 @@ from app.infrastructure.storage.repositories.connector_account import (
     SqlAlchemyConnectorAccountRepository,
 )
 from app.infrastructure.storage.repositories.identity import SqlAlchemyIdentityRepository
+from app.infrastructure.storage.repositories.mailbox_authorization_session import (
+    SqlAlchemyMailboxAuthorizationSessionRepository,
+)
 from app.infrastructure.storage.repositories.workflow_action import (
     SqlAlchemyWorkflowActionRepository,
 )
@@ -39,6 +45,9 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._analysis_repository: AnalysisRepository | None = None
         self._connector_accounts: ConnectorAccountRepository | None = None
         self._workflow_actions: WorkflowActionRepository | None = None
+        self._mailbox_authorization_sessions: (
+            MailboxAuthorizationSessionRepository | None
+        ) = None
 
     @property
     def identity_repository(self) -> IdentityRepository:
@@ -67,6 +76,13 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         if self._workflow_actions is None:
             raise PersistenceError(_INACTIVE)
         return self._workflow_actions
+
+    @property
+    def mailbox_authorization_sessions(self) -> MailboxAuthorizationSessionRepository:
+        """Mailbox authorization session repository bound to this unit of work."""
+        if self._mailbox_authorization_sessions is None:
+            raise PersistenceError(_INACTIVE)
+        return self._mailbox_authorization_sessions
 
     def commit(self) -> None:
         """Commit the current unit of work."""
@@ -99,6 +115,9 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._analysis_repository = SqlAlchemyAnalysisRepository(session)
             self._connector_accounts = SqlAlchemyConnectorAccountRepository(session)
             self._workflow_actions = SqlAlchemyWorkflowActionRepository(session)
+            self._mailbox_authorization_sessions = (
+                SqlAlchemyMailboxAuthorizationSessionRepository(session)
+            )
             return self
         except SQLAlchemyError:
             if session is not None:
@@ -111,6 +130,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._analysis_repository = None
             self._connector_accounts = None
             self._workflow_actions = None
+            self._mailbox_authorization_sessions = None
             raise PersistenceError(_GENERIC_OPERATION_FAILURE) from None
 
     def __exit__(
@@ -139,6 +159,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._analysis_repository = None
         self._connector_accounts = None
         self._workflow_actions = None
+        self._mailbox_authorization_sessions = None
         if session is None:
             return
         session.close()

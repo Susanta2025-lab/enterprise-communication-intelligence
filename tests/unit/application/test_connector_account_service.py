@@ -14,7 +14,7 @@ from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.identity import IdentityResolver
 from app.core.exceptions import PersistenceError, ServiceUnavailableError
 from app.core.security import AuthenticatedPrincipal
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRecord
 from tests.support.in_memory_persistence import InMemoryUnitOfWork, UnitOfWorkFactory
 from tests.support.jwt_tokens import TEST_PERMISSION
@@ -126,7 +126,9 @@ def test_register_reactivates_disconnected_account() -> None:
 
     disconnected = service.disconnect_owned(_principal(), created.id)
     assert disconnected.status is ConnectorAccountStatus.DISCONNECTED
-    assert next(iter(unit.connector_account_store.values())).credential_ref is None
+    stored_disconnected = next(iter(unit.connector_account_store.values()))
+    assert stored_disconnected.credential_ref is None
+    assert stored_disconnected.granted_capabilities is None
 
     restored = service.register(
         _principal(),
@@ -160,6 +162,74 @@ def test_register_reactivation_can_clear_credential_ref() -> None:
     )
     assert restored.status is ConnectorAccountStatus.ACTIVE
     assert next(iter(unit.connector_account_store.values())).credential_ref is None
+
+
+def test_disconnect_clears_known_granted_capabilities() -> None:
+    """Disconnect must not leave grant metadata on an account without a credential."""
+    user_id = uuid4()
+    now = datetime.now(UTC)
+    account_id = uuid4()
+    store = {
+        account_id: ConnectorAccountRecord(
+            id=account_id,
+            user_id=user_id,
+            provider=_PROVIDER,
+            external_account_id=_ACCOUNT,
+            credential_ref=_CREDENTIAL_REF,
+            status=ConnectorAccountStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+            granted_capabilities=(
+                CommunicationCapability.MAIL_READ,
+                CommunicationCapability.MAIL_SEND,
+            ),
+        )
+    }
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts=store,
+    )
+    service, _units = _service(unit)
+    disconnected = service.disconnect_owned(_principal(), account_id)
+    assert disconnected.status is ConnectorAccountStatus.DISCONNECTED
+    assert disconnected.granted_capabilities is None
+    assert store[account_id].credential_ref is None
+    assert store[account_id].granted_capabilities is None
+
+
+def test_register_reactivates_reauth_required_account() -> None:
+    """REAUTH_REQUIRED can be reactivated onto ACTIVE for later OAuth reauthorization."""
+    user_id = uuid4()
+    now = datetime.now(UTC)
+    account_id = uuid4()
+    store = {
+        account_id: ConnectorAccountRecord(
+            id=account_id,
+            user_id=user_id,
+            provider=_PROVIDER,
+            external_account_id=_ACCOUNT,
+            credential_ref=None,
+            status=ConnectorAccountStatus.REAUTH_REQUIRED,
+            created_at=now,
+            updated_at=now,
+            granted_capabilities=None,
+        )
+    }
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts=store,
+    )
+    service, _units = _service(unit)
+    restored = service.register(
+        _principal(),
+        provider=_PROVIDER,
+        external_account_id=_ACCOUNT,
+        credential_ref="cred-ref-fake-003",
+    )
+    assert restored.id == account_id
+    assert restored.status is ConnectorAccountStatus.ACTIVE
+    assert restored.granted_capabilities is None
+    assert store[account_id].credential_ref == "cred-ref-fake-003"
 
 
 def test_list_unseen_principal_is_empty_and_does_not_create_user() -> None:
@@ -253,9 +323,11 @@ def test_application_result_omits_credential_ref_and_user_id() -> None:
         "provider",
         "external_account_id",
         "status",
+        "granted_capabilities",
         "created_at",
         "updated_at",
     }
+    assert payload["granted_capabilities"] is None
     assert _CREDENTIAL_REF not in str(payload.values())
 
 

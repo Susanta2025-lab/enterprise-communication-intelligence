@@ -7,9 +7,11 @@ from app.api.dependencies import (
     get_ai_provider,
     get_communication_analysis_service,
     get_workflow_action_service,
+    require_authenticated_communications_connect,
     require_authenticated_communications_send,
     require_authenticated_communications_workflow,
     require_communications_analyze,
+    require_communications_connect,
     require_communications_send,
     require_communications_workflow,
     require_permission,
@@ -19,6 +21,7 @@ from app.application.services.identity import IdentityResolver
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.security import (
+    COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
@@ -285,6 +288,60 @@ def test_analyze_only_principal_is_denied_send_permission(
     with pytest.raises(HTTPException) as exc_info:
         require_communications_send(principal, permission_validator)
     assert exc_info.value.status_code == 403
+
+
+def test_require_authenticated_communications_connect_rejects_missing_principal() -> None:
+    """AUTH_MODE=disabled must not pass None into mailbox connect operations."""
+    with pytest.raises(HTTPException) as exc_info:
+        require_authenticated_communications_connect(None)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Not authenticated"
+    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_require_authenticated_communications_connect_returns_principal(
+    permission_validator,
+) -> None:
+    """A connect-authorized principal is passed through unchanged."""
+    principal = _principal(COMMUNICATIONS_CONNECT_PERMISSION)
+    authorized = require_communications_connect(principal, permission_validator)
+    assert require_authenticated_communications_connect(authorized) is principal
+
+
+def test_analyze_workflow_and_send_are_denied_connect_permission(
+    permission_validator,
+) -> None:
+    """analyze, workflow, and send do not satisfy communications:connect."""
+    for permission, dependency in (
+        (TEST_PERMISSION, require_communications_analyze),
+        (COMMUNICATIONS_WORKFLOW_PERMISSION, require_communications_workflow),
+        (COMMUNICATIONS_SEND_PERMISSION, require_communications_send),
+    ):
+        principal = _principal(permission)
+        dependency(principal, permission_validator)
+        with pytest.raises(HTTPException) as exc_info:
+            require_communications_connect(principal, permission_validator)
+        assert exc_info.value.status_code == 403
+
+
+def test_connect_only_principal_is_denied_other_permissions(
+    permission_validator,
+) -> None:
+    """communications:connect does not satisfy analyze, workflow, or send."""
+    principal = _principal(COMMUNICATIONS_CONNECT_PERMISSION)
+    require_communications_connect(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    with pytest.raises(HTTPException):
+        require_communications_workflow(principal, permission_validator)
+    with pytest.raises(HTTPException):
+        require_communications_send(principal, permission_validator)
+
+
+def test_require_communications_connect_skips_checks_when_auth_disabled() -> None:
+    """AUTH_MODE=disabled returns None from the non-authenticated connect dependency."""
+    assert require_communications_connect(None, None) is None
 
 
 def test_get_workflow_action_service_uses_identity_resolver_and_uow_factory() -> None:

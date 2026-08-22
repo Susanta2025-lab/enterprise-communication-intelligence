@@ -36,6 +36,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-018](ADR-018-workflow-execution-target-provenance.md) | Workflow Execution Target Provenance | Accepted |
 | [ADR-019](ADR-019-production-communication-write-architecture.md) | Production Communication Write Architecture | Accepted |
 | [ADR-020](ADR-020-uncertain-communication-execution-semantics.md) | Uncertain Communication Execution Semantics | Accepted |
+| [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md) | Mailbox Delegated OAuth Authorization Architecture | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -64,6 +65,8 @@ ADR-018 records Phase 12A execution-target provenance. `WorkflowAction` snapshot
 ADR-019 records production write architecture. `CommunicationConnector` stays read-only. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` implement `CommunicationActionExecutor` with injected `httpx.Client` and `AccessTokenProvider`. Graph uses native `/reply`. Gmail discovers sender identity from `users/me/profile`, fetches metadata, constructs an RFC 2822 reply, and posts `messages.send`. Tokens and `credential_ref` stay off the execution command. Phase 12E routes those writers through `CommunicationActionExecutorFactory` and `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`.
 
 ADR-020 records uncertain external-side-effect semantics. Definite provider rejection becomes durable `FAILED`. Confirmed success becomes durable `EXECUTED`. Uncertain or unavailable outcomes after TX1 remain `EXECUTING` and the execute API returns HTTP 503. Automatic retry and `EXECUTION_UNKNOWN` are rejected. Duplicate-send prevention takes priority over automatic recovery. Operator reconciliation remains future work.
+
+ADR-021 records mailbox delegated OAuth as a server-side authorization transaction separate from ECI application-user OIDC. Raw OAuth state is not persisted; SHA-256(state) is. State is single-use via a conditional consume compare-and-set and bound to the internal user plus mailbox provider. PKCE is S256. `communications:connect` is distinct from analyze/workflow/send. `credential_ref` remains non-unique at the database level in 13A. Disconnect clears locator and grant metadata without provider token revocation. Real Google/Microsoft OAuth and secret-store backends remain later Phase 13 slices.
 
 ## Template
 

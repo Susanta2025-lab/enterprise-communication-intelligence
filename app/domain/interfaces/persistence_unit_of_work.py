@@ -6,6 +6,9 @@ from types import TracebackType
 from app.domain.interfaces.analysis_repository import AnalysisRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
+from app.domain.interfaces.mailbox_authorization_session_repository import (
+    MailboxAuthorizationSessionRepository,
+)
 from app.domain.interfaces.workflow_action_repository import WorkflowActionRepository
 
 
@@ -34,6 +37,11 @@ class PersistenceUnitOfWork(ABC):
     @abstractmethod
     def workflow_actions(self) -> WorkflowActionRepository:
         """Workflow action repository bound to this unit of work."""
+
+    @property
+    @abstractmethod
+    def mailbox_authorization_sessions(self) -> MailboxAuthorizationSessionRepository:
+        """Mailbox authorization session repository bound to this unit of work."""
 
     @abstractmethod
     def commit(self) -> None:

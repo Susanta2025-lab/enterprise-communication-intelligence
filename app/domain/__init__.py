@@ -1,6 +1,10 @@
 """Provider-independent communication domain for ECI Platform."""
 
 from app.domain.enums import (
+    CommunicationCapability,
+    ConnectorAccountStatus,
+    MailboxAuthorizationProvider,
+    MailboxAuthorizationPurpose,
     MessageCategory,
     PriorityLevel,
     SourceType,
@@ -26,11 +30,15 @@ __all__ = [
     "ActionItem",
     "CommunicationAnalysis",
     "CommunicationAnalysisResult",
+    "CommunicationCapability",
     "CommunicationConnector",
     "CommunicationMessage",
     "CommunicationRequest",
+    "ConnectorAccountStatus",
     "DraftReply",
     "InvalidWorkflowTransitionError",
+    "MailboxAuthorizationProvider",
+    "MailboxAuthorizationPurpose",
     "MessageCategory",
     "MessageMetadata",
     "Priority",

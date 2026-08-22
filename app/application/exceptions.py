@@ -49,6 +49,24 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
         super().__init__("Analysis has no usable draft reply.")
 
 
+class MailboxAuthorizationSessionInvalidError(ECIPlatformError):
+    """Raised when a mailbox authorization session cannot be used.
+
+    Covers missing, expired, consumed, provider-mismatched, and malformed
+    state without distinguishing those cases.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox authorization session is invalid.")
+
+
+class UnsupportedMailboxAuthorizationProviderError(ECIPlatformError):
+    """Raised when mailbox authorization is requested for an unsupported provider."""
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox authorization provider is not supported.")
+
+
 class WorkflowActionNotExecutableError(ECIPlatformError):
     """Raised when an owned action cannot begin external execution.
 

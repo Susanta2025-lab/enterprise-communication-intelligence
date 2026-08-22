@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     oidc_jwks_url: str | None = None
     oidc_required_permission: str = "communications:analyze"
     database_url: str | None = None
+    oauth_authorization_session_ttl_seconds: int = Field(default=600, ge=60, le=1800)
 
     @field_validator("app_env", mode="before")
     @classmethod

@@ -59,10 +59,20 @@ def test_gmail_adapter_does_not_log_sensitive_fields() -> None:
 
 
 def test_domain_and_application_do_not_import_gmail() -> None:
+    """Domain may name the mailbox provider slug; it must not import the adapter."""
+    adapter_markers = (
+        "infrastructure.connectors.gmail",
+        "infrastructure.executors.gmail",
+        "GmailCommunicationConnector",
+        "GmailCommunicationActionExecutor",
+        "gmail.googleapis.com",
+        *_FORBIDDEN_SDK,
+    )
     for root in (_DOMAIN_ROOT, _APPLICATION_ROOT):
         for path in _python_files(root):
             source = path.read_text(encoding="utf-8")
-            assert "gmail" not in source.lower(), f"{path} must stay Gmail-agnostic"
+            for marker in adapter_markers:
+                assert marker not in source, f"{path} must stay Gmail-adapter-agnostic"
 
 
 def test_common_connector_helpers_do_not_use_google_sdk() -> None:

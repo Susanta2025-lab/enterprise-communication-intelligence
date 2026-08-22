@@ -8,6 +8,7 @@ from app.infrastructure.storage.models import (
     Base,
     ConnectorAccount,
     ExternalIdentity,
+    MailboxAuthorizationSession,
     User,
     WorkflowAction,
 )
@@ -47,6 +48,7 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
         "analyses",
         "connector_accounts",
         "workflow_actions",
+        "mailbox_authorization_sessions",
     } <= tables
     assert "messages" not in tables
     assert "connections" not in tables
@@ -151,12 +153,14 @@ def test_orm_metadata_matches_mapped_classes() -> None:
         "analyses",
         "connector_accounts",
         "workflow_actions",
+        "mailbox_authorization_sessions",
     }
     assert User.__tablename__ == "users"
     assert ExternalIdentity.__tablename__ == "external_identities"
     assert Analysis.__tablename__ == "analyses"
     assert ConnectorAccount.__tablename__ == "connector_accounts"
     assert WorkflowAction.__tablename__ == "workflow_actions"
+    assert MailboxAuthorizationSession.__tablename__ == "mailbox_authorization_sessions"
 
 
 def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -170,6 +174,7 @@ def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
         "external_account_id",
         "credential_ref",
         "status",
+        "granted_capabilities",
         "created_at",
         "updated_at",
     }
@@ -196,6 +201,32 @@ def test_connector_account_unique_constraint(sqlite_engine: Engine) -> None:
     assert named or expected in unique_indexes
     if named:
         assert named[0]["name"] == "uq_connector_accounts_user_provider_external_account"
+
+
+def test_mailbox_authorization_session_columns_are_minimized(sqlite_engine: Engine) -> None:
+    """Authorization sessions store a state hash and short-lived PKCE verifier only."""
+    inspector = inspect(sqlite_engine)
+    columns = {
+        column["name"] for column in inspector.get_columns("mailbox_authorization_sessions")
+    }
+    assert columns == {
+        "id",
+        "user_id",
+        "provider",
+        "purpose",
+        "connector_account_id",
+        "state_hash",
+        "pkce_verifier",
+        "requested_capabilities",
+        "created_at",
+        "expires_at",
+        "consumed_at",
+    }
+    assert "state" not in columns
+    assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+    fks = inspector.get_foreign_keys("mailbox_authorization_sessions")
+    assert any(fk["referred_table"] == "users" for fk in fks)
+    assert any(fk["referred_table"] == "connector_accounts" for fk in fks)
 
 
 def test_workflow_action_columns_are_minimized(sqlite_engine: Engine) -> None:
