@@ -31,6 +31,9 @@ from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
 )
+from app.domain.interfaces.communication_action_executor_factory import (
+    CommunicationActionExecutorFactory,
+)
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRecord
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
@@ -51,11 +54,11 @@ class WorkflowActionExecutionService:
         self,
         identity_resolver: IdentityResolver,
         unit_of_work_factory: Callable[[], PersistenceUnitOfWork],
-        executor: CommunicationActionExecutor,
+        executor_factory: CommunicationActionExecutorFactory,
     ) -> None:
         self._identity_resolver = identity_resolver
         self._unit_of_work_factory = unit_of_work_factory
-        self._executor = executor
+        self._executor_factory = executor_factory
 
     def execute(
         self,
@@ -65,10 +68,10 @@ class WorkflowActionExecutionService:
         """Execute an owned APPROVED action and return the persisted terminal row."""
         started_at = time.perf_counter()
         user_id = self._require_existing_user(principal)
-        command = self._commit_executing(user_id, action_id, started_at)
+        command, executor = self._commit_executing(user_id, action_id, started_at)
 
         try:
-            self._executor.execute(command)
+            executor.execute(command)
         except CommunicationActionExecutionError as exc:
             logger.warning(
                 "workflow_action_execution_failed",
@@ -114,7 +117,7 @@ class WorkflowActionExecutionService:
         user_id: UUID,
         action_id: UUID,
         started_at: float,
-    ) -> CommunicationActionExecution:
+    ) -> tuple[CommunicationActionExecution, CommunicationActionExecutor]:
         try:
             with self._unit_of_work_factory() as uow:
                 action = uow.workflow_actions.get_owned(action_id, user_id)
@@ -142,6 +145,19 @@ class WorkflowActionExecutionService:
                         operation="execute",
                         workflow_action_id=str(action.id),
                         connector_account_id=str(connector_account_id),
+                        has_execution_target=True,
+                        status=action.status.value,
+                        duration_ms=elapsed_ms(started_at),
+                    )
+                    raise WorkflowActionNotExecutableError()
+                executor = self._executor_factory.create_for_account(account)
+                if executor is None:
+                    logger.info(
+                        "workflow_action_not_executable",
+                        operation="execute",
+                        workflow_action_id=str(action.id),
+                        connector_account_id=str(connector_account_id),
+                        provider=account.provider,
                         has_execution_target=True,
                         status=action.status.value,
                         duration_ms=elapsed_ms(started_at),
@@ -181,7 +197,7 @@ class WorkflowActionExecutionService:
             duration_ms=elapsed_ms(started_at),
             status=WorkflowActionStatus.EXECUTING.value,
         )
-        return command
+        return command, executor
 
     def _commit_terminal(
         self,

@@ -10,6 +10,9 @@ from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
 )
+from app.domain.interfaces.communication_action_executor_factory import (
+    CommunicationActionExecutorFactory,
+)
 from app.domain.interfaces.communication_connector import (
     CommunicationConnector,
     ConnectorMessageQuery,
@@ -39,6 +42,7 @@ __all__ = [
     "AnalysisRepository",
     "CommunicationActionExecution",
     "CommunicationActionExecutor",
+    "CommunicationActionExecutorFactory",
     "CommunicationConnector",
     "CommunicationCredentialResolver",
     "ConnectorAccountRecord",

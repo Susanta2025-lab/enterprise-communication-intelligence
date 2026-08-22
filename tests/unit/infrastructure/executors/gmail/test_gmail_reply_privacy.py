@@ -21,7 +21,7 @@ _SECRET_TOKEN = "SUPER_SECRET_GMAIL_TOKEN_123"
 _SECRET_BODY = "SECRET_APPROVED_GMAIL_REPLY_BODY_123"
 _SECRET_MESSAGE_ID = "SECRET_PROVIDER_MESSAGE_ID_123"
 _SECRET_RECIPIENT = "distinctive-gmail-recipient-privacy@example.test"
-_SECRET_MAILBOX = "secret-mailbox-owner@example.test"
+_SECRET_MAILBOX = "secret-mailbox@example.test"
 _SECRET_SUBJECT = "SECRET_GMAIL_SUBJECT_123"
 _SECRET_RFC_ID = "<SECRET_GMAIL_RFC_MESSAGE_ID_123@example.test>"
 _SECRET_THREAD = "SECRET_GMAIL_THREAD_ID_123"
@@ -60,10 +60,10 @@ def test_successful_reply_logs_omit_token_body_and_headers(
         subject=_SECRET_SUBJECT,
         rfc_message_id=_SECRET_RFC_ID,
     )
+    stub.profile_json = {"emailAddress": _SECRET_MAILBOX}
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=CountingTokenProvider(_SECRET_TOKEN),
-        mailbox_address=_SECRET_MAILBOX,
     )
     command = execution_command(
         approved_reply_body=_SECRET_BODY,
@@ -89,10 +89,10 @@ def test_error_logs_omit_token_body_recipient_and_gmail_payload(
         subject=_SECRET_SUBJECT,
         rfc_message_id=_SECRET_RFC_ID,
     )
+    stub.profile_json = {"emailAddress": _SECRET_MAILBOX}
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=CountingTokenProvider(_SECRET_TOKEN),
-        mailbox_address=_SECRET_MAILBOX,
     )
     command = execution_command(
         approved_reply_body=_SECRET_BODY,
@@ -131,10 +131,10 @@ def test_timeout_logs_omit_token_and_body(
 ) -> None:
     _executor, stub, client, _tokens = gmail_reply_executor
     stub.send_transport_error = httpx.TimeoutException("timed out")
+    stub.profile_json = {"emailAddress": _SECRET_MAILBOX}
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=CountingTokenProvider(_SECRET_TOKEN),
-        mailbox_address=_SECRET_MAILBOX,
     )
     command = execution_command(
         approved_reply_body=_SECRET_BODY,
@@ -182,7 +182,6 @@ def test_credential_unavailable_logs_omit_token_and_body(
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=missing_token,
-        mailbox_address=_SECRET_MAILBOX,
     )
     command = execution_command(
         approved_reply_body=_SECRET_BODY,

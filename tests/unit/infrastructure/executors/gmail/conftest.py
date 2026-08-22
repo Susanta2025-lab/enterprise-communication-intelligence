@@ -22,6 +22,7 @@ from app.infrastructure.executors.gmail import GmailCommunicationActionExecutor
 
 GMAIL_TOKEN = "unit-test-gmail-write-token"
 GMAIL_API_PREFIX = "/gmail/v1/users/me/messages/"
+GMAIL_PROFILE_PATH = "/gmail/v1/users/me/profile"
 GMAIL_SEND_PATH = "/gmail/v1/users/me/messages/send"
 APPROVED_REPLY = "Thanks, I will review the report and respond by Friday."
 PROVIDER_MESSAGE_ID = "gmail-msg-abc123"
@@ -49,6 +50,10 @@ class GmailReplyHttpStub:
 
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
+        self.profile_status = 200
+        self.profile_json: Any = {"emailAddress": MAILBOX_ADDRESS}
+        self.profile_text: str | None = None
+        self.profile_transport_error: BaseException | None = None
         self.metadata_status = 200
         self.metadata_json: Any = metadata_resource()
         self.metadata_text: str | None = None
@@ -62,6 +67,14 @@ class GmailReplyHttpStub:
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         path = request.url.path
+        if request.method == "GET" and path == GMAIL_PROFILE_PATH:
+            if self.profile_transport_error is not None:
+                raise self.profile_transport_error
+            return self._response(
+                self.profile_status,
+                body_json=self.profile_json,
+                body_text=self.profile_text,
+            )
         if request.method == "GET" and _is_metadata_path(path):
             if self.metadata_transport_error is not None:
                 raise self.metadata_transport_error
@@ -100,8 +113,19 @@ class GmailReplyHttpStub:
             return httpx.Response(status, json=body_json, headers=headers)
         return httpx.Response(status, json=body_json, headers=headers)
 
+    def profile_requests(self) -> list[httpx.Request]:
+        return [
+            request
+            for request in self.requests
+            if request.method == "GET" and request.url.path == GMAIL_PROFILE_PATH
+        ]
+
     def metadata_requests(self) -> list[httpx.Request]:
-        return [request for request in self.requests if request.method == "GET"]
+        return [
+            request
+            for request in self.requests
+            if request.method == "GET" and request.url.path != GMAIL_PROFILE_PATH
+        ]
 
     def send_requests(self) -> list[httpx.Request]:
         return [request for request in self.requests if request.method == "POST"]
@@ -192,7 +216,6 @@ def gmail_executor(
     *,
     stub: GmailReplyHttpStub,
     token: object = GMAIL_TOKEN,
-    mailbox_address: str = MAILBOX_ADDRESS,
     follow_redirects: bool = False,
 ) -> tuple[GmailCommunicationActionExecutor, CountingTokenProvider, httpx.Client]:
     token_provider = CountingTokenProvider(token)
@@ -203,7 +226,6 @@ def gmail_executor(
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=token_provider,
-        mailbox_address=mailbox_address,
     )
     return executor, token_provider, client
 

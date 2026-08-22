@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 
 from app.application.exceptions import (
@@ -29,7 +30,9 @@ from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionSaveResult,
 )
 from app.domain.models.workflow import WorkflowAction
+from app.infrastructure.executors.factory import ProviderCommunicationActionExecutorFactory
 from app.infrastructure.executors.fake import FakeCommunicationActionExecutor
+from tests.support.executor_factory import StaticCommunicationActionExecutorFactory
 from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
     UnitOfWorkFactory,
@@ -96,7 +99,11 @@ def _execution_service(
 ]:
     factory = UnitOfWorkFactory(unit)
     fake = executor if executor is not None else FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, fake)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(fake),
+    )
     return service, fake
 
 
@@ -366,6 +373,7 @@ def test_tx1_conflict_does_not_call_executor() -> None:
 
     assert captured == [WorkflowActionStatus.APPROVED]
     assert executor.calls == []
+    assert service._executor_factory.calls == 1
 
 
 def test_tx1_not_found_does_not_call_executor() -> None:
@@ -412,7 +420,11 @@ def test_tx1_persistence_enter_failure_does_not_call_executor() -> None:
     )
     factory = UnitOfWorkFactory(unit, tx1)
     executor = FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
         service.execute(_principal(), approved.id)
@@ -430,7 +442,11 @@ def test_executing_is_committed_before_executor_runs() -> None:
     tx2 = _shared_unit(unit)
     factory = UnitOfWorkFactory(unit, tx1, tx2)
     executor = _InspectingExecutor(unit, tx1, tx2, factory)
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     result = service.execute(_principal(), approved.id)
 
@@ -537,7 +553,11 @@ def test_tx2_persistence_failure_after_success_leaves_executing() -> None:
     )
     factory = UnitOfWorkFactory(unit, unit, tx2)
     executor = FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(ServiceUnavailableError):
         service.execute(_principal(), approved.id)
@@ -562,7 +582,11 @@ def test_tx2_persistence_failure_after_fake_failure_leaves_executing() -> None:
     )
     factory = UnitOfWorkFactory(unit, unit, tx2)
     executor = FakeCommunicationActionExecutor(fail=True)
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(ServiceUnavailableError):
         service.execute(_principal(), approved.id)
@@ -580,7 +604,11 @@ def test_unexpected_executor_exception_does_not_record_failed() -> None:
     approved = _approved_action(unit, analysis_id)
     factory = UnitOfWorkFactory(unit)
     boom = _BoomExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, boom)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(boom),
+    )
     commits_before = unit.commit_calls
 
     with pytest.raises(RuntimeError, match="unexpected adapter bug"):
@@ -607,7 +635,11 @@ def test_tx2_not_found_does_not_return_terminal_or_retry() -> None:
     tx2.workflow_actions.get_owned = _missing  # type: ignore[method-assign]
     factory = UnitOfWorkFactory(unit, unit, tx2)
     executor = FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(WorkflowActionNotFoundError):
         service.execute(_principal(), approved.id)
@@ -635,7 +667,11 @@ def test_tx2_conflict_does_not_return_terminal_or_retry() -> None:
     tx2.workflow_actions.save_owned = _conflict  # type: ignore[method-assign]
     factory = UnitOfWorkFactory(unit, unit, tx2)
     executor = FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(WorkflowActionConflictError):
         service.execute(_principal(), approved.id)
@@ -663,7 +699,11 @@ def test_tx2_save_not_found_does_not_return_terminal_or_retry() -> None:
     tx2.workflow_actions.save_owned = _not_found  # type: ignore[method-assign]
     factory = UnitOfWorkFactory(unit, unit, tx2)
     executor = FakeCommunicationActionExecutor()
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(WorkflowActionNotFoundError):
         service.execute(_principal(), approved.id)
@@ -809,7 +849,7 @@ def test_provider_is_resolved_from_owned_connector_account() -> None:
 
 
 def test_active_account_without_credential_ref_is_structurally_executable() -> None:
-    """12A treats ACTIVE as executable without inspecting credential_ref."""
+    """Fake/static factory execution remains credential-independent."""
     user_id = uuid4()
     account = sample_connector_account(
         user_id,
@@ -834,3 +874,109 @@ def test_active_account_without_credential_ref_is_structurally_executable() -> N
     assert len(executor.calls) == 1
     assert executor.calls[0].provider == _PROVIDER
     assert "credential_ref" not in CommunicationActionExecution.model_fields
+
+
+def test_factory_none_keeps_action_approved() -> None:
+    """A non-routable account must not transition to EXECUTING."""
+    user_id = uuid4()
+    account = sample_connector_account(user_id, provider="gmail")
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    factory = UnitOfWorkFactory(unit)
+    executor_factory = StaticCommunicationActionExecutorFactory(None)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        executor_factory,
+    )
+    commits_before = unit.commit_calls
+    saves_before = unit.workflow_actions.save_calls
+
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), action.id)
+
+    assert executor_factory.calls == 1
+    assert executor_factory.accounts[0].id == account.id
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_actions.save_calls == saves_before
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
+def test_factory_is_invoked_with_owned_account_before_executing() -> None:
+    """Executor selection uses the owned account and happens before the EXECUTING write."""
+    unit, _user_id, analysis_id = _seeded_unit()
+    approved = _approved_action(unit, analysis_id)
+    factory = UnitOfWorkFactory(unit)
+    executor = FakeCommunicationActionExecutor()
+    executor_factory = StaticCommunicationActionExecutorFactory(executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        executor_factory,
+    )
+
+    result = service.execute(_principal(), approved.id)
+
+    assert result.status is WorkflowActionStatus.EXECUTED
+    assert executor_factory.calls == 1
+    assert executor_factory.accounts[0].id == approved.connector_account_id
+    assert executor_factory.accounts[0].provider == _PROVIDER
+    assert len(executor.calls) == 1
+
+
+def test_unexpected_factory_resolver_error_keeps_approved() -> None:
+    """Structural factory failure must not start execution or invoke tokens."""
+
+    class _BoomResolver:
+        def resolve(self, *, credential_ref: str, provider: str):
+            raise RuntimeError("SECRET_CREDENTIAL_REF_12E")
+
+    user_id = uuid4()
+    account = sample_connector_account(user_id, provider="gmail")
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    transport_calls = {"count": 0}
+
+    def _reject(_request: httpx.Request) -> httpx.Response:
+        transport_calls["count"] += 1
+        return httpx.Response(599)
+
+    client = httpx.Client(transport=httpx.MockTransport(_reject))
+    factory = UnitOfWorkFactory(unit)
+    executor_factory = ProviderCommunicationActionExecutorFactory(
+        credential_resolver=_BoomResolver(),
+        http_client=client,
+    )
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        executor_factory,
+    )
+    commits_before = unit.commit_calls
+    try:
+        with pytest.raises(WorkflowActionNotExecutableError) as exc_info:
+            service.execute(_principal(), action.id)
+    finally:
+        client.close()
+
+    assert exc_info.value.message == "Workflow action is not executable."
+    assert "SECRET_CREDENTIAL_REF_12E" not in exc_info.value.message
+    assert unit.commit_calls == commits_before
+    assert transport_calls["count"] == 0
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED

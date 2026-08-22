@@ -12,6 +12,7 @@ from app.domain.interfaces import (
     AnalysisRepository,
     CommunicationActionExecution,
     CommunicationActionExecutor,
+    CommunicationActionExecutorFactory,
     CommunicationConnector,
     CommunicationCredentialResolver,
     ConnectorAccountRepository,
@@ -105,6 +106,14 @@ def test_communication_action_executor_interface_is_abstract() -> None:
         CommunicationActionExecutor()  # type: ignore[abstract]
 
 
+def test_communication_action_executor_factory_interface_is_abstract() -> None:
+    """The factory port must not be instantiable without create_for_account."""
+    assert issubclass(CommunicationActionExecutorFactory, ABC)
+    assert "create_for_account" in CommunicationActionExecutorFactory.__abstractmethods__
+    with pytest.raises(TypeError):
+        CommunicationActionExecutorFactory()  # type: ignore[abstract]
+
+
 def test_communication_credential_resolver_interface_is_abstract() -> None:
     """The credential port must not be instantiable without a resolve implementation."""
     assert issubclass(CommunicationCredentialResolver, ABC)
@@ -187,6 +196,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
     import app.domain.interfaces.communication_action_executor as communication_action_executor
+    import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
     import app.domain.interfaces.communication_connector as communication_connector
     import app.domain.interfaces.communication_credential_resolver as credential_resolver
     import app.domain.interfaces.connector_account_repository as connector_account_repository
@@ -204,6 +214,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         ai_provider,
         analysis_repository,
         communication_action_executor,
+        executor_factory_port,
         communication_connector,
         credential_resolver,
         connector_account_repository,

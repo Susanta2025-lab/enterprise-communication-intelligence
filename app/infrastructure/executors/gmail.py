@@ -2,8 +2,8 @@
 
 This adapter implements ``CommunicationActionExecutor``. It does not fetch mail
 bodies, look up mailbox locators, or own OAuth. The caller injects
-``httpx.Client``, an on-demand ``AccessTokenProvider``, and the trusted
-mailbox identity used for the RFC ``From`` header.
+``httpx.Client`` and an on-demand ``AccessTokenProvider``. Sender identity is
+read from Gmail ``users.me.profile`` using the same access token.
 """
 
 from __future__ import annotations
@@ -32,13 +32,13 @@ from app.domain.interfaces.communication_credential_resolver import AccessTokenP
 logger = get_logger(__name__)
 
 _GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1"
+_PROFILE_URL = f"{_GMAIL_API_BASE}/users/me/profile"
 _MESSAGES_URL = f"{_GMAIL_API_BASE}/users/me/messages"
 _SEND_URL = f"{_MESSAGES_URL}/send"
 _GMAIL_PROVIDER = "gmail"
 _METADATA_HEADERS = ("From", "Reply-To", "Subject", "Message-ID", "References")
 _UNAVAILABLE = "Communication action execution is currently unavailable."
 _FAILED = "Communication action execution failed."
-_INVALID_MAILBOX = "Mailbox identity is invalid."
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,8 @@ class GmailCommunicationActionExecutor(CommunicationActionExecutor):
 
     HTTP, Gmail JSON, and RFC construction stay inside this adapter. The caller
     owns the ``httpx.Client`` lifecycle and supplies an in-memory access-token
-    callable plus the trusted mailbox identity.
+    callable. The authenticated mailbox ``emailAddress`` is discovered at
+    execute time and is not persisted.
     """
 
     def __init__(
@@ -63,14 +64,12 @@ class GmailCommunicationActionExecutor(CommunicationActionExecutor):
         *,
         http_client: httpx.Client,
         access_token_provider: AccessTokenProvider,
-        mailbox_address: str,
     ) -> None:
-        self._mailbox_address = _require_mailbox_address(mailbox_address)
         self._http = http_client
         self._access_token_provider = access_token_provider
 
     def execute(self, command: CommunicationActionExecution) -> None:
-        """Fetch original metadata, then POST the approved RFC reply to Gmail."""
+        """Fetch profile and original metadata, then POST the RFC reply to Gmail."""
         started_at = time.perf_counter()
         self._require_supported_command(command, started_at)
         token = self._current_access_token(command, started_at)
@@ -78,9 +77,10 @@ class GmailCommunicationActionExecutor(CommunicationActionExecutor):
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
         }
+        mailbox_address = self._fetch_mailbox_address(command, auth_headers, started_at)
         preparation = self._fetch_reply_preparation(command, auth_headers, started_at)
         raw = _encode_rfc_reply(
-            mailbox_address=self._mailbox_address,
+            mailbox_address=mailbox_address,
             recipient=preparation.recipient,
             subject=preparation.subject,
             message_id=preparation.message_id,
@@ -150,6 +150,64 @@ class GmailCommunicationActionExecutor(CommunicationActionExecutor):
             )
             raise unavailable
         return token.strip()
+
+    def _fetch_mailbox_address(
+        self,
+        command: CommunicationActionExecution,
+        auth_headers: dict[str, str],
+        started_at: float,
+    ) -> str:
+        try:
+            response = self._http.get(
+                _PROFILE_URL,
+                headers=auth_headers,
+                follow_redirects=False,
+            )
+        except httpx.TimeoutException:
+            unavailable = ServiceUnavailableError(_UNAVAILABLE)
+            _log_failure(
+                command,
+                started_at,
+                unavailable,
+                operation="profile_fetch",
+                status_class="unavailable",
+            )
+            raise unavailable from None
+        except httpx.RequestError:
+            unavailable = ServiceUnavailableError(_UNAVAILABLE)
+            _log_failure(
+                command,
+                started_at,
+                unavailable,
+                operation="profile_fetch",
+                status_class="unavailable",
+            )
+            raise unavailable from None
+        _raise_for_status(response, command, started_at, operation="profile_fetch")
+        try:
+            payload = response.json()
+        except ValueError:
+            unavailable = ServiceUnavailableError(_UNAVAILABLE)
+            _log_failure(
+                command,
+                started_at,
+                unavailable,
+                operation="profile_fetch",
+                status_class="unavailable",
+            )
+            raise unavailable from None
+        mailbox_address = _parse_profile_mailbox(payload)
+        if mailbox_address is None:
+            unavailable = ServiceUnavailableError(_UNAVAILABLE)
+            _log_failure(
+                command,
+                started_at,
+                unavailable,
+                operation="profile_fetch",
+                status_class="unavailable",
+            )
+            raise unavailable
+        return mailbox_address
 
     def _fetch_reply_preparation(
         self,
@@ -259,13 +317,6 @@ class GmailCommunicationActionExecutor(CommunicationActionExecutor):
         _raise_for_status(response, command, started_at, operation="send")
 
 
-def _require_mailbox_address(mailbox_address: str) -> str:
-    parsed = _parse_single_mailbox(mailbox_address)
-    if parsed is None:
-        raise ValueError(_INVALID_MAILBOX)
-    return parsed
-
-
 def _metadata_url(provider_message_id: str) -> str:
     return f"{_MESSAGES_URL}/{quote(provider_message_id, safe='')}"
 
@@ -293,6 +344,15 @@ def _raise_for_status(
     failed = CommunicationActionExecutionError(_FAILED)
     _log_failure(command, started_at, failed, operation=operation, status_class="rejected")
     raise failed from None
+
+
+def _parse_profile_mailbox(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    email_address = payload.get("emailAddress")
+    if not isinstance(email_address, str):
+        return None
+    return _parse_single_mailbox(email_address)
 
 
 def _parse_reply_preparation(payload: object) -> _ReplyPreparation:

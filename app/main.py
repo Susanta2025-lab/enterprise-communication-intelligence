@@ -13,6 +13,7 @@ from app.application.exceptions import (
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
     WorkflowActionConflictError,
+    WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
 from app.core.config import get_settings
@@ -105,6 +106,15 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.warning("workflow_action_conflict", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(WorkflowActionNotExecutableError)
+    async def workflow_action_not_executable_handler(
+        _request: Request,
+        exc: WorkflowActionNotExecutableError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("workflow_action_not_executable", error_class=error_class(exc))
         return JSONResponse(status_code=409, content={"detail": exc.message})
 
     @application.exception_handler(PersistenceError)

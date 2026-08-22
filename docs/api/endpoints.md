@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 12A. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 11D added an internal deterministic execution boundary below HTTP. Phase 12A adds `has_execution_target` to workflow responses. There is no execute, retry, PATCH, or DELETE workflow endpoint.
+All HTTP endpoints implemented in the repository as of Phase 12E. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 12E adds `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. There is no retry, PATCH, or DELETE workflow endpoint.
 
 ## `GET /health`
 
@@ -262,3 +262,24 @@ Repeated approve is not idempotent. Approving an already approved or rejected ac
   - `503` — persistence unavailable, including when `DATABASE_URL` is omitted
 
 Repeated reject is not idempotent. Rejecting an already rejected or approved action returns `409`. Rejection still succeeds after the source analysis is deleted. A rejected action cannot execute.
+
+---
+
+## `POST /api/v1/workflow-actions/{action_id}/execute`
+
+**Purpose:** Execute an owned APPROVED workflow action through the mailbox account snapshotted at proposal time. This is explicit user-approved execution, not an automatic reply.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/workflow-actions/{action_id}/execute`
+- **Request body:** none. Callers cannot supply reply text, provider, connector account, credentials, or a provider message id.
+- **Authentication:** always required. Uses `require_authenticated_communications_send`: `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, send `Authorization: Bearer <JWT>` with permission `communications:send`.
+- **Response model:** `WorkflowActionResponse`
+- **Status codes:**
+  - `200 OK` — terminal `executed` or `failed` resource. `failed` means the provider definitely rejected the send and that outcome was stored.
+  - `401` — missing or invalid bearer token (`AUTH_MODE=disabled` included)
+  - `403` — authenticated caller lacks `communications:send`
+  - `404 Not Found` — unknown id or owned by a different user. Body: `{"detail": "Workflow action not found."}`
+  - `409 Conflict` — not APPROVED, not executable, or concurrent update. Body for not-executable: `{"detail": "Workflow action is not executable."}`
+  - `503` — persistence, credential material, or the mailbox provider is unavailable. If provider execution had already begun, the action may remain `executing`.
+
+Unauthorized and forbidden requests do not open an execution unit of work, resolve credentials, retrieve tokens, or call the mailbox provider. Create, list, get, approve, and reject remain `communications:workflow`.

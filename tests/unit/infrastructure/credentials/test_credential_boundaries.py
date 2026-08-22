@@ -89,12 +89,25 @@ def test_credentials_package_does_not_implement_oauth() -> None:
         assert "pkce" not in source
 
 
-def test_application_and_api_do_not_import_environment_resolver() -> None:
+def test_application_does_not_import_environment_resolver() -> None:
     marker = "EnvironmentCommunicationCredentialResolver"
-    for root in (_APPLICATION_ROOT, _API_ROOT):
-        for path in _python_files(root):
-            source = path.read_text(encoding="utf-8")
-            assert marker not in source, f"{path} must not import the env resolver"
+    for path in _python_files(_APPLICATION_ROOT):
+        source = path.read_text(encoding="utf-8")
+        assert marker not in source, f"{path} must not import the env resolver"
+
+
+def test_api_routes_do_not_import_environment_resolver() -> None:
+    marker = "EnvironmentCommunicationCredentialResolver"
+    for path in _python_files(_API_ROOT / "routes"):
+        source = path.read_text(encoding="utf-8")
+        assert marker not in source, f"{path} must not import the env resolver"
+
+
+def test_api_composition_root_lazy_imports_environment_resolver() -> None:
+    source = (_API_ROOT / "dependencies.py").read_text(encoding="utf-8")
+    assert "from app.infrastructure.credentials.environment import (" in source
+    assert "EnvironmentCommunicationCredentialResolver" in source
+    assert "get_communication_credential_resolver" in source
 
 
 def test_domain_does_not_import_environment_resolver() -> None:

@@ -90,7 +90,7 @@ Unknown and cross-user ids both return `404`. Do not send real bearer tokens in 
 
 ## Workflow Actions
 
-Workflow endpoints always require an authenticated principal with `communications:workflow` (`AUTH_MODE=disabled` returns `401`). Without `DATABASE_URL`, they return `503`. Create accepts only `analysis_id`. Approve and reject have no request body.
+Workflow proposal/approval endpoints always require an authenticated principal with `communications:workflow` (`AUTH_MODE=disabled` returns `401`). Execute requires `communications:send`. Without `DATABASE_URL`, they return `503`. Create accepts only `analysis_id`. Approve, reject, and execute have no request body.
 
 ```bash
 curl -sS -X POST http://localhost:8000/api/v1/workflow-actions \
@@ -119,7 +119,12 @@ curl -sS -X POST http://localhost:8000/api/v1/workflow-actions/<action-id>/rejec
   -H "Authorization: Bearer <access-token>"
 ```
 
-Unknown and cross-user workflow actions both return `404`. Responses omit `owner_user_id`. There is no execute, retry, PATCH, or DELETE workflow route.
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/workflow-actions/<action-id>/execute \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Unknown and cross-user workflow actions both return `404`. Responses omit `owner_user_id`. There is no retry, PATCH, or DELETE workflow route.
 
 ## Urgent Communication
 

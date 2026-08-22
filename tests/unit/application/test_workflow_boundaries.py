@@ -52,18 +52,19 @@ def test_workflow_action_service_does_not_import_connectors_or_ai() -> None:
     assert "fastapi" not in source
 
 
-def test_workflow_api_exists_without_executor_routes() -> None:
-    """Phase 11C exposes proposal/approval HTTP; execute and retry remain absent."""
+def test_workflow_api_exposes_execute_without_retry() -> None:
+    """Phase 12E exposes execute over HTTP; retry remains absent."""
     workflow_routes = (_API_ROUTES / "workflow_actions.py").read_text(encoding="utf-8")
     assert "workflow-actions" in workflow_routes
     assert "WorkflowActionService" in workflow_routes
-    assert "/execute" not in workflow_routes
+    assert "WorkflowActionExecutionService" in workflow_routes
+    assert "/execute" in workflow_routes
     assert "/retry" not in workflow_routes
-    assert "CommunicationActionExecutor" not in workflow_routes
-    assert "WorkflowActionExecutionService" not in workflow_routes
-    assert "sqlalchemy" not in workflow_routes
     assert "GmailCommunicationConnector" not in workflow_routes
     assert "MicrosoftGraphCommunicationConnector" not in workflow_routes
+    assert "GmailCommunicationActionExecutor" not in workflow_routes
+    assert "MicrosoftGraphCommunicationActionExecutor" not in workflow_routes
+    assert "sqlalchemy" not in workflow_routes
 
     communications = (_API_ROUTES / "communications.py").read_text(encoding="utf-8")
     analyses = (_API_ROUTES / "analyses.py").read_text(encoding="utf-8")
@@ -75,16 +76,25 @@ def test_workflow_api_exists_without_executor_routes() -> None:
     router = (_ROOT / "app" / "api" / "router.py").read_text(encoding="utf-8")
     assert "workflow_actions" in router
     dependencies = (_ROOT / "app" / "api" / "dependencies.py").read_text(encoding="utf-8")
-    assert "get_workflow_action_execution_service" not in dependencies
-    assert "WorkflowActionExecutionService" not in dependencies
+    assert "get_workflow_action_execution_service" in dependencies
+    assert "WorkflowActionExecutionService" in dependencies
+    assert "require_authenticated_communications_send" in dependencies
+    assert "GmailCommunicationActionExecutor" not in dependencies
+    assert "MicrosoftGraphCommunicationActionExecutor" not in dependencies
 
 
-def test_communications_send_permission_is_absent_from_application_code() -> None:
-    """Phase 11D must not introduce communications:send."""
-    application_root = _ROOT / "app"
-    for path in application_root.rglob("*.py"):
+def test_communications_send_permission_is_isolated_from_application_services() -> None:
+    """communications:send belongs to security and the execute route, not application services."""
+    services = _SERVICES
+    for path in services.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
-        assert "communications:send" not in source, f"{path} must not introduce send permission"
+        assert "communications:send" not in source, f"{path} must not hard-code send permission"
+    domain = _ROOT / "app" / "domain"
+    for path in domain.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert "communications:send" not in source, f"{path} must not hard-code send permission"
+    security = (_ROOT / "app" / "core" / "security.py").read_text(encoding="utf-8")
+    assert 'COMMUNICATIONS_SEND_PERMISSION = "communications:send"' in security
 
 
 def test_communication_connector_remains_read_only() -> None:
@@ -111,10 +121,14 @@ def test_gmail_and_graph_adapters_remain_read_only() -> None:
             assert marker not in source, f"{path} must not add {marker}"
 
 
-def test_execution_boundary_exists_below_http() -> None:
-    """Phase 11D adds a write port, fake, and execution service without HTTP execute."""
+def test_execution_boundary_uses_factory_and_unchanged_command() -> None:
+    """Phase 12E routes through a factory; the execution command stays unchanged."""
     assert (_ROOT / "app" / "domain" / "interfaces" / "communication_action_executor.py").is_file()
+    assert (
+        _ROOT / "app" / "domain" / "interfaces" / "communication_action_executor_factory.py"
+    ).is_file()
     assert (_ROOT / "app" / "infrastructure" / "executors" / "fake.py").is_file()
+    assert (_ROOT / "app" / "infrastructure" / "executors" / "factory.py").is_file()
     assert (_SERVICES / "workflow_action_execution.py").is_file()
     assert CommunicationActionExecutor is not CommunicationConnector
     assert issubclass(FakeCommunicationActionExecutor, CommunicationActionExecutor)
@@ -130,6 +144,7 @@ def test_execution_boundary_exists_below_http() -> None:
 
     execution_source = (_SERVICES / "workflow_action_execution.py").read_text(encoding="utf-8")
     assert "CommunicationActionExecutor" in execution_source
+    assert "CommunicationActionExecutorFactory" in execution_source
     assert "AIProvider" not in execution_source
     assert "AnalysisHistoryService" not in execution_source
     assert "analysis_repository" not in execution_source

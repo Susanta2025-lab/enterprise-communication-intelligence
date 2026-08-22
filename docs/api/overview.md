@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ECI Platform exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)). When persistence is configured and the caller is authenticated, a successful analysis can be stored as user-owned history. Authenticated callers with `communications:workflow` can also propose and approve or reject a `WorkflowAction` derived from a stored draft. Approval authorizes a stored snapshot; it does not execute or send mail. There is no HTTP execute route.
+ECI Platform exposes a REST API for analyzing business communications: producing a summary, priority classification, category, action items, and an optional draft reply. Analysis is performed by a configurable `AIProvider` behind the scenes (see [Provider Abstraction](../architecture/provider-abstraction.md)). When persistence is configured and the caller is authenticated, a successful analysis can be stored as user-owned history. Authenticated callers with `communications:workflow` can propose and approve or reject a `WorkflowAction` derived from a stored draft. Authenticated callers with `communications:send` can execute an already-approved action. Approval authorizes a stored snapshot; execute sends that snapshot through the owned mailbox account. There is no retry route and no automatic reply.
 
 ## Base URL
 
@@ -52,6 +52,7 @@ Client
   → POST /api/v1/communications/analyze (communications:analyze)
   → GET/DELETE /api/v1/analyses (communications:analyze)
   → POST/GET /api/v1/workflow-actions (communications:workflow)
+  → POST /api/v1/workflow-actions/{id}/execute (communications:send)
 ```
 
 Configuration (`app/core/config.py`):
@@ -83,7 +84,7 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `POST /api/v1/workflow-actions/{action_id}/approve`
 - `POST /api/v1/workflow-actions/{action_id}/reject`
 
-Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow routes require `communications:workflow`; analyze does not imply workflow, and workflow does not imply analyze. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Analyze, workflow, and send do not imply each other. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
 
 Permissions are read only from bounded claims `scp`, `scope`, or `roles`. Internal users store only `issuer` and `subject`; they are not a session store or login database.
 
@@ -107,7 +108,8 @@ request_id middleware
 FastAPI route (app/api/routes/*)
   ↓ dependency injection
   ├── CommunicationAnalysisWorkflowService (analyze / history)
-  └── WorkflowActionService (workflow proposal and approval)
+  ├── WorkflowActionService (workflow proposal and approval)
+  └── WorkflowActionExecutionService (execute)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints; Gmail and Graph adapters are not reachable through this API surface. Phase 11D execution (`WorkflowActionExecutionService` / `CommunicationActionExecutor`) remains below HTTP. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow or execution service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

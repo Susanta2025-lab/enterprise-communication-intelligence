@@ -52,8 +52,9 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
 class WorkflowActionNotExecutableError(ECIPlatformError):
     """Raised when an owned action cannot begin external execution.
 
-    Covers missing execution targets and unusable mailbox accounts. The
-    public message does not distinguish those cases.
+    Covers missing execution targets, unusable mailbox accounts, and
+    factory routing that cannot produce a production writer. The public
+    message does not distinguish those cases.
     """
 
     def __init__(self) -> None:

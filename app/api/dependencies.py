@@ -1,8 +1,9 @@
 """FastAPI dependency providers."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -12,18 +13,25 @@ from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
 from app.application.services.identity import IdentityResolver
+from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import (
+    COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
     AuthenticationFailedError,
     AuthorizationFailedError,
     TokenValidator,
 )
-from app.domain.interfaces import AIProvider, PersistenceUnitOfWork
+from app.domain.interfaces import (
+    AIProvider,
+    CommunicationActionExecutorFactory,
+    CommunicationCredentialResolver,
+    PersistenceUnitOfWork,
+)
 from app.providers.factory import create_ai_provider
 
 logger = get_logger(__name__)
@@ -170,6 +178,7 @@ def require_communications_analyze(
 
 
 require_communications_workflow = require_permission(COMMUNICATIONS_WORKFLOW_PERMISSION)
+require_communications_send = require_permission(COMMUNICATIONS_SEND_PERMISSION)
 
 
 def require_authenticated_communications_analyze(
@@ -200,6 +209,27 @@ def require_authenticated_communications_workflow(
     ],
 ) -> AuthenticatedPrincipal:
     """Require a real authenticated principal for workflow endpoints.
+
+    ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
+    Missing permission remains 403.
+    """
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
+    return principal
+
+
+def require_authenticated_communications_send(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(require_communications_send),
+    ],
+) -> AuthenticatedPrincipal:
+    """Require a real authenticated principal for the execute endpoint.
 
     ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
     Missing permission remains 403.
@@ -247,6 +277,21 @@ def require_unit_of_work_factory(
         logger.warning("persistence_unavailable", operation="history")
         raise ServiceUnavailableError(_UNAVAILABLE)
     return factory
+
+
+def get_execution_unit_of_work_factory(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+) -> UnitOfWorkFactory:
+    """Resolve execute persistence only after communications:send succeeds.
+
+    Persistence lookup is performed in this function body so it is not a
+    FastAPI sibling of send authorization. Unauthorized requests never
+    construct a unit-of-work factory.
+    """
+    return require_unit_of_work_factory(get_unit_of_work_factory())
 
 
 def get_communication_analysis_service(
@@ -298,3 +343,77 @@ def get_workflow_action_service(
 ) -> WorkflowActionService:
     """Build the workflow action service for authenticated workflow endpoints."""
     return WorkflowActionService(identity_resolver, uow_factory)
+
+
+def get_communication_http_client(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+) -> Iterator[httpx.Client]:
+    """Yield a request-scoped HTTP client for production write adapters.
+
+    Tests may override this dependency with ``httpx.MockTransport``. The client
+    is closed after the request. Construction is gated by send authorization.
+    """
+    client = httpx.Client(timeout=30.0, follow_redirects=False)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+def get_communication_credential_resolver(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+) -> CommunicationCredentialResolver:
+    """Return the local/dev environment-backed credential resolver."""
+    from app.infrastructure.credentials.environment import (
+        EnvironmentCommunicationCredentialResolver,
+    )
+
+    return EnvironmentCommunicationCredentialResolver()
+
+
+def get_communication_action_executor_factory(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+    http_client: Annotated[httpx.Client, Depends(get_communication_http_client)],
+    credential_resolver: Annotated[
+        CommunicationCredentialResolver,
+        Depends(get_communication_credential_resolver),
+    ],
+) -> CommunicationActionExecutorFactory:
+    """Build the account-driven production executor factory after send authorization."""
+    from app.infrastructure.executors.factory import ProviderCommunicationActionExecutorFactory
+
+    return ProviderCommunicationActionExecutorFactory(
+        credential_resolver=credential_resolver,
+        http_client=http_client,
+    )
+
+
+def get_workflow_action_execution_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+    uow_factory: Annotated[
+        UnitOfWorkFactory,
+        Depends(get_execution_unit_of_work_factory),
+    ],
+    executor_factory: Annotated[
+        CommunicationActionExecutorFactory,
+        Depends(get_communication_action_executor_factory),
+    ],
+) -> WorkflowActionExecutionService:
+    """Build execution orchestration after communications:send authorization."""
+    return WorkflowActionExecutionService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        executor_factory,
+    )

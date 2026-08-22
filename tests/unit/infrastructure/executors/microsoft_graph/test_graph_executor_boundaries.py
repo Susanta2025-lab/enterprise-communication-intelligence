@@ -154,7 +154,6 @@ def test_api_does_not_import_graph_executor() -> None:
     for path in _python_files(_API_ROOT):
         source = path.read_text(encoding="utf-8")
         assert marker not in source, f"{path} must not import the Graph executor"
-        assert "communications:send" not in source
 
 
 def test_execution_command_has_no_token_or_credential_ref() -> None:

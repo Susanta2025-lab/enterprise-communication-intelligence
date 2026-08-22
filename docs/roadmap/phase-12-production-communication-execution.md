@@ -39,7 +39,7 @@ Phase 12 is **In Progress**.
 - **12B is Completed:** provider-neutral `CommunicationCredentialResolver`, environment-backed local/dev resolver, shared `AccessTokenProvider` contract, write-scope readiness documentation. Environment-backed local/dev lookup only. Fake execution remains credential-independent.
 - **12C is Completed:** Microsoft Graph reply adapter implemented as `MicrosoftGraphCommunicationActionExecutor`. Production workflow routing/composition is deferred to the provider-routing/execute integration slice. The adapter is not reachable from the REST API. ADR-019.
 - **12D is Completed:** Gmail reply adapter implemented as `GmailCommunicationActionExecutor`. Production workflow routing/composition remains deferred. The adapter is not reachable from the REST API. ADR-019 extended.
-- **12E is Not started:** Execute API and `communications:send`.
+- **12E is Completed:** Execute API, `communications:send`, and account-driven production executor factory. Gmail sender identity from `users/me/profile`. ADR-019 extended for factory routing. Production OAuth, retry, and `EXECUTION_UNKNOWN` remain deferred.
 - **12F is Not started:** Failure semantics, privacy, documentation, and regression.
 
 Phase 11 remains **Completed**.
@@ -199,7 +199,31 @@ Not implemented in 12D:
 
 ### 12E — Execute API + communications:send
 
-`POST /api/v1/workflow-actions/{id}/execute` and the send permission. Not implemented in this slice.
+```text
+12E
+= production routing + execute API + communications:send
+
+retry / EXECUTION_UNKNOWN / outbox
+= deferred to 12F
+```
+
+Implemented in this slice:
+
+- `POST /api/v1/workflow-actions/{action_id}/execute` with no request body
+- `communications:send` as a distinct capability from `communications:workflow`
+- `CommunicationActionExecutorFactory` / `ProviderCommunicationActionExecutorFactory`
+- `WorkflowActionExecutionService` selects a Graph or Gmail executor from the owned `ConnectorAccount` before `APPROVED` → `EXECUTING`
+- Gmail sender identity from `GET /gmail/v1/users/me/profile` (`emailAddress`); constructor `mailbox_address` removed
+- `WorkflowActionNotExecutableError` → HTTP 409
+- Environment-backed credential lookup remains the local/dev secret backend
+
+Not implemented in 12E:
+
+- retry, `EXECUTION_UNKNOWN`, outbox, reconciliation
+- production OAuth authorization/refresh
+- managed secret stores
+- automatic replies
+- live Gmail/Graph send validation
 
 ### 12F — Failure Semantics, Privacy, Documentation & Regression
 
@@ -211,15 +235,11 @@ Provider-result persistence, uncertain-outcome documentation, and Phase 12 closu
 - [x] Phase 12B — Credential Resolution + Write-Scope Readiness (completed)
 - [x] Phase 12C — Microsoft Graph Reply Executor (completed)
 - [x] Phase 12D — Gmail Reply Executor (completed)
-- [ ] Phase 12E — Execute API + communications:send
+- [x] Phase 12E — Execute API + communications:send (completed)
 - [ ] Phase 12F — Failure Semantics, Privacy, Documentation & Regression
 
 ## Unavailable until later Phase 12 slices
 
 - production OAuth, token refresh, Azure Key Vault, AWS Secrets Manager
-- production workflow routing of the Graph or Gmail reply adapters
-- Graph `sendMail`
-- HTTP execute route
-- `communications:send`
 - retry, `EXECUTION_UNKNOWN`, outbox, workers
 - automatic replies

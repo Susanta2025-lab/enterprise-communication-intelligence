@@ -107,6 +107,7 @@ def test_gmail_executor_does_not_use_drafts_or_reply_all() -> None:
     for marker in _FORBIDDEN_OPERATIONS:
         assert marker not in source, f"gmail executor must not use {marker}"
     assert "/users/me/messages" in source
+    assert "/users/me/profile" in source
     assert "/send" in source
     assert "metadata" in source
 
@@ -151,7 +152,6 @@ def test_api_does_not_import_gmail_executor() -> None:
     for path in _python_files(_API_ROOT):
         source = path.read_text(encoding="utf-8")
         assert marker not in source, f"{path} must not import the Gmail executor"
-        assert "communications:send" not in source
 
 
 def test_execution_command_has_no_token_or_mailbox_identity() -> None:

@@ -65,9 +65,9 @@ Only `email` is exercised by any implemented behavior; the remaining values exis
 | `pending` | Proposal exists; not authorized |
 | `approved` | User authorized the stored snapshot; not sent |
 | `rejected` | User denied execution; terminal in Phase 11 |
-| `executing` | Authorized execution attempt has begun (internal boundary; no HTTP execute route) |
-| `executed` | Deterministic fake executor completed; not Gmail/Graph delivery |
-| `failed` | Known execution failure; terminal in Phase 11 |
+| `executing` | Authorized execution attempt has begun |
+| `executed` | Provider accepted the send and the outcome was stored |
+| `failed` | Provider definitely rejected the send and that outcome was stored |
 
 ---
 
@@ -226,9 +226,9 @@ Owned workflow-action resource. Mapped explicitly from the domain `WorkflowActio
 | `created_at` | `datetime` | Timezone-aware ISO-8601 |
 | `approved_at` | `datetime \| None` | Set on approve |
 | `rejected_at` | `datetime \| None` | Set on reject |
-| `executed_at` | `datetime \| None` | Later execution; not set by 11C |
-| `failed_at` | `datetime \| None` | Later execution; not set by 11C |
-| `has_execution_target` | `bool` | `true` when mailbox routing provenance exists (`connector_account_id` and `provider_message_id` both present). This is **not** a claim that a real provider can already send the message. There is no execute API in Phase 12A. |
+| `executed_at` | `datetime \| None` | Set when status is `executed` |
+| `failed_at` | `datetime \| None` | Set when status is `failed` |
+| `has_execution_target` | `bool` | `true` when mailbox routing provenance exists (`connector_account_id` and `provider_message_id` both present). This is not a claim that the current account can send. |
 
 The response omits `owner_user_id`, `connector_account_id`, `provider_message_id`, and `credential_ref`.
 

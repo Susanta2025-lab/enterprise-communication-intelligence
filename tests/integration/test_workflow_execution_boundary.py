@@ -11,6 +11,7 @@ from app.application.services.workflow_actions import WorkflowActionService
 from app.core.security import AuthenticatedPrincipal
 from app.domain.enums import WorkflowActionStatus
 from app.infrastructure.executors.fake import FakeCommunicationActionExecutor
+from tests.support.executor_factory import StaticCommunicationActionExecutorFactory
 from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
     UnitOfWorkFactory,
@@ -65,7 +66,11 @@ def _mailbox_wired_services(
     identity = IdentityResolver(factory)
     fake = executor if executor is not None else FakeCommunicationActionExecutor()
     workflow = WorkflowActionService(identity, factory)
-    execution = WorkflowActionExecutionService(identity, factory, fake)
+    execution = WorkflowActionExecutionService(
+        identity,
+        factory,
+        StaticCommunicationActionExecutorFactory(fake),
+    )
     return workflow, execution, unit, fake
 
 
@@ -94,7 +99,11 @@ def _direct_text_wired_services() -> tuple[
     identity = IdentityResolver(factory)
     fake = FakeCommunicationActionExecutor()
     workflow = WorkflowActionService(identity, factory)
-    execution = WorkflowActionExecutionService(identity, factory, fake)
+    execution = WorkflowActionExecutionService(
+        identity,
+        factory,
+        StaticCommunicationActionExecutorFactory(fake),
+    )
     return workflow, execution, unit, fake
 
 

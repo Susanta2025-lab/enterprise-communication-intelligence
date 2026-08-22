@@ -32,9 +32,110 @@ def _assert_generic_execution_error(exc: Exception) -> None:
     assert exc.__cause__ is None
 
 
-def _assert_metadata_only(stub: object) -> None:
+def _assert_profile_only(stub: object) -> None:
+    assert len(stub.profile_requests()) == 1  # type: ignore[attr-defined]
+    assert stub.metadata_requests() == []  # type: ignore[attr-defined]
+    assert stub.send_requests() == []  # type: ignore[attr-defined]
+
+
+def _assert_profile_and_metadata_only(stub: object) -> None:
+    assert len(stub.profile_requests()) == 1  # type: ignore[attr-defined]
     assert len(stub.metadata_requests()) == 1  # type: ignore[attr-defined]
     assert stub.send_requests() == []  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+def test_profile_4xx_is_definite_execution_error_without_metadata(
+    gmail_reply_executor: tuple,
+    status: int,
+) -> None:
+    executor, stub, _client, tokens = gmail_reply_executor
+    stub.profile_status = status
+    stub.profile_json = _GMAIL_ERROR
+
+    with pytest.raises(CommunicationActionExecutionError) as exc_info:
+        executor.execute(execution_command())
+
+    assert exc_info.value.message == _FAILED
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+    assert tokens.calls == 1
+
+
+@pytest.mark.parametrize("status", [408, 500, 502, 503, 504, 599])
+def test_profile_unavailable_statuses_prevent_metadata(
+    gmail_reply_executor: tuple,
+    status: int,
+) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_status = status
+    stub.profile_json = _GMAIL_ERROR
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
+    assert exc_info.value.message == _UNAVAILABLE
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+
+
+@pytest.mark.parametrize("status", [201, 202, 204])
+def test_profile_unexpected_2xx_prevents_metadata(
+    gmail_reply_executor: tuple,
+    status: int,
+) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_status = status
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+
+
+def test_profile_timeout_is_unavailable_without_metadata(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_transport_error = httpx.TimeoutException("timed out contacting Gmail")
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
+    assert "timed out" not in exc_info.value.message
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+
+
+def test_profile_transport_error_is_unavailable_without_metadata(
+    gmail_reply_executor: tuple,
+) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_transport_error = httpx.ConnectError("dns failed for gmail.googleapis.com")
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
+    assert "dns failed" not in exc_info.value.message
+    assert "gmail.googleapis.com" not in exc_info.value.message
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+
+
+def test_profile_redirect_is_not_followed(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_status = 302
+
+    with pytest.raises(CommunicationActionExecutionError) as exc_info:
+        executor.execute(execution_command())
+
+    _assert_generic_execution_error(exc_info.value)
+    _assert_profile_only(stub)
+    assert stub.profile_requests()[0].url.host == "gmail.googleapis.com"
+    assert all(request.url.host != "evil.example" for request in stub.requests)
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
@@ -51,7 +152,7 @@ def test_metadata_4xx_is_definite_execution_error_without_send(
 
     assert exc_info.value.message == _FAILED
     _assert_generic_execution_error(exc_info.value)
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
     assert tokens.calls == 1
 
 
@@ -65,7 +166,7 @@ def test_metadata_429_does_not_retry(gmail_reply_executor: tuple) -> None:
 
     _assert_generic_execution_error(exc_info.value)
     assert "Retry-After" not in exc_info.value.message
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
 
 
 @pytest.mark.parametrize("status", [408, 500, 502, 503, 504, 599])
@@ -83,7 +184,7 @@ def test_metadata_unavailable_statuses_prevent_send(
     assert not isinstance(exc_info.value, CommunicationActionExecutionError)
     assert exc_info.value.message == _UNAVAILABLE
     _assert_generic_execution_error(exc_info.value)
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
 
 
 @pytest.mark.parametrize("status", [201, 202, 204])
@@ -99,7 +200,7 @@ def test_metadata_unexpected_2xx_prevents_send(
 
     assert not isinstance(exc_info.value, CommunicationActionExecutionError)
     _assert_generic_execution_error(exc_info.value)
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
 
 
 def test_metadata_timeout_is_unavailable_without_send(gmail_reply_executor: tuple) -> None:
@@ -112,7 +213,7 @@ def test_metadata_timeout_is_unavailable_without_send(gmail_reply_executor: tupl
     assert not isinstance(exc_info.value, CommunicationActionExecutionError)
     assert "timed out" not in exc_info.value.message
     _assert_generic_execution_error(exc_info.value)
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
 
 
 def test_metadata_transport_error_is_unavailable_without_send(
@@ -128,7 +229,7 @@ def test_metadata_transport_error_is_unavailable_without_send(
     assert "dns failed" not in exc_info.value.message
     assert "gmail.googleapis.com" not in exc_info.value.message
     _assert_generic_execution_error(exc_info.value)
-    _assert_metadata_only(stub)
+    _assert_profile_and_metadata_only(stub)
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 429])

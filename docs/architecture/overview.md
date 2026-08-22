@@ -15,30 +15,27 @@ CommunicationAnalysisWorkflowService   (app/application/services)
   └── AnalysisHistoryService → AnalysisRepository → PostgreSQL
 ```
 
-Workflow HTTP product surface (proposal and approval only):
+Workflow HTTP product surface (proposal, approval, and execute):
 
 ```text
 Client
   ↓
 FastAPI REST API
   ↓
-WorkflowActionService
+WorkflowActionService | WorkflowActionExecutionService
   ├── IdentityResolver.find_existing
-  └── WorkflowActionRepository → PostgreSQL
+  └── WorkflowActionRepository / owned ConnectorAccount → factory → Graph or Gmail
 ```
 
-There is no HTTP execute route. Execution is below HTTP:
+Execute is user-approved only:
 
 ```text
-WorkflowActionExecutionService
-  → TX1: validate has_execution_target and owned active ConnectorAccount,
-    then APPROVED → EXECUTING (commit, close UoW)
-  → CommunicationActionExecutor interface
-  → FakeCommunicationActionExecutor (current workflow composition)
+POST /api/v1/workflow-actions/{action_id}/execute
+  → communications:send
+  → TX1: validate owned APPROVED action and owned ACTIVE account, select executor, APPROVED → EXECUTING
+  → executor.execute (no open UoW)
   → TX2 EXECUTED | FAILED
 ```
-
-Phase 12C adds `MicrosoftGraphCommunicationActionExecutor` as a standalone Graph `/reply` adapter. Phase 12D adds `GmailCommunicationActionExecutor` as a standalone Gmail metadata-plus-send adapter. Neither is injected into `WorkflowActionExecutionService` and neither is reachable from REST.
 
 Connector ingestion path (below the HTTP product surface; no connector routes). Vendor adapters call Gmail or Microsoft Graph REST and implement the domain port:
 
@@ -74,14 +71,14 @@ API
 
 ## Purpose of Each Layer
 
-- **FastAPI REST API (`app/api`)** — HTTP transport. Defines routes (`app/api/routes/`), the API router assembly (`app/api/router.py`), and dependency wiring (`app/api/dependencies.py`). Contains no business logic; every route validates input via Pydantic and delegates to a service. Phase 10 added no connector HTTP endpoints. Phase 11C adds workflow proposal and approval routes. The API does not import concrete Gmail or Graph adapters.
+- **FastAPI REST API (`app/api`)** — HTTP transport. Defines routes (`app/api/routes/`), the API router assembly (`app/api/router.py`), and dependency wiring (`app/api/dependencies.py`). Contains no business logic; every route validates input via Pydantic and delegates to a service. Phase 10 added no connector HTTP endpoints. Phase 11C adds workflow proposal and approval routes. Phase 12E adds execute. Analyze/history keep `communications:analyze`; proposal/approval require `communications:workflow`; execute requires `communications:send`. The API does not import concrete Gmail or Graph executor classes.
 - **Application service (`app/application`)** — Orchestrates use cases. `CommunicationAnalysisService` remains AI-only. `CommunicationAnalysisWorkflowService` resolves internal user ownership, calls the AI service, then persists through `AnalysisHistoryService`. `CommunicationIngestionService` fetches one `CommunicationMessage` from a `CommunicationConnector` and delegates to the existing workflow. `ConnectorAccountService` manages user-owned connector accounts with opaque `credential_ref`. `WorkflowActionService` manages proposal/approval lifecycle. `WorkflowActionExecutionService` commits `EXECUTING` then calls `CommunicationActionExecutor` with no open unit of work. Application code depends on domain interfaces, not SQLAlchemy or vendor mailbox types.
 - **Domain (`app/domain`)** — Provider-independent business objects: enums (`SourceType`, `PriorityLevel`, `MessageCategory`, `ConnectorAccountStatus`, `WorkflowActionType`, `WorkflowActionStatus`), models (`CommunicationMessage`, `MessageMetadata`, `CommunicationAnalysis`, `Summary`, `Priority`, `ActionItem`, `DraftReply`, `WorkflowAction`), schemas (`CommunicationRequest`, `CommunicationAnalysisResult`), the `AIProvider` interface, the `CommunicationConnector` contract, the `CommunicationActionExecutor` write port, and persistence repository/UoW interfaces. Domain code imports neither FastAPI, SQLAlchemy, nor any cloud SDK.
 - **Providers (`app/providers`)** — Concrete implementations of `AIProvider`. `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` are implemented. The two real LLM adapters share `app/providers/common/`. `app/providers/factory.py` selects a provider from configuration. Connector adapters do not live here and do not implement `AIProvider`.
 - **Core (`app/core`)** — Cross-cutting concerns: `config.py` (Pydantic Settings, including `DATABASE_URL`), `logging.py` (structlog configuration), `telemetry.py` (request-safe `duration_ms` and `error_class` helpers), `exceptions.py` (the base application exception hierarchy, including `PersistenceError` and connector-neutral errors), `security.py` (OIDC JWT validation, `AuthenticatedPrincipal`, and capability-specific `authorize(principal, required_permission)`). HTTP `request_id` binding lives in `app/api/middleware.py`.
 - **Infrastructure storage (`app/infrastructure/storage`)** — SQLAlchemy models, engine, unit of work, and repository implementations, including `connector_accounts`. Domain and application code do not import these types except through API dependency wiring.
 - **Infrastructure communication connectors (`app/infrastructure/connectors`)** — Vendor adapters that implement `CommunicationConnector`: fake, Gmail REST v1, and Microsoft Graph REST v1.0. They normalize email to `SourceType.EMAIL` while keeping provider identity (`gmail`, `microsoft_graph`) separate. They do not persist raw mail, call `AIProvider`, own OAuth, resolve `credential_ref`, or expose HTTP routes.
-- **Infrastructure executors (`app/infrastructure/executors`)** — Write-port adapters. `FakeCommunicationActionExecutor` remains the workflow test and current composition path. `MicrosoftGraphCommunicationActionExecutor` sends Graph native `/reply` with an injected `httpx.Client` and `AccessTokenProvider`. `GmailCommunicationActionExecutor` fetches Gmail metadata, constructs an RFC 2822 reply, and posts `users.messages.send` with an injected `httpx.Client`, `AccessTokenProvider`, and trusted `mailbox_address`. Neither writer is wired into application execution or HTTP.
+- **Infrastructure executors (`app/infrastructure/executors`)** — Write-port adapters. `FakeCommunicationActionExecutor` remains the isolated test double. `ProviderCommunicationActionExecutorFactory` selects `MicrosoftGraphCommunicationActionExecutor` or `GmailCommunicationActionExecutor` from an owned account. Gmail discovers sender identity from `users/me/profile`. The fake provider is not production-routed.
 
 ## Provider Independence
 
@@ -142,4 +139,4 @@ See [`identity.mmd`](../diagrams/identity.mmd), [`persistence.mmd`](../diagrams/
 
 ## Future Extensibility
 
-Phase 8 identity separation is implemented: application-user OIDC JWT, Azure/AWS workload identity, and GitHub OIDC deploy identities. Phase 9 adds a fourth class: database identity from ECI to PostgreSQL. Phase 7 observability is implemented: portable structured JSON on stdout, `request_id` / `X-Request-ID` correlation, `duration_ms`, and `error_class`. Azure retains logs in Log Analytics and exposes native Container Apps metrics. AWS retains logs in CloudWatch via awslogs and exposes standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, and alerts remain deferred. Managed cloud PostgreSQL and private DB networking remain later work. Phase 10 connector ingestion is implemented as a domain/application/infrastructure path; production OAuth, credential resolver, connector HTTP APIs, synchronization, attachments, sending, and automatic replies remain later work. Phase 11A encodes `WorkflowAction` and capability-specific permissions. Phase 11B persists user-owned `workflow_actions` with proposed/approved reply snapshots and no analysis FK. Phase 11C exposes create, list, get, approve, and reject over `/api/v1/workflow-actions`. Phase 11D adds `CommunicationActionExecutor`, `FakeCommunicationActionExecutor`, and `WorkflowActionExecutionService` with a two-transaction boundary and no HTTP execute surface. Phase 12C adds a Microsoft Graph reply adapter that is not yet routed into that service. Additional AI providers can still be added behind `AIProvider` and the factory without changing the application or API layers. Additional communication vendors can implement `CommunicationConnector` without changing domain analysis models. See [Persistence](persistence.md), [Provider Abstraction](provider-abstraction.md), [Observability](../cloud/observability.md), [Authentication](../cloud/authentication.md), [PostgreSQL strategy](../cloud/persistence.md), [Phase 10](../roadmap/phase-10-communication-connectors.md), [Phase 11](../roadmap/phase-11-workflow-automation.md), and [`docs/cloud/`](../cloud/README.md).
+Phase 8 identity separation is implemented: application-user OIDC JWT, Azure/AWS workload identity, and GitHub OIDC deploy identities. Phase 9 adds a fourth class: database identity from ECI to PostgreSQL. Phase 7 observability is implemented: portable structured JSON on stdout, `request_id` / `X-Request-ID` correlation, `duration_ms`, and `error_class`. Azure retains logs in Log Analytics and exposes native Container Apps metrics. AWS retains logs in CloudWatch via awslogs and exposes standard ECS CPU/memory metrics. Distributed tracing, custom metrics, dashboards, and alerts remain deferred. Managed cloud PostgreSQL and private DB networking remain later work. Phase 10 connector ingestion is implemented as a domain/application/infrastructure path; production OAuth, credential resolver, connector HTTP APIs, synchronization, attachments, sending, and automatic replies remain later work. Phase 11A encodes `WorkflowAction` and capability-specific permissions. Phase 11B persists user-owned `workflow_actions` with proposed/approved reply snapshots and no analysis FK. Phase 11C exposes create, list, get, approve, and reject over `/api/v1/workflow-actions`. Phase 11D adds `CommunicationActionExecutor`, `FakeCommunicationActionExecutor`, and `WorkflowActionExecutionService` with a two-transaction boundary. Phase 12E routes Graph and Gmail writers through `CommunicationActionExecutorFactory` and `POST /api/v1/workflow-actions/{action_id}/execute`. Additional AI providers can still be added behind `AIProvider` and the factory without changing the application or API layers. Additional communication vendors can implement `CommunicationConnector` without changing domain analysis models. See [Persistence](persistence.md), [Provider Abstraction](provider-abstraction.md), [Observability](../cloud/observability.md), [Authentication](../cloud/authentication.md), [PostgreSQL strategy](../cloud/persistence.md), [Phase 10](../roadmap/phase-10-communication-connectors.md), [Phase 11](../roadmap/phase-11-workflow-automation.md), and [`docs/cloud/`](../cloud/README.md).

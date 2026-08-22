@@ -21,6 +21,7 @@ from tests.unit.infrastructure.executors.gmail.conftest import (
     APPROVED_REPLY,
     FROM_ADDRESS,
     GMAIL_API_PREFIX,
+    GMAIL_PROFILE_PATH,
     GMAIL_SEND_PATH,
     GMAIL_TOKEN,
     MAILBOX_ADDRESS,
@@ -62,10 +63,19 @@ def test_reply_fetches_metadata_then_posts_send(gmail_reply_executor: tuple) -> 
 
     assert result is None
     assert tokens.calls == 1
+    assert len(stub.profile_requests()) == 1
     assert len(stub.metadata_requests()) == 1
     assert len(stub.send_requests()) == 1
+    profile_request = stub.profile_requests()[0]
     metadata_request = stub.metadata_requests()[0]
     send_request = stub.send_requests()[0]
+    assert [request.method for request in stub.requests] == ["GET", "GET", "POST"]
+    assert profile_request.method == "GET"
+    assert profile_request.url.host == "gmail.googleapis.com"
+    assert profile_request.url.path == GMAIL_PROFILE_PATH
+    assert not profile_request.url.query
+    assert profile_request.headers.get("authorization") == f"Bearer {GMAIL_TOKEN}"
+    assert "authorization" not in str(profile_request.url).lower()
     assert metadata_request.method == "GET"
     assert metadata_request.url.host == "gmail.googleapis.com"
     encoded_id = quote(PROVIDER_MESSAGE_ID, safe="")
@@ -115,10 +125,11 @@ def test_raw_is_urlsafe_base64_of_entire_rfc_message(gmail_reply_executor: tuple
     assert parsed.get_content_type() == "text/plain"
 
 
-def test_decoded_mime_uses_trusted_from_and_approved_body(
+def test_decoded_mime_uses_profile_email_address_as_from(
     gmail_reply_executor: tuple,
 ) -> None:
     executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": MAILBOX_ADDRESS}
 
     executor.execute(execution_command())
 
@@ -440,96 +451,136 @@ def test_execution_command_rejects_blank_approved_reply_body() -> None:
         execution_command(approved_reply_body="   ")
 
 
-def test_constructor_rejects_blank_mailbox_address(gmail_reply_stub: GmailReplyHttpStub) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError) as exc_info:
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="   ",
-            )
-    finally:
-        client.close()
+def _assert_profile_only(stub: GmailReplyHttpStub) -> None:
+    assert len(stub.profile_requests()) == 1
+    assert stub.metadata_requests() == []
+    assert stub.send_requests() == []
+
+
+def test_profile_email_address_becomes_rfc_from(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "authenticated-owner@example.test"}
+
+    executor.execute(execution_command())
+
+    parsed = decoded_rfc_message(stub.send_requests()[0])
+    assert mailbox_of(parsed["From"]) == "authenticated-owner@example.test"
+    assert tokens.calls == 1
+    assert stub.profile_requests()[0].headers.get("authorization") == f"Bearer {GMAIL_TOKEN}"
+    assert stub.metadata_requests()[0].headers.get("authorization") == f"Bearer {GMAIL_TOKEN}"
+    assert stub.send_requests()[0].headers.get("authorization") == f"Bearer {GMAIL_TOKEN}"
+
+
+def test_blank_profile_email_address_is_unavailable_without_metadata(
+    gmail_reply_executor: tuple,
+) -> None:
+    executor, stub, _client, tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "   "}
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
     assert "owner@" not in str(exc_info.value)
-    assert gmail_reply_stub.requests == []
+    _assert_profile_only(stub)
+    assert tokens.calls == 1
 
 
-def test_constructor_rejects_multiple_mailbox_addresses(
-    gmail_reply_stub: GmailReplyHttpStub,
+def test_multiple_profile_mailboxes_are_unavailable_without_metadata(
+    gmail_reply_executor: tuple,
 ) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError) as exc_info:
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="owner@example.test, other@example.test",
-            )
-    finally:
-        client.close()
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "owner@example.test, other@example.test"}
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
     assert "owner@example.test" not in str(exc_info.value)
-    assert gmail_reply_stub.requests == []
+    _assert_profile_only(stub)
 
 
-def test_constructor_rejects_header_injection_in_mailbox(
-    gmail_reply_stub: GmailReplyHttpStub,
+def test_header_injection_in_profile_email_address_is_unavailable(
+    gmail_reply_executor: tuple,
 ) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError):
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="owner@example.test\r\nBcc: victim@example.test",
-            )
-    finally:
-        client.close()
-    assert gmail_reply_stub.requests == []
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "owner@example.test\r\nBcc: victim@example.test"}
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
 
 
-def test_constructor_rejects_malformed_mailbox_address(
-    gmail_reply_stub: GmailReplyHttpStub,
+def test_malformed_profile_email_address_is_unavailable(
+    gmail_reply_executor: tuple,
 ) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError):
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="not-a-mailbox",
-            )
-    finally:
-        client.close()
-    assert gmail_reply_stub.requests == []
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "not-a-mailbox"}
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
 
 
-def test_constructor_rejects_empty_mailbox_address(gmail_reply_stub: GmailReplyHttpStub) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError):
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="",
-            )
-    finally:
-        client.close()
-    assert gmail_reply_stub.requests == []
+def test_empty_profile_email_address_is_unavailable(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": ""}
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
 
 
-def test_constructor_rejects_group_mailbox_syntax(gmail_reply_stub: GmailReplyHttpStub) -> None:
-    client = httpx.Client(transport=httpx.MockTransport(gmail_reply_stub))
-    try:
-        with pytest.raises(ValueError):
-            GmailCommunicationActionExecutor(
-                http_client=client,
-                access_token_provider=CountingTokenProvider(),
-                mailbox_address="Owners: owner@example.test;",
-            )
-    finally:
-        client.close()
-    assert gmail_reply_stub.requests == []
+def test_group_profile_mailbox_syntax_is_unavailable(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": "Owners: owner@example.test;"}
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
+
+
+def test_missing_profile_email_address_is_unavailable(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = {"messagesTotal": 1}
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
+
+
+@pytest.mark.parametrize(
+    "email_address",
+    [None, 1, ["owner@example.test"], {"address": "owner@example.test"}],
+)
+def test_non_string_profile_email_address_is_unavailable(
+    gmail_reply_executor: tuple,
+    email_address: object,
+) -> None:
+    executor, stub, _client, tokens = gmail_reply_executor
+    stub.profile_json = {"emailAddress": email_address}
+
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        executor.execute(execution_command())
+
+    assert not isinstance(exc_info.value, CommunicationActionExecutionError)
+    _assert_profile_only(stub)
+    assert stub.metadata_requests() == []
+    assert tokens.calls == 1
+
+
+def test_non_object_profile_json_is_unavailable(gmail_reply_executor: tuple) -> None:
+    executor, stub, _client, _tokens = gmail_reply_executor
+    stub.profile_json = ["owner@example.test"]
+
+    with pytest.raises(ServiceUnavailableError):
+        executor.execute(execution_command())
+
+    _assert_profile_only(stub)
 
 
 def test_token_provider_is_invoked_once_on_execute(gmail_reply_executor: tuple) -> None:
@@ -628,7 +679,6 @@ def test_environment_resolver_composes_with_gmail_executor() -> None:
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=token_provider,
-        mailbox_address=MAILBOX_ADDRESS,
     )
     try:
         result = executor.execute(execution_command())
@@ -636,8 +686,10 @@ def test_environment_resolver_composes_with_gmail_executor() -> None:
         client.close()
 
     assert result is None
+    assert len(stub.profile_requests()) == 1
     assert len(stub.metadata_requests()) == 1
     assert len(stub.send_requests()) == 1
+    assert stub.profile_requests()[0].headers.get("authorization") == f"Bearer {_RESOLVER_TOKEN}"
     assert stub.metadata_requests()[0].headers.get("authorization") == f"Bearer {_RESOLVER_TOKEN}"
     assert stub.send_requests()[0].headers.get("authorization") == f"Bearer {_RESOLVER_TOKEN}"
     assert send_payload(stub.send_requests()[0])["threadId"] == THREAD_ID
@@ -648,7 +700,6 @@ def test_empty_token_is_unavailable_before_http(gmail_reply_executor: tuple) -> 
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=CountingTokenProvider(""),
-        mailbox_address=MAILBOX_ADDRESS,
     )
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
@@ -665,7 +716,6 @@ def test_whitespace_token_is_unavailable_before_http(gmail_reply_executor: tuple
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=CountingTokenProvider("   "),
-        mailbox_address=MAILBOX_ADDRESS,
     )
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
@@ -686,7 +736,6 @@ def test_token_provider_exception_is_unavailable_before_http(
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=boom,
-        mailbox_address=MAILBOX_ADDRESS,
     )
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
@@ -709,7 +758,6 @@ def test_credential_unavailable_is_unavailable_before_http(
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=missing_token,
-        mailbox_address=MAILBOX_ADDRESS,
     )
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
@@ -732,7 +780,6 @@ def test_environment_resolver_missing_token_is_unavailable_before_http() -> None
     executor = GmailCommunicationActionExecutor(
         http_client=client,
         access_token_provider=token_provider,
-        mailbox_address=MAILBOX_ADDRESS,
     )
     try:
         with pytest.raises(ServiceUnavailableError) as exc_info:
@@ -754,11 +801,12 @@ def test_redirect_is_not_followed_on_metadata_when_client_would_follow(
     try:
         with pytest.raises(CommunicationActionExecutionError) as exc_info:
             executor.execute(execution_command())
-        assert len(gmail_reply_stub.requests) == 1
-        assert gmail_reply_stub.requests[0].url.host == "gmail.googleapis.com"
+        assert len(gmail_reply_stub.profile_requests()) == 1
+        assert len(gmail_reply_stub.metadata_requests()) == 1
+        assert gmail_reply_stub.requests[-1].url.host == "gmail.googleapis.com"
         assert all(request.url.host != "evil.example" for request in gmail_reply_stub.requests)
         assert gmail_reply_stub.send_requests() == []
-        authorization = gmail_reply_stub.requests[0].headers.get("authorization")
+        authorization = gmail_reply_stub.metadata_requests()[0].headers.get("authorization")
         assert authorization is not None
         assert "evil.example" not in authorization
         assert tokens.calls == 1
@@ -775,6 +823,7 @@ def test_redirect_is_not_followed_on_send_when_client_would_follow(
     try:
         with pytest.raises(CommunicationActionExecutionError) as exc_info:
             executor.execute(execution_command())
+        assert len(gmail_reply_stub.profile_requests()) == 1
         assert len(gmail_reply_stub.metadata_requests()) == 1
         assert len(gmail_reply_stub.send_requests()) == 1
         assert all(request.url.host != "evil.example" for request in gmail_reply_stub.requests)

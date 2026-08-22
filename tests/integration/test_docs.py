@@ -66,6 +66,7 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/api/v1/workflow-actions/{action_id}" in schema["paths"]
     assert "/api/v1/workflow-actions/{action_id}/approve" in schema["paths"]
     assert "/api/v1/workflow-actions/{action_id}/reject" in schema["paths"]
+    assert "/api/v1/workflow-actions/{action_id}/execute" in schema["paths"]
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
@@ -92,6 +93,7 @@ def test_openapi_schema_available(client: TestClient) -> None:
     workflow_item = schema["paths"]["/api/v1/workflow-actions/{action_id}"]
     workflow_approve = schema["paths"]["/api/v1/workflow-actions/{action_id}/approve"]
     workflow_reject = schema["paths"]["/api/v1/workflow-actions/{action_id}/reject"]
+    workflow_execute = schema["paths"]["/api/v1/workflow-actions/{action_id}/execute"]
     assert "post" in workflow_collection
     assert "get" in workflow_collection
     assert "patch" not in workflow_collection
@@ -101,8 +103,10 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "delete" not in workflow_item
     assert "post" in workflow_approve
     assert "post" in workflow_reject
+    assert "post" in workflow_execute
     assert "requestBody" not in workflow_approve["post"]
     assert "requestBody" not in workflow_reject["post"]
+    assert "requestBody" not in workflow_execute["post"]
     assert "201" in workflow_collection["post"]["responses"]
     assert "401" in workflow_collection["post"]["responses"]
     assert "403" in workflow_collection["post"]["responses"]
@@ -130,7 +134,12 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "404" in workflow_reject["post"]["responses"]
     assert "409" in workflow_reject["post"]["responses"]
     assert "503" in workflow_reject["post"]["responses"]
-    assert "/api/v1/workflow-actions/{action_id}/execute" not in schema["paths"]
+    assert "200" in workflow_execute["post"]["responses"]
+    assert "401" in workflow_execute["post"]["responses"]
+    assert "403" in workflow_execute["post"]["responses"]
+    assert "404" in workflow_execute["post"]["responses"]
+    assert "409" in workflow_execute["post"]["responses"]
+    assert "503" in workflow_execute["post"]["responses"]
     assert "/api/v1/workflow-actions/{action_id}/retry" not in schema["paths"]
 
     serialized = repr(schema)
@@ -158,20 +167,22 @@ def test_openapi_schema_exposes_analysis_history_routes(client: TestClient) -> N
 
 
 def test_openapi_schema_exposes_workflow_action_routes(client: TestClient) -> None:
-    """Phase 11C exposes proposal and approval routes without execute or mutation verbs."""
+    """Phase 11C/12E expose proposal, approval, and execute without retry."""
     schema = client.get("/openapi.json").json()
     paths = schema["paths"]
     assert "/api/v1/workflow-actions" in paths
     assert "/api/v1/workflow-actions/{action_id}" in paths
     assert "/api/v1/workflow-actions/{action_id}/approve" in paths
     assert "/api/v1/workflow-actions/{action_id}/reject" in paths
-    assert "/api/v1/workflow-actions/{action_id}/execute" not in paths
+    assert "/api/v1/workflow-actions/{action_id}/execute" in paths
     assert "/api/v1/workflow-actions/{action_id}/retry" not in paths
     assert "post" in paths["/api/v1/workflow-actions"]
     assert "get" in paths["/api/v1/workflow-actions"]
     assert "get" in paths["/api/v1/workflow-actions/{action_id}"]
     assert "post" in paths["/api/v1/workflow-actions/{action_id}/approve"]
     assert "post" in paths["/api/v1/workflow-actions/{action_id}/reject"]
+    assert "post" in paths["/api/v1/workflow-actions/{action_id}/execute"]
+    assert "requestBody" not in paths["/api/v1/workflow-actions/{action_id}/execute"]["post"]
     for path, operations in paths.items():
         if "workflow-actions" not in path:
             continue

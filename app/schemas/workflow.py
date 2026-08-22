@@ -21,8 +21,7 @@ class WorkflowActionResponse(BaseModel):
     """Owned workflow-action resource. Does not include identity or routing ids.
 
     ``has_execution_target`` means mailbox routing provenance exists. It does
-    not mean a real provider can already send the message. There is no execute
-    API in Phase 12A.
+    not mean a real provider can already send the message.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -270,14 +270,18 @@ sequenceDiagram
     Route-->>Client: 200 WorkflowActionResponse
 ```
 
-Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, and concurrent update return `409`. Persistence unavailable returns `503`. HTTP execute and retry are not implemented.
+Unknown and cross-user resources return the same `404`. Missing draft, invalid transition, concurrent update, and not-executable execute attempts return `409`. Persistence unavailable returns `503`.
 
-## Workflow action execution (Phase 11D, below HTTP)
+## Workflow action execution (Phase 12E)
 
-There is no `POST /api/v1/workflow-actions/{action_id}/execute` route. Execution is an application-layer boundary:
+`POST /api/v1/workflow-actions/{action_id}/execute` requires `communications:send`. The stored approved snapshot is executed:
 
 ```text
 APPROVED WorkflowAction
+        ↓
+owned ACTIVE ConnectorAccount
+        ↓
+CommunicationActionExecutorFactory
         ↓
 TX1 APPROVED → EXECUTING (commit, close UoW)
         ↓
@@ -297,7 +301,7 @@ sequenceDiagram
     Exec->>UoW: TX1 validate target, mark EXECUTING
     UoW-->>Exec: commit and close
     Exec->>Port: execute(CommunicationActionExecution)
-    alt Fake success
+    alt Provider success
         Port-->>Exec: None
         Exec->>UoW: TX2 mark EXECUTED
         UoW-->>Exec: commit
@@ -313,7 +317,7 @@ sequenceDiagram
     end
 ```
 
-The command carries `approved_reply_body` plus provider-neutral routing from the snapshotted target and the owned `ConnectorAccount`. Analysis is not loaded. `CommunicationConnector` is not used. Targetless or unusable mailbox accounts fail inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 12A does not add retry, outbox, `EXECUTION_UNKNOWN`, or an HTTP execute route.
+The command carries `approved_reply_body` plus provider-neutral routing from the snapshotted target and the owned `ConnectorAccount`. Analysis is not loaded. `CommunicationConnector` is not used. Targetless or unusable mailbox accounts fail inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. If TX2 persistence fails after a completed executor call, the stored row remains `EXECUTING`. Phase 12E does not add retry, outbox, or `EXECUTION_UNKNOWN`.
 
 The domain state machine is unchanged:
 
@@ -351,5 +355,6 @@ Authorization is capability-specific after JWT authentication:
 ```text
 authenticate JWT → AuthenticatedPrincipal → required permission
 communications:analyze     (existing analyze / history)
-communications:workflow    (workflow HTTP)
+communications:workflow    (workflow proposal/approval HTTP)
+communications:send        (execute HTTP)
 ```

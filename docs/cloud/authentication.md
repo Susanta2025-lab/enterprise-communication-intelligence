@@ -22,6 +22,8 @@ Client
 → POST /api/v1/communications/analyze
 ```
 
+Analyze and history require `communications:analyze`. Workflow proposal and approval require `communications:workflow`. Execute requires `communications:send`. These are distinct capabilities; `OIDC_REQUIRED_PERMISSION` remains the analyze permission.
+
 Live Entra configuration is conceptual here (placeholders only; no tenant or client IDs):
 
 - Resource application: `eci-api-auth-dev`

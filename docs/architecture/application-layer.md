@@ -163,13 +163,13 @@ The service depends on `PersistenceUnitOfWork` and `WorkflowActionRepository`. I
 AuthenticatedPrincipal
 → IdentityResolver.find_existing
 → TX1: validate execution target and owned active ConnectorAccount,
-  then owned APPROVED → EXECUTING, commit, close UoW
+  factory.create_for_account, then owned APPROVED → EXECUTING, commit, close UoW
 → CommunicationActionExecutor.execute(CommunicationActionExecution)
 → TX2: EXECUTING → EXECUTED or FAILED, commit
 ```
 
-Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutor`. There is no executor factory, no `ACTION_EXECUTOR` setting, and no FastAPI `get_workflow_action_execution_service` dependency because there is no HTTP execute route.
+Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutorFactory`. There is no global `ACTION_EXECUTOR` setting. FastAPI `get_workflow_action_execution_service` is gated by `communications:send`.
 
-The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, and disconnected accounts raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. `ACTIVE` is structural executability in 12A; `credential_ref` is not inspected. Known `CommunicationActionExecutionError` becomes durable `FAILED`. Unexpected executor exceptions are not converted into `FAILED`; the row may remain `EXECUTING`.
+The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, disconnected, unsupported-provider, and missing/malformed-credential accounts raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Known `CommunicationActionExecutionError` becomes durable `FAILED` and is returned over HTTP as 200 with status `FAILED`. Unexpected executor exceptions and `ServiceUnavailableError` are not converted into `FAILED`; the row may remain `EXECUTING` and the execute API returns 503.
 
-Phase 12A still uses `FakeCommunicationActionExecutor` as the injected workflow executor. Phase 12C adds `MicrosoftGraphCommunicationActionExecutor` and Phase 12D adds `GmailCommunicationActionExecutor` under `app/infrastructure/executors/` without injecting them here. `CommunicationConnector` remains read-only. Phase 12B adds `CommunicationCredentialResolver` without injecting it into this service.
+Production execute routes `gmail` and `microsoft_graph` through the factory. Fake execution remains available for isolated tests and is not production-routed. `CommunicationConnector` remains read-only. `CommunicationCredentialResolver` is used by the factory to produce an `AccessTokenProvider`; the application service does not import the resolver or invoke tokens.

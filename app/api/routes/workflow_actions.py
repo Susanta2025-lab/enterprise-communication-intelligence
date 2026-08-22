@@ -6,9 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
+    get_workflow_action_execution_service,
     get_workflow_action_service,
+    require_authenticated_communications_send,
     require_authenticated_communications_workflow,
 )
+from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.security import AuthenticatedPrincipal
 from app.schemas.errors import ErrorResponse
@@ -47,6 +50,25 @@ _WORKFLOW_CONFLICT = {
     409: {
         "model": ErrorResponse,
         "description": "Invalid workflow state transition or concurrent update.",
+    },
+}
+
+_SEND_AUTH_RESPONSES = {
+    401: {
+        "model": ErrorResponse,
+        "description": "Missing or invalid bearer token.",
+    },
+    403: {
+        "model": ErrorResponse,
+        "description": "Authenticated caller lacks communications:send.",
+    },
+    503: {
+        "model": ErrorResponse,
+        "description": (
+            "Persistence, credential material, or the mailbox provider is currently "
+            "unavailable. If provider execution had already begun, the action may "
+            "remain EXECUTING."
+        ),
     },
 }
 
@@ -191,4 +213,51 @@ def reject_workflow_action(
 ) -> WorkflowActionResponse:
     """Reject an owned pending workflow action."""
     action = service.reject(principal, action_id)
+    return workflow_action_response(action)
+
+
+@router.post(
+    "/{action_id}/execute",
+    response_model=WorkflowActionResponse,
+    summary="Execute an approved workflow action",
+    description=(
+        "Executes an owned APPROVED workflow action through the mailbox account "
+        "snapshotted at proposal time. The request has no body. Callers cannot "
+        "supply reply text, provider, connector account, credentials, or a "
+        "provider message id. A recorded terminal FAILED outcome is returned as "
+        "HTTP 200 with status FAILED. Uncertain provider or credential failures "
+        "return 503 and may leave the action EXECUTING."
+    ),
+    responses={
+        **_SEND_AUTH_RESPONSES,
+        **_WORKFLOW_NOT_FOUND,
+        409: {
+            "model": ErrorResponse,
+            "description": (
+                "Workflow action is not executable, is not APPROVED, or was "
+                "updated concurrently."
+            ),
+        },
+        200: {
+            "model": WorkflowActionResponse,
+            "description": (
+                "Terminal EXECUTED or FAILED workflow action. FAILED means the "
+                "provider definitely rejected the send and that outcome was stored."
+            ),
+        },
+    },
+)
+def execute_workflow_action(
+    action_id: UUID,
+    principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+    service: Annotated[
+        WorkflowActionExecutionService,
+        Depends(get_workflow_action_execution_service),
+    ],
+) -> WorkflowActionResponse:
+    """Execute an owned approved workflow action using the stored snapshot."""
+    action = service.execute(principal, action_id)
     return workflow_action_response(action)

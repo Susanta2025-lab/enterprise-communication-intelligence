@@ -7,8 +7,10 @@ from app.api.dependencies import (
     get_ai_provider,
     get_communication_analysis_service,
     get_workflow_action_service,
+    require_authenticated_communications_send,
     require_authenticated_communications_workflow,
     require_communications_analyze,
+    require_communications_send,
     require_communications_workflow,
     require_permission,
 )
@@ -17,6 +19,7 @@ from app.application.services.identity import IdentityResolver
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.security import (
+    COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
 )
@@ -231,6 +234,59 @@ def test_require_authenticated_communications_workflow_returns_principal(
     assert require_authenticated_communications_workflow(authorized) is principal
 
 
+def test_require_authenticated_communications_send_rejects_missing_principal() -> None:
+    """AUTH_MODE=disabled must not pass None into execution."""
+    with pytest.raises(HTTPException) as exc_info:
+        require_authenticated_communications_send(None)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Not authenticated"
+    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_require_authenticated_communications_send_returns_principal(
+    permission_validator,
+) -> None:
+    """A send-authorized principal is passed through unchanged."""
+    principal = _principal(COMMUNICATIONS_SEND_PERMISSION)
+    authorized = require_communications_send(principal, permission_validator)
+    assert require_authenticated_communications_send(authorized) is principal
+
+
+def test_workflow_only_principal_is_denied_send_permission(
+    permission_validator,
+) -> None:
+    """communications:workflow does not satisfy communications:send."""
+    principal = _principal(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    require_communications_workflow(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_send(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not authorized"
+
+
+def test_send_only_principal_is_denied_workflow_permission(
+    permission_validator,
+) -> None:
+    """communications:send does not satisfy communications:workflow."""
+    principal = _principal(COMMUNICATIONS_SEND_PERMISSION)
+    require_communications_send(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_workflow(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not authorized"
+
+
+def test_analyze_only_principal_is_denied_send_permission(
+    permission_validator,
+) -> None:
+    """communications:analyze does not satisfy communications:send."""
+    principal = _principal(TEST_PERMISSION)
+    require_communications_analyze(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_send(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+
+
 def test_get_workflow_action_service_uses_identity_resolver_and_uow_factory() -> None:
     """Workflow routes receive WorkflowActionService, not a repository or Session."""
 
@@ -248,3 +304,16 @@ def test_require_permission_rejects_blank_permission() -> None:
         require_permission("")
     with pytest.raises(ValueError, match="required_permission must not be empty"):
         require_permission("   ")
+
+
+def test_communication_http_client_closes_after_generator_exit() -> None:
+    """The request-scoped write client is closed when the yield dependency finishes."""
+    from app.api.dependencies import get_communication_http_client
+
+    principal = _principal(COMMUNICATIONS_SEND_PERMISSION)
+    generator = get_communication_http_client(principal)
+    client = next(generator)
+    assert client.is_closed is False
+    with pytest.raises(StopIteration):
+        next(generator)
+    assert client.is_closed is True

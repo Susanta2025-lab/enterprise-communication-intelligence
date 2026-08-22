@@ -22,6 +22,7 @@ from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
 )
+from tests.support.executor_factory import StaticCommunicationActionExecutorFactory
 from tests.support.in_memory_persistence import UnitOfWorkFactory
 from tests.unit.application.test_workflow_action_execution_service import (
     _approved_action,
@@ -59,7 +60,11 @@ def test_communication_action_execution_error_becomes_failed() -> None:
     approved = _approved_action(unit, analysis_id)
     factory = UnitOfWorkFactory(unit)
     executor = _RaisingExecutor(CommunicationActionExecutionError())
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     result = service.execute(_principal(), approved.id)
 
@@ -77,7 +82,11 @@ def test_service_unavailable_leaves_executing() -> None:
     executor = _RaisingExecutor(
         ServiceUnavailableError("Communication action execution is currently unavailable."),
     )
-    service = WorkflowActionExecutionService(IdentityResolver(factory), factory, executor)
+    service = WorkflowActionExecutionService(
+        IdentityResolver(factory),
+        factory,
+        StaticCommunicationActionExecutorFactory(executor),
+    )
 
     with pytest.raises(ServiceUnavailableError):
         service.execute(_principal(), approved.id)

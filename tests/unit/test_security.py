@@ -7,6 +7,7 @@ import pytest
 from jwt.exceptions import PyJWKClientConnectionError
 
 from app.core.security import (
+    COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticationFailedError,
     AuthorizationFailedError,
@@ -242,6 +243,40 @@ def test_analyze_permission_does_not_satisfy_workflow(
     assert exc_info.value.reason == "insufficient_permission"
 
 
+def test_send_permission_does_not_satisfy_analyze_or_workflow(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:send must not implicitly grant analyze or workflow."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_SEND_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    assert COMMUNICATIONS_SEND_PERMISSION in principal.permissions
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, TEST_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+    validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)
+
+
+def test_workflow_permission_does_not_satisfy_send(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:workflow must not implicitly grant communications:send."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_WORKFLOW_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)
+
+
 def test_principal_with_both_permissions_satisfies_either_check(
     private_key,
     validator: TokenValidator,
@@ -369,3 +404,22 @@ def test_unexpected_key_resolution_error_becomes_invalid_token(private_key) -> N
     assert exc_info.value.reason == "invalid_token"
     assert exc_info.value.__cause__ is None
     assert "ECI_PRIVATE_JWKS_SENTINEL" not in str(exc_info.value)
+
+
+def test_malformed_send_permission_claims_are_not_grants(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """Non-string scp/scope/roles representations must not grant communications:send."""
+    for extra_claims in (
+        {"scp": [COMMUNICATIONS_SEND_PERMISSION]},
+        {"scope": [COMMUNICATIONS_SEND_PERMISSION]},
+        {"roles": COMMUNICATIONS_SEND_PERMISSION},
+        {"roles": [1]},
+        {"scp": {"permission": COMMUNICATIONS_SEND_PERMISSION}},
+    ):
+        token = encode_test_token(private_key, extra_claims=extra_claims)
+        principal = validator.authenticate(token)
+        assert COMMUNICATIONS_SEND_PERMISSION not in principal.permissions
+        with pytest.raises(AuthorizationFailedError):
+            validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)

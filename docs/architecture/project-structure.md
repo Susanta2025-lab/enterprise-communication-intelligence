@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 12D (in progress). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 12E (in progress). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -11,7 +11,7 @@ app/
 │       ├── health.py         # GET /health, GET /api/v1/health, GET /api/v1/readiness
 │       ├── communications.py # POST /api/v1/communications/analyze
 │       ├── analyses.py       # GET/DELETE /api/v1/analyses
-│       └── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject
+│       └── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
 ├── application/
 │   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account and workflow-action errors
 │   └── services/
@@ -42,6 +42,7 @@ app/
 │   │   ├── ai_provider.py     # AIProvider abstract interface
 │   │   ├── communication_connector.py  # CommunicationConnector, ConnectorMessageQuery, MessagePage
 │   │   ├── communication_action_executor.py  # CommunicationActionExecutor, CommunicationActionExecution
+│   │   ├── communication_action_executor_factory.py  # CommunicationActionExecutorFactory
 │   │   ├── communication_credential_resolver.py  # CommunicationCredentialResolver, AccessTokenProvider
 │   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
@@ -80,8 +81,9 @@ app/
 │   ├── credentials/
 │   │   └── environment.py     # EnvironmentCommunicationCredentialResolver (local/dev env lookup)
 │   ├── executors/
+│   │   ├── factory.py         # ProviderCommunicationActionExecutorFactory (account-driven routing)
 │   │   ├── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)
-│   │   ├── gmail.py           # GmailCommunicationActionExecutor (metadata + messages.send)
+│   │   ├── gmail.py           # GmailCommunicationActionExecutor (profile + metadata + messages.send)
 │   │   └── microsoft_graph.py # MicrosoftGraphCommunicationActionExecutor (Graph /reply)
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
@@ -121,6 +123,7 @@ tests/
 │   ├── test_communications.py
 │   ├── test_analyses.py
 │   ├── test_workflow_actions.py
+│   ├── test_workflow_action_execute.py
 │   ├── test_workflow_execution_boundary.py
 │   ├── test_docs.py
 │   ├── test_ingestion_boundary.py
@@ -147,12 +150,12 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete communication connector. Phase 10 added no connector routes. Phase 11C adds `app/api/routes/workflow_actions.py` over `WorkflowActionService`. Analyze/history keep `communications:analyze`; workflow routes require `communications:workflow` and a real principal.
-- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `WorkflowActionService` creates, lists, retrieves, approves, and rejects durable workflow actions. `WorkflowActionExecutionService` executes an approved action through `CommunicationActionExecutor`. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete Gmail/Graph executor. Phase 10 added no connector routes. Phase 11C adds `app/api/routes/workflow_actions.py` over `WorkflowActionService`. Phase 12E adds execute over `WorkflowActionExecutionService`. Analyze/history keep `communications:analyze`; proposal/approval require `communications:workflow`; execute requires `communications:send` and a real principal.
+- **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `WorkflowActionService` creates, lists, retrieves, approves, and rejects durable workflow actions. `WorkflowActionExecutionService` executes an approved action through `CommunicationActionExecutorFactory`. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, `CommunicationActionExecutor`, `CommunicationCredentialResolver`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
-- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`). `monitoring/` and `parsers/` remain empty scaffolds.
+- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`, `ProviderCommunicationActionExecutorFactory`). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, workflow actions, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
 - **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. Connector ingestion-boundary tests live under `tests/integration/`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, AWS, Gmail, or Microsoft Graph network calls.
