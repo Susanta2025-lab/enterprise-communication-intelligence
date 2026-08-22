@@ -23,6 +23,7 @@ _FORBIDDEN_SDK = (
 _FORBIDDEN_COUPLING = (
     "WorkflowActionExecutionService",
     "FakeCommunicationActionExecutor",
+    "MicrosoftGraphCommunicationActionExecutor",
     "GmailCommunicationConnector",
     "MicrosoftGraphCommunicationConnector",
     "ConnectorAccountService",
@@ -124,21 +125,28 @@ def test_read_connectors_do_not_resolve_credential_ref() -> None:
 
 
 def test_fake_executor_does_not_invoke_credential_resolver() -> None:
-    for path in _python_files(_EXECUTOR_ROOT):
-        source = path.read_text(encoding="utf-8")
-        assert "CommunicationCredentialResolver" not in source
-        assert "AccessTokenProvider" not in source
-        assert "credential_ref" not in source
-        assert "EnvironmentCommunicationCredentialResolver" not in source
+    source = (_EXECUTOR_ROOT / "fake.py").read_text(encoding="utf-8")
+    assert "CommunicationCredentialResolver" not in source
+    assert "AccessTokenProvider" not in source
+    assert "credential_ref" not in source
+    assert "EnvironmentCommunicationCredentialResolver" not in source
 
 
-def test_production_write_executors_are_absent() -> None:
+def test_graph_executor_does_not_resolve_credential_ref() -> None:
+    source = (_EXECUTOR_ROOT / "microsoft_graph.py").read_text(encoding="utf-8")
+    assert "AccessTokenProvider" in source
+    assert "credential_ref" not in source
+    assert "CommunicationCredentialResolver" not in source
+    assert "EnvironmentCommunicationCredentialResolver" not in source
+
+
+def test_gmail_and_routed_write_executors_are_absent() -> None:
     names = {path.name for path in _python_files(_EXECUTOR_ROOT)}
-    assert names == {"__init__.py", "fake.py"}
+    assert "fake.py" in names
+    assert "microsoft_graph.py" in names
     for path in _python_files(_EXECUTOR_ROOT):
         source = path.read_text(encoding="utf-8")
         assert "GmailCommunicationActionExecutor" not in source
-        assert "MicrosoftGraphCommunicationActionExecutor" not in source
         assert "RoutedCommunicationActionExecutor" not in source
 
 

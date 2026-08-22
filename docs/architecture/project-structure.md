@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 12B (in progress). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 12C (in progress). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -80,7 +80,8 @@ app/
 │   ├── credentials/
 │   │   └── environment.py     # EnvironmentCommunicationCredentialResolver (local/dev env lookup)
 │   ├── executors/
-│   │   └── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)
+│   │   ├── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)
+│   │   └── microsoft_graph.py # MicrosoftGraphCommunicationActionExecutor (Graph /reply)
 │   ├── monitoring/             # empty scaffold package — no implementation
 │   ├── parsers/                # empty scaffold package — no implementation
 │   └── storage/                # SQLAlchemy runtime, models, UoW, repositories
@@ -150,7 +151,7 @@ deployment/
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, `CommunicationActionExecutor`, `CommunicationCredentialResolver`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
-- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`). `monitoring/` and `parsers/` remain empty scaffolds.
+- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, workflow actions, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
 - **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. Connector ingestion-boundary tests live under `tests/integration/`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, AWS, Gmail, or Microsoft Graph network calls.
