@@ -108,7 +108,7 @@ It does **not** store access tokens, refresh tokens, authorization codes, or sec
 
 Phase 13B adds a provider-neutral `CommunicationCredentialStore` (`app/domain/interfaces/communication_credential_store.py`) and `OAuthCommunicationCredentialResolver` (`app/infrastructure/credentials/oauth.py`). Secrets are opaque bytes stored outside PostgreSQL. Locators are server-generated. Token refresh/acquisition uses an injected adapter; `resolve()` still performs no store or adapter I/O. An in-process access-token cache and per-credential lock exist in-process only. Multi-instance rotation uses compare-and-set on an opaque secret version.
 
-Phase 13C adds a Google implementation of that adapter plus Gmail connect HTTP. `GmailMailboxOAuthService` starts a Phase 13A session, builds the Google authorization URL, consumes state, then exchanges the code outside any database transaction. Verified Google `sub` is `external_account_id`. Granted Gmail scopes map to `mail.read` / `mail.send`. Development composition shares one in-memory store between callback storage and the refreshable resolver; `oauth-` locators use that resolver and legacy locators keep the environment resolver. Production does not use the memory store as durable OAuth storage. Microsoft OAuth, Key Vault, and Secrets Manager are not implemented. See [ADR-021](../decisions/ADR-021-mailbox-delegated-oauth-authorization-architecture.md) and [ADR-022](../decisions/ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md).
+Phase 13C adds a Google implementation of that adapter plus Gmail connect HTTP. `GmailMailboxOAuthService` starts a Phase 13A session, builds the Google authorization URL, consumes state, then exchanges the code outside any database transaction. Verified Google `sub` is `external_account_id`. Granted Gmail scopes map to `mail.read` / `mail.send`. Phase 13D adds the Microsoft counterpart: `MicrosoftMailboxOAuthService`, Microsoft identity platform v2, and verified `{tid}:{oid}` as `external_account_id`. Granted Graph `Mail.Read` / `Mail.Send` map to the same provider-neutral capabilities. Development composition shares one in-memory store between callback storage and the refreshable resolver; `oauth-` locators use that resolver and legacy locators keep the environment resolver. Production does not use the memory store as durable OAuth storage. Key Vault and Secrets Manager are not implemented. See [ADR-021](../decisions/ADR-021-mailbox-delegated-oauth-authorization-architecture.md) and [ADR-022](../decisions/ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md).
 
 ## Gmail mailbox OAuth
 
@@ -126,6 +126,23 @@ communications:connect
 ```
 
 Google HTTP never runs while a database unit of work is open. Callers cannot supply `credential_ref`, redirect URI, or scopes. Tokens are never returned. Active duplicate connections do not overwrite a live locator; unused secret material is deleted.
+
+## Microsoft mailbox OAuth
+
+`MicrosoftMailboxOAuthService` (`app/application/services/microsoft_mailbox_oauth.py`) orchestrates Graph mailbox consent, not ECI login:
+
+```text
+communications:connect
+→ MailboxAuthorizationSessionService.start (microsoft_graph, connect)
+→ Microsoft v2 authorization URL (Phase 13A state + PKCE S256)
+→ unauthenticated Microsoft callback (code, state, error)
+→ consume session, close UoW
+→ Microsoft code exchange and ID-token verification
+→ credential-store create
+→ short ConnectorAccount persist/reactivate
+```
+
+Durable mailbox identity is verified `{tid}:{oid}`. Microsoft HTTP never runs while a database unit of work is open. Tokens are never returned.
 
 ## Provider Failure Translation
 

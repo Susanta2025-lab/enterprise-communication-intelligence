@@ -322,3 +322,40 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
   - `503` — Gmail OAuth unavailable, persistence failure, or credential-store compensation failure
 
 Invalid state does not call Google. Consent denial consumes the session and does not exchange a token. Tokens are never returned. Live Google Cloud setup remains an external operator step; automated tests mock Google.
+
+---
+
+## `POST /api/v1/connector-accounts/microsoft_graph/authorize`
+
+**Purpose:** Start a server-side Microsoft mailbox consent session and return the Microsoft identity platform authorization URL. This is mailbox OAuth, not ECI login.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/microsoft_graph/authorize`
+- **Request body:** none. Callers cannot supply scopes, redirect URI, state, PKCE, or `credential_ref`.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `MicrosoftAuthorizationStartResponse` (`authorization_url`, `expires_at`)
+- **Status codes:**
+  - `200 OK` — Microsoft authorization URL for the browser
+  - `401` / `403` — authentication/authorization failure
+  - `400` — mailbox authorization could not be started
+  - `503` — Microsoft OAuth is unconfigured, persistence is unavailable, or `APP_ENV=production` (in-memory OAuth store is not durable production storage)
+
+Authorization runs before unit-of-work, OAuth adapter, and credential-store construction. Raw state, PKCE verifier, and client secret are not returned.
+
+---
+
+## `GET /api/v1/oauth/callbacks/microsoft_graph`
+
+**Purpose:** Microsoft redirect target for Graph mailbox consent. Ownership comes from the Phase 13A authorization session.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/oauth/callbacks/microsoft_graph`
+- **Query:** `code`, `state`, and `error` when Microsoft supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
+- **Authentication:** none. This is not an ECI bearer-token route.
+- **Response model:** `MicrosoftAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`)
+- **Status codes:**
+  - `200 OK` — Microsoft Graph connector account created, reactivated, or reused
+  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read`
+  - `503` — Microsoft OAuth unavailable, persistence failure, or credential-store compensation failure
+
+Invalid state does not call Microsoft. Consent denial consumes the session and does not exchange a token. Tokens are never returned. Live Entra setup remains an external operator step; automated tests mock Microsoft.

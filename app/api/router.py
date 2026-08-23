@@ -2,7 +2,14 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import analyses, communications, gmail_oauth, health, workflow_actions
+from app.api.routes import (
+    analyses,
+    communications,
+    gmail_oauth,
+    health,
+    microsoft_oauth,
+    workflow_actions,
+)
 from app.core.config import get_settings
 
 
@@ -15,4 +22,5 @@ def create_api_router() -> APIRouter:
     api_router.include_router(analyses.router, prefix=settings.api_v1_prefix)
     api_router.include_router(workflow_actions.router, prefix=settings.api_v1_prefix)
     api_router.include_router(gmail_oauth.router, prefix=settings.api_v1_prefix)
+    api_router.include_router(microsoft_oauth.router, prefix=settings.api_v1_prefix)
     return api_router

@@ -12,7 +12,8 @@ app/
 │       ├── communications.py # POST /api/v1/communications/analyze
 │       ├── analyses.py       # GET/DELETE /api/v1/analyses
 │       ├── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
-│       └── gmail_oauth.py       # POST gmail authorize; GET Google callback
+│       ├── gmail_oauth.py       # POST gmail authorize; GET Google callback
+│       └── microsoft_oauth.py   # POST microsoft_graph authorize; GET Microsoft callback
 ├── application/
 │   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account and workflow-action errors
 │   └── services/
@@ -25,7 +26,8 @@ app/
 │       ├── identity.py       # IdentityResolver
 │       ├── analysis_history.py  # AnalysisHistoryService
 │       ├── mailbox_authorization_sessions.py
-│       └── gmail_mailbox_oauth.py  # Gmail connect start/callback orchestration
+│       ├── gmail_mailbox_oauth.py  # Gmail connect start/callback orchestration
+│       └── microsoft_mailbox_oauth.py  # Microsoft Graph connect start/callback orchestration
 ├── core/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
@@ -93,6 +95,7 @@ app/
 │   │   └── composite.py       # oauth- locator vs environment routing
 │   ├── oauth/
 │   │   ├── google.py          # Google authorization, ID-token verify, Gmail refresh adapter
+│   │   ├── microsoft.py       # Microsoft identity platform v2 authorize/exchange/refresh
 │   │   └── runtime.py         # shared in-memory store; production fail-closed connect
 │   ├── executors/
 │   │   ├── factory.py         # ProviderCommunicationActionExecutorFactory (account-driven routing)
@@ -116,7 +119,7 @@ app/
 │   ├── health.py               # LivenessResponse, HealthResponse, ReadinessResponse
 │   ├── analysis.py             # CommunicationAnalysisResponse, history items
 │   ├── workflow.py             # WorkflowActionCreateRequest, WorkflowActionResponse, list wrapper
-│   ├── oauth.py                # Gmail authorization start/callback responses
+│   ├── oauth.py                # Gmail/Microsoft authorization start/callback responses
 │   └── errors.py                # ErrorResponse (OpenAPI documentation only)
 ├── utils/                       # empty scaffold package — no implementation
 └── main.py                      # FastAPI app factory, lifespan, exception handlers

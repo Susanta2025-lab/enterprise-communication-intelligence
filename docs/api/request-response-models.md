@@ -268,6 +268,31 @@ Returned by `GET /api/v1/oauth/callbacks/gmail` after a successful Google redire
 
 The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
 
+## `MicrosoftAuthorizationStartResponse` (`app/schemas/oauth.py`)
+
+Returned by `POST /api/v1/connector-accounts/microsoft_graph/authorize`. Extra fields are forbidden.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `authorization_url` | `str` | Microsoft identity platform v2 authorization URL. Includes Phase 13A `state` and PKCE challenge; the raw state and verifier are not separate response fields. |
+| `expires_at` | `datetime` | Session expiry |
+
+The response omits `state`, PKCE verifier, redirect URI, client secret, `credential_ref`, and tokens.
+
+## `MicrosoftAuthorizationCallbackResponse` (`app/schemas/oauth.py`)
+
+Returned by `GET /api/v1/oauth/callbacks/microsoft_graph` after a successful Microsoft redirect.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `provider` | `str` | Always `microsoft_graph` |
+| `connector_account_id` | `UUID` | Owned connector-account id |
+| `external_account_id` | `str` | Verified Microsoft `{tid}:{oid}`, never email |
+| `status` | `ConnectorAccountStatus` | Serialized lowercase (`active`, ...) |
+| `granted_capabilities` | `tuple[CommunicationCapability, ...]` | Explicit grants from accepted Graph scopes |
+
+The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
+
 ## API-Level Schemas (not domain schemas)
 
 `app/schemas/` (distinct from `app/domain/schemas/`) holds transport-only response models used by the health endpoints:

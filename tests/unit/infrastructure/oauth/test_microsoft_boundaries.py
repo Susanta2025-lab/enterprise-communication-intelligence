@@ -1,4 +1,4 @@
-"""Architecture boundary tests for Phase 13C Google OAuth."""
+"""Architecture boundary tests for Phase 13D Microsoft OAuth."""
 
 from pathlib import Path
 
@@ -14,6 +14,7 @@ _FORBIDDEN_SDK = (
     "msal",
     "azure.keyvault",
     "secretsmanager",
+    "msgraph",
 )
 
 
@@ -21,56 +22,50 @@ def _python_files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*.py") if path.name != "__pycache__")
 
 
-def test_domain_and_application_do_not_import_google_sdk() -> None:
+def test_domain_and_application_do_not_import_microsoft_oauth_http() -> None:
     for root in (_DOMAIN, _APPLICATION):
         for path in _python_files(root):
             source = path.read_text(encoding="utf-8")
-            assert "from google.auth" not in source
-            assert "import google.auth" not in source
-            assert "google_auth_oauthlib" not in source
-            assert "gmail.googleapis.com" not in source
+            assert "login.microsoftonline.com" not in source
+            assert "from msal" not in source
+            assert "import msal" not in source
             for marker in _FORBIDDEN_SDK:
                 assert marker not in source, f"{path} must not reference {marker}"
 
 
-def test_gmail_connectors_and_executors_remain_oauth_unaware() -> None:
+def test_graph_connectors_and_executors_remain_oauth_unaware() -> None:
     for path in (
-        _CONNECTORS / "gmail" / "connector.py",
-        _EXECUTORS / "gmail.py",
+        _CONNECTORS / "microsoft_graph" / "connector.py",
+        _EXECUTORS / "microsoft_graph.py",
     ):
         source = path.read_text(encoding="utf-8").lower()
         assert "authorization_code" not in source
         assert "refresh_token" not in source
-        assert "google_auth_oauthlib" not in source
+        assert "msal" not in source
         assert "mailboxoauth" not in source.replace("_", "")
         assert "pkce" not in source
+        assert "login.microsoftonline.com" not in source
 
 
-def test_google_sdk_stays_inside_oauth_adapter() -> None:
-    google_mod = (_OAUTH / "google.py").read_text(encoding="utf-8")
-    assert "google_auth_oauthlib" in google_mod
-    assert "google.oauth2" in google_mod
-    assert "google-api-python-client" not in google_mod
-    assert "googleapiclient" not in google_mod
+def test_microsoft_http_stays_inside_oauth_adapter() -> None:
+    microsoft_mod = (_OAUTH / "microsoft.py").read_text(encoding="utf-8")
+    assert "login.microsoftonline.com" in microsoft_mod
+    assert "httpx" in microsoft_mod
+    assert "import msal" not in microsoft_mod
+    assert "from msal" not in microsoft_mod
     runtime = (_OAUTH / "runtime.py").read_text(encoding="utf-8")
     assert "InMemoryCommunicationCredentialStore" in runtime
     assert "production" in runtime.lower()
+    assert "MicrosoftRefreshableCredentialAdapter" in runtime
     for path in _python_files(_OAUTH):
         source = path.read_text(encoding="utf-8")
-        assert "googleapiclient" not in source
-        assert "msal" not in source
+        assert "import msal" not in source
+        assert "from msal" not in source
         assert "azure.keyvault" not in source
+        assert "msgraph" not in source
 
 
-def test_microsoft_oauth_adapter_exists_without_msal() -> None:
-    names = {path.name for path in _python_files(_OAUTH)}
-    assert "google.py" in names
-    assert "microsoft.py" in names
-    assert "msal.py" not in names
-    microsoft_mod = (_OAUTH / "microsoft.py").read_text(encoding="utf-8")
-    assert "login.microsoftonline.com" in microsoft_mod
-    assert "import msal" not in microsoft_mod
-    assert "from msal" not in microsoft_mod
+def test_gmail_adapter_does_not_gain_microsoft_urls() -> None:
     google_mod = (_OAUTH / "google.py").read_text(encoding="utf-8").lower()
     assert "login.microsoftonline.com" not in google_mod
     assert "msal" not in google_mod

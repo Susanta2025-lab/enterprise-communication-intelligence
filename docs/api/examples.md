@@ -261,3 +261,21 @@ curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/gmail/authorize
 ```
 
 The JSON omits state, PKCE verifier, client secret, and tokens. Live Google Cloud consent is an operator step outside automated tests.
+
+## Microsoft mailbox authorize (requires OIDC)
+
+`POST /api/v1/connector-accounts/microsoft_graph/authorize` always requires an authenticated principal. `AUTH_MODE=disabled` returns `401`. The Microsoft callback is public and is not shown with a bearer token.
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/microsoft_graph/authorize \
+  -H "Authorization: Bearer <access-token-with-communications:connect>"
+```
+
+```json
+{
+  "authorization_url": "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?...",
+  "expires_at": "2026-08-23T12:10:00+00:00"
+}
+```
+
+The JSON omits state, PKCE verifier, client secret, and tokens. Live Entra consent is an operator step outside automated tests.

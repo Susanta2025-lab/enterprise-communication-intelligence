@@ -1,5 +1,6 @@
 """Application configuration loaded from environment variables."""
 
+import re
 from functools import lru_cache
 from typing import Literal, Self
 from urllib.parse import urlparse
@@ -19,6 +20,8 @@ _ALLOWED_DATABASE_SCHEMES = frozenset(
         "sqlite+pysqlite",
     }
 )
+_MICROSOFT_OAUTH_TENANT_ALIASES = frozenset({"common", "organizations", "consumers"})
+_MICROSOFT_OAUTH_TENANT_GUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
 class Settings(BaseSettings):
@@ -58,6 +61,10 @@ class Settings(BaseSettings):
     gmail_oauth_client_id: str | None = None
     gmail_oauth_client_secret: SecretStr | None = None
     gmail_oauth_redirect_uri: str | None = None
+    microsoft_oauth_client_id: str | None = None
+    microsoft_oauth_client_secret: SecretStr | None = None
+    microsoft_oauth_redirect_uri: str | None = None
+    microsoft_oauth_tenant: str | None = None
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -249,6 +256,68 @@ class Settings(BaseSettings):
             raise ValueError("GMAIL_OAUTH_REDIRECT_URI must be an absolute http(s) URL.")
         return value
 
+    @field_validator("microsoft_oauth_client_id", mode="before")
+    @classmethod
+    def normalize_microsoft_oauth_client_id(cls, value: object) -> object:
+        """Treat blank Microsoft OAuth client IDs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("microsoft_oauth_client_secret", mode="before")
+    @classmethod
+    def normalize_microsoft_oauth_client_secret(cls, value: object) -> object:
+        """Treat blank Microsoft OAuth client secrets as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("microsoft_oauth_redirect_uri", mode="before")
+    @classmethod
+    def normalize_microsoft_oauth_redirect_uri(cls, value: object) -> object:
+        """Treat blank Microsoft OAuth redirect URIs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("microsoft_oauth_tenant", mode="before")
+    @classmethod
+    def normalize_microsoft_oauth_tenant(cls, value: object) -> object:
+        """Treat blank Microsoft OAuth tenants as unset and lowercase aliases."""
+        if isinstance(value, str):
+            stripped = value.strip().lower()
+            return stripped or None
+        return value
+
+    @field_validator("microsoft_oauth_redirect_uri")
+    @classmethod
+    def validate_microsoft_oauth_redirect_uri(cls, value: str | None) -> str | None:
+        """Require an absolute http(s) redirect URI with no fragment."""
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.fragment:
+            raise ValueError("MICROSOFT_OAUTH_REDIRECT_URI must be an absolute http(s) URL.")
+        return value
+
+    @field_validator("microsoft_oauth_tenant")
+    @classmethod
+    def validate_microsoft_oauth_tenant(cls, value: str | None) -> str | None:
+        """Accept v2 aliases or a directory GUID. Reject authority URLs."""
+        if value is None:
+            return None
+        if value in _MICROSOFT_OAUTH_TENANT_ALIASES:
+            return value
+        if re.fullmatch(_MICROSOFT_OAUTH_TENANT_GUID, value) is None:
+            raise ValueError(
+                "MICROSOFT_OAUTH_TENANT must be common, organizations, consumers, "
+                "or a directory GUID."
+            )
+        return value
+
     @model_validator(mode="after")
     def validate_gmail_oauth_settings_together(self) -> Self:
         """Require Gmail OAuth fields together when any one is provided.
@@ -280,6 +349,42 @@ class Settings(BaseSettings):
             and secret is not None
             and secret.get_secret_value()
             and self.gmail_oauth_redirect_uri
+        )
+
+    @model_validator(mode="after")
+    def validate_microsoft_oauth_settings_together(self) -> Self:
+        """Require Microsoft OAuth fields together when any one is provided.
+
+        Ordinary mock/local startup does not set these variables. Partial
+        configuration is rejected so a connect path is never half-enabled.
+        """
+        secret_value = None
+        if self.microsoft_oauth_client_secret is not None:
+            secret_value = self.microsoft_oauth_client_secret.get_secret_value()
+        present = (
+            self.microsoft_oauth_client_id is not None,
+            secret_value is not None,
+            self.microsoft_oauth_redirect_uri is not None,
+            self.microsoft_oauth_tenant is not None,
+        )
+        if any(present) and not all(present):
+            raise ValueError(
+                "MICROSOFT_OAUTH_CLIENT_ID, MICROSOFT_OAUTH_CLIENT_SECRET, "
+                "MICROSOFT_OAUTH_REDIRECT_URI, and MICROSOFT_OAUTH_TENANT "
+                "must be set together."
+            )
+        return self
+
+    @property
+    def microsoft_oauth_is_configured(self) -> bool:
+        """Return True when Microsoft OAuth client settings are complete."""
+        secret = self.microsoft_oauth_client_secret
+        return bool(
+            self.microsoft_oauth_client_id
+            and secret is not None
+            and secret.get_secret_value()
+            and self.microsoft_oauth_redirect_uri
+            and self.microsoft_oauth_tenant
         )
 
     @model_validator(mode="after")

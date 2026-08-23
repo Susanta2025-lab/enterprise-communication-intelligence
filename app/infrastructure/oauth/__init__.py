@@ -1,1 +1,1 @@
-"""Google mailbox OAuth adapters. SDK imports stay in google.py."""
+"""Google and Microsoft mailbox OAuth adapters. Provider HTTP stays in modules."""

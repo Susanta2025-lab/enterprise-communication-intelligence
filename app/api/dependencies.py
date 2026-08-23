@@ -14,6 +14,7 @@ from app.application.services.communication_analysis_workflow import (
 )
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
+from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAuthService
 from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
@@ -397,17 +398,17 @@ def get_communication_credential_resolver(
 ) -> CommunicationCredentialResolver:
     """Return the execute credential resolver after send authorization.
 
-    Legacy locators use the environment resolver. When Gmail OAuth is enabled
+    Legacy locators use the environment resolver. When mailbox OAuth is enabled
     in a non-production process, ``oauth-`` locators use the shared in-memory
     store. Production does not use the memory store.
     """
     settings = get_settings()
     from app.infrastructure.oauth.runtime import (
         build_runtime_communication_credential_resolver,
-        gmail_oauth_connect_available,
+        mailbox_oauth_store_available,
     )
 
-    if gmail_oauth_connect_available(settings):
+    if mailbox_oauth_store_available(settings):
         return build_runtime_communication_credential_resolver(settings)
     from app.infrastructure.credentials.environment import (
         EnvironmentCommunicationCredentialResolver,
@@ -505,6 +506,62 @@ def _build_gmail_mailbox_oauth_service() -> GmailMailboxOAuthService:
         )
 
     return GmailMailboxOAuthService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        oauth_client,
+        store,
+        create_stored_credential,
+        session_ttl_seconds=settings.oauth_authorization_session_ttl_seconds,
+    )
+
+
+def get_microsoft_mailbox_oauth_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+) -> MicrosoftMailboxOAuthService:
+    """Build Microsoft OAuth start orchestration after communications:connect.
+
+    Persistence, OAuth adapter, and credential-store construction run in this
+    function body so unauthorized requests never reach them.
+    """
+    return _build_microsoft_mailbox_oauth_service()
+
+
+def get_microsoft_mailbox_oauth_callback_service() -> MicrosoftMailboxOAuthService:
+    """Build Microsoft OAuth callback orchestration without an ECI bearer token."""
+    return _build_microsoft_mailbox_oauth_service()
+
+
+def _build_microsoft_mailbox_oauth_service() -> MicrosoftMailboxOAuthService:
+    settings = get_settings()
+    from app.domain.interfaces.communication_credential_store import (
+        CommunicationCredentialRecord,
+    )
+    from app.infrastructure.credentials.locators import create_communication_credential
+    from app.infrastructure.oauth.runtime import (
+        build_microsoft_oauth_client,
+        microsoft_oauth_connect_available,
+        require_shared_oauth_store,
+    )
+
+    if not microsoft_oauth_connect_available(settings):
+        raise ServiceUnavailableError("Microsoft mailbox authorization is unavailable.")
+    uow_factory = require_unit_of_work_factory(get_unit_of_work_factory())
+    store = require_shared_oauth_store(settings)
+    oauth_client = build_microsoft_oauth_client(settings)
+
+    def create_stored_credential(
+        secret_material: bytes,
+    ) -> CommunicationCredentialRecord:
+        return create_communication_credential(
+            store,
+            provider="microsoft_graph",
+            secret_material=secret_material,
+        )
+
+    return MicrosoftMailboxOAuthService(
         IdentityResolver(uow_factory),
         uow_factory,
         oauth_client,

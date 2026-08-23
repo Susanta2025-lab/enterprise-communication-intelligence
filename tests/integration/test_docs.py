@@ -70,14 +70,24 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/api/v1/workflow-actions/{action_id}/execute" in schema["paths"]
     assert "/api/v1/connector-accounts/gmail/authorize" in schema["paths"]
     assert "/api/v1/oauth/callbacks/gmail" in schema["paths"]
+    assert "/api/v1/connector-accounts/microsoft_graph/authorize" in schema["paths"]
+    assert "/api/v1/oauth/callbacks/microsoft_graph" in schema["paths"]
     authorize = schema["paths"]["/api/v1/connector-accounts/gmail/authorize"]["post"]
     callback = schema["paths"]["/api/v1/oauth/callbacks/gmail"]["get"]
+    ms_authorize = schema["paths"]["/api/v1/connector-accounts/microsoft_graph/authorize"]["post"]
+    ms_callback = schema["paths"]["/api/v1/oauth/callbacks/microsoft_graph"]["get"]
     assert "requestBody" not in authorize
     assert authorize.get("security") == [{"HTTPBearer": []}]
     assert "401" in authorize["responses"]
     assert "403" in authorize["responses"]
     assert callback.get("security") in (None, [])
     assert "401" not in callback["responses"]
+    assert "requestBody" not in ms_authorize
+    assert ms_authorize.get("security") == [{"HTTPBearer": []}]
+    assert "401" in ms_authorize["responses"]
+    assert "403" in ms_authorize["responses"]
+    assert ms_callback.get("security") in (None, [])
+    assert "401" not in ms_callback["responses"]
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
@@ -158,8 +168,7 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "executing" in execute_503
     assert "retried" in execute_503
     execute_summary = (
-        f"{workflow_execute['post'].get('description', '')} "
-        f"{execute_200} {execute_503}"
+        f"{workflow_execute['post'].get('description', '')} {execute_200} {execute_503}"
     ).lower()
     assert "exactly-once" not in execute_summary
     assert "idempotent" not in execute_summary
@@ -249,12 +258,7 @@ def test_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_adr_020_records_uncertain_execution_without_unknown_state() -> None:
     """Phase 12F documents EXECUTING as the uncertainty marker, not a new state."""
     root = Path(__file__).resolve().parents[2]
-    adr = (
-        root
-        / "docs"
-        / "decisions"
-        / "ADR-020-uncertain-communication-execution-semantics.md"
-    )
+    adr = root / "docs" / "decisions" / "ADR-020-uncertain-communication-execution-semantics.md"
     text = adr.read_text(encoding="utf-8")
     lowered = text.lower()
     assert "## Status" in text

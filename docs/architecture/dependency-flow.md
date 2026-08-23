@@ -66,7 +66,7 @@ Domain defines `CommunicationCredentialResolver`, `AccessTokenProvider`, and `Co
                                  (credentials/)
 ```
 
-The environment resolver and refreshable resolver do not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`. Real Google/Microsoft adapters and cloud secret backends remain later Phase 13 slices.
+The environment resolver and refreshable resolver do not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`. Google and Microsoft mailbox OAuth adapters live in `app/infrastructure/oauth/`. Cloud secret backends remain Phase 13E.
 
 ## Explicit Rules (Verified Against Source)
 

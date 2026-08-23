@@ -1,4 +1,4 @@
-"""HTTP tests for Gmail mailbox OAuth start and callback."""
+"""HTTP tests for Microsoft mailbox OAuth start and callback."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import (
-    get_gmail_mailbox_oauth_callback_service,
-    get_gmail_mailbox_oauth_service,
+    get_microsoft_mailbox_oauth_callback_service,
+    get_microsoft_mailbox_oauth_service,
     get_token_validator,
 )
-from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
+from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAuthService
 from app.core.config import get_settings
 from app.core.security import COMMUNICATIONS_CONNECT_PERMISSION
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
@@ -32,10 +32,10 @@ from tests.support.jwt_tokens import (
     generate_test_rsa_private_key,
     make_test_validator,
 )
-from tests.unit.application.test_gmail_mailbox_oauth import FakeMailboxOAuthClient
+from tests.unit.application.test_microsoft_mailbox_oauth import FakeMailboxOAuthClient
 
-_AUTHORIZE_URL = "/api/v1/connector-accounts/gmail/authorize"
-_CALLBACK_URL = "/api/v1/oauth/callbacks/gmail"
+_AUTHORIZE_URL = "/api/v1/connector-accounts/microsoft_graph/authorize"
+_CALLBACK_URL = "/api/v1/oauth/callbacks/microsoft_graph"
 _SETTINGS_ENV_VARS = (
     "APP_NAME",
     "APP_VERSION",
@@ -82,7 +82,7 @@ def _enable_oidc_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _build_service(
     client: FakeMailboxOAuthClient | None = None,
-) -> tuple[GmailMailboxOAuthService, FakeMailboxOAuthClient, InMemoryUnitOfWork]:
+) -> tuple[MicrosoftMailboxOAuthService, FakeMailboxOAuthClient, InMemoryUnitOfWork]:
     unit = InMemoryUnitOfWork()
     factory = UnitOfWorkFactory(unit)
     oauth_client = client or FakeMailboxOAuthClient()
@@ -91,11 +91,11 @@ def _build_service(
     def create_stored(secret_material: bytes) -> CommunicationCredentialRecord:
         return create_communication_credential(
             store,
-            provider="gmail",
+            provider="microsoft_graph",
             secret_material=secret_material,
         )
 
-    service = GmailMailboxOAuthService(
+    service = MicrosoftMailboxOAuthService(
         IdentityResolver(factory),
         factory,
         oauth_client,
@@ -119,8 +119,8 @@ def oauth_app(monkeypatch: pytest.MonkeyPatch, private_key):
     service, client, unit = _build_service()
     application = create_app()
     application.dependency_overrides[get_token_validator] = lambda: validator
-    application.dependency_overrides[get_gmail_mailbox_oauth_service] = lambda: service
-    application.dependency_overrides[get_gmail_mailbox_oauth_callback_service] = lambda: service
+    application.dependency_overrides[get_microsoft_mailbox_oauth_service] = lambda: service
+    application.dependency_overrides[get_microsoft_mailbox_oauth_callback_service] = lambda: service
     return application, service, client, unit, private_key
 
 
@@ -196,11 +196,11 @@ def test_callback_success_without_bearer(
     assert started.status_code == 200
     response = oauth_client.get(
         _CALLBACK_URL,
-        params={"state": fake.last_state, "code": "AUTH_CODE_SENTINEL_HTTP"},
+        params={"state": fake.last_state, "code": "AUTH_CODE_SENTINEL_HTTP_MS"},
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider"] == "gmail"
+    assert payload["provider"] == "microsoft_graph"
     assert payload["status"] == ConnectorAccountStatus.ACTIVE.value
     assert payload["granted_capabilities"] == [
         CommunicationCapability.MAIL_READ.value,
@@ -236,6 +236,15 @@ def test_callback_without_oauth_config_is_not_401(
     """Unauthenticated callback must not require the ECI bearer token."""
     _clear_settings_env(monkeypatch)
     _enable_oidc_env(monkeypatch)
+    # Blank env values override a local `.env` so this test stays offline.
+    for name in (
+        "MICROSOFT_OAUTH_CLIENT_ID",
+        "MICROSOFT_OAUTH_CLIENT_SECRET",
+        "MICROSOFT_OAUTH_REDIRECT_URI",
+        "MICROSOFT_OAUTH_TENANT",
+        "DATABASE_URL",
+    ):
+        monkeypatch.setenv(name, "")
     get_settings.cache_clear()
     validator = make_test_validator(private_key)
     application = create_app()
@@ -243,4 +252,4 @@ def test_callback_without_oauth_config_is_not_401(
     with TestClient(application) as test_client:
         response = test_client.get(_CALLBACK_URL, params={"state": "x", "code": "y"})
     assert response.status_code == 503
-    assert response.json() == {"detail": "Gmail mailbox authorization is unavailable."}
+    assert response.json() == {"detail": "Microsoft mailbox authorization is unavailable."}

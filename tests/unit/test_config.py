@@ -31,6 +31,10 @@ _SETTINGS_ENV_VARS = (
     "GMAIL_OAUTH_CLIENT_ID",
     "GMAIL_OAUTH_CLIENT_SECRET",
     "GMAIL_OAUTH_REDIRECT_URI",
+    "MICROSOFT_OAUTH_CLIENT_ID",
+    "MICROSOFT_OAUTH_CLIENT_SECRET",
+    "MICROSOFT_OAUTH_REDIRECT_URI",
+    "MICROSOFT_OAUTH_TENANT",
 )
 
 
@@ -69,6 +73,11 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.gmail_oauth_client_secret is None
     assert settings.gmail_oauth_redirect_uri is None
     assert settings.gmail_oauth_is_configured is False
+    assert settings.microsoft_oauth_client_id is None
+    assert settings.microsoft_oauth_client_secret is None
+    assert settings.microsoft_oauth_redirect_uri is None
+    assert settings.microsoft_oauth_tenant is None
+    assert settings.microsoft_oauth_is_configured is False
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -689,3 +698,115 @@ def test_production_does_not_require_gmail_oauth(
     settings = Settings(_env_file=None)
     assert settings.app_env == "production"
     assert settings.gmail_oauth_is_configured is False
+    assert settings.microsoft_oauth_is_configured is False
+
+
+_MICROSOFT_OAUTH_REDIRECT = "https://eci.example.invalid/api/v1/oauth/callbacks/microsoft_graph"
+_MICROSOFT_OAUTH_CLIENT_ID = "11111111-1111-1111-1111-111111111111"
+_MICROSOFT_OAUTH_SECRET = "microsoft-oauth-client-secret-sentinel"
+_MICROSOFT_OAUTH_TENANT = "consumers"
+
+
+def test_microsoft_oauth_settings_are_optional(clear_settings_env: None) -> None:
+    """Ordinary startup must not require Microsoft OAuth configuration."""
+    settings = Settings(_env_file=None)
+    assert settings.microsoft_oauth_is_configured is False
+    assert settings.app_env == "development"
+
+
+def test_microsoft_oauth_settings_load_together(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Complete Microsoft OAuth settings load without becoming the production store."""
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_ID", f"  {_MICROSOFT_OAUTH_CLIENT_ID}  ")
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_SECRET", f"  {_MICROSOFT_OAUTH_SECRET}  ")
+    monkeypatch.setenv("MICROSOFT_OAUTH_REDIRECT_URI", f"  {_MICROSOFT_OAUTH_REDIRECT}  ")
+    monkeypatch.setenv("MICROSOFT_OAUTH_TENANT", "  Consumers  ")
+    settings = Settings(_env_file=None)
+    assert settings.microsoft_oauth_client_id == _MICROSOFT_OAUTH_CLIENT_ID
+    assert settings.microsoft_oauth_redirect_uri == _MICROSOFT_OAUTH_REDIRECT
+    assert settings.microsoft_oauth_tenant == _MICROSOFT_OAUTH_TENANT
+    assert settings.microsoft_oauth_is_configured is True
+    assert settings.microsoft_oauth_client_secret is not None
+    assert settings.microsoft_oauth_client_secret.get_secret_value() == _MICROSOFT_OAUTH_SECRET
+    blob = f"{settings!r}{settings}{settings.model_dump()!s}"
+    assert _MICROSOFT_OAUTH_SECRET not in blob
+    assert "**********" in repr(settings.microsoft_oauth_client_secret)
+
+
+def test_microsoft_oauth_partial_configuration_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A half-configured Microsoft OAuth client must not start."""
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_ID", _MICROSOFT_OAUTH_CLIENT_ID)
+    monkeypatch.delenv("MICROSOFT_OAUTH_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("MICROSOFT_OAUTH_REDIRECT_URI", raising=False)
+    monkeypatch.delenv("MICROSOFT_OAUTH_TENANT", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_microsoft_oauth_redirect_uri_must_be_absolute_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redirect URIs must be absolute http(s) URLs without fragments."""
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_ID", _MICROSOFT_OAUTH_CLIENT_ID)
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_SECRET", _MICROSOFT_OAUTH_SECRET)
+    monkeypatch.setenv("MICROSOFT_OAUTH_TENANT", _MICROSOFT_OAUTH_TENANT)
+    monkeypatch.setenv(
+        "MICROSOFT_OAUTH_REDIRECT_URI",
+        "/oauth/callbacks/microsoft_graph",
+    )
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv(
+        "MICROSOFT_OAUTH_REDIRECT_URI",
+        f"{_MICROSOFT_OAUTH_REDIRECT}#fragment",
+    )
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_microsoft_oauth_tenant_rejects_authority_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tenant must be an alias or GUID, never a login host URL."""
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_ID", _MICROSOFT_OAUTH_CLIENT_ID)
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_SECRET", _MICROSOFT_OAUTH_SECRET)
+    monkeypatch.setenv("MICROSOFT_OAUTH_REDIRECT_URI", _MICROSOFT_OAUTH_REDIRECT)
+    monkeypatch.setenv(
+        "MICROSOFT_OAUTH_TENANT",
+        "https://login.microsoftonline.com/consumers",
+    )
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_microsoft_oauth_secret_is_hidden_in_validation_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rejected Microsoft OAuth configuration must not echo the client secret."""
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_ID", _MICROSOFT_OAUTH_CLIENT_ID)
+    monkeypatch.setenv("MICROSOFT_OAUTH_CLIENT_SECRET", _MICROSOFT_OAUTH_SECRET)
+    monkeypatch.setenv("MICROSOFT_OAUTH_TENANT", _MICROSOFT_OAUTH_TENANT)
+    monkeypatch.setenv("MICROSOFT_OAUTH_REDIRECT_URI", "not-a-url")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    assert _MICROSOFT_OAUTH_SECRET not in str(exc_info.value)
+
+
+def test_production_does_not_require_microsoft_oauth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production startup must not fail solely because Microsoft OAuth is unset."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.delenv("MICROSOFT_OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("MICROSOFT_OAUTH_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("MICROSOFT_OAUTH_REDIRECT_URI", raising=False)
+    monkeypatch.delenv("MICROSOFT_OAUTH_TENANT", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.app_env == "production"
+    assert settings.microsoft_oauth_is_configured is False

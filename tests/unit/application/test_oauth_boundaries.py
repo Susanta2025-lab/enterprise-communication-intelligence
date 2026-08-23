@@ -98,9 +98,7 @@ def test_gmail_and_graph_executors_and_connectors_are_unchanged() -> None:
     )
 
     assert GmailCommunicationConnector.__name__ == "GmailCommunicationConnector"
-    assert MicrosoftGraphCommunicationConnector.__name__ == (
-        "MicrosoftGraphCommunicationConnector"
-    )
+    assert MicrosoftGraphCommunicationConnector.__name__ == ("MicrosoftGraphCommunicationConnector")
     assert GmailCommunicationActionExecutor.__name__ == "GmailCommunicationActionExecutor"
     assert MicrosoftGraphCommunicationActionExecutor.__name__ == (
         "MicrosoftGraphCommunicationActionExecutor"
@@ -125,24 +123,24 @@ def test_gmail_and_graph_executors_and_connectors_are_unchanged() -> None:
     assert "granted_capabilities" in execution
 
 
-def test_gmail_oauth_routes_exist_and_microsoft_oauth_does_not() -> None:
-    """13C publishes Gmail OAuth HTTP only. Microsoft OAuth remains unimplemented."""
-    gmail_route = (_ROOT / "app" / "api" / "routes" / "gmail_oauth.py").read_text(
-        encoding="utf-8"
-    )
+def test_gmail_and_microsoft_oauth_routes_exist() -> None:
+    """13C/13D publish Gmail and Microsoft mailbox OAuth HTTP."""
+    gmail_route = (_ROOT / "app" / "api" / "routes" / "gmail_oauth.py").read_text(encoding="utf-8")
     assert "/connector-accounts/gmail/authorize" in gmail_route
     assert "/oauth/callbacks/gmail" in gmail_route
     assert "require_authenticated_communications_connect" in gmail_route
     assert "get_gmail_mailbox_oauth_callback_service" in gmail_route
     assert "login.microsoftonline.com" not in gmail_route.lower()
-    assert "microsoft" not in gmail_route.lower()
+    microsoft_route = (_ROOT / "app" / "api" / "routes" / "microsoft_oauth.py").read_text(
+        encoding="utf-8"
+    )
+    assert "/connector-accounts/microsoft_graph/authorize" in microsoft_route
+    assert "/oauth/callbacks/microsoft_graph" in microsoft_route
+    assert "require_authenticated_communications_connect" in microsoft_route
+    assert "get_microsoft_mailbox_oauth_callback_service" in microsoft_route
     router = (_ROOT / "app" / "api" / "router.py").read_text(encoding="utf-8")
     assert "gmail_oauth" in router
-    for path in _python_files(_ROOT / "app" / "api" / "routes"):
-        source = path.read_text(encoding="utf-8").lower()
-        assert "login.microsoftonline.com" not in source
-        assert "/oauth/callbacks/microsoft" not in source
-        assert "/connector-accounts/microsoft" not in source
+    assert "microsoft_oauth" in router
 
 
 def test_future_oauth_contracts_reject_client_supplied_credential_ref() -> None:
