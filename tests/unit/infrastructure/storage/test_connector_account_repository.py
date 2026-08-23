@@ -249,6 +249,37 @@ def test_reactivate_replaces_credential_ref(session_factory: sessionmaker) -> No
     assert restored.id == owned.id
     assert _aware(restored.created_at) == _aware(owned.created_at)
     assert _aware(restored.updated_at) >= _aware(owned.updated_at)
+    assert restored.granted_capabilities is None
+
+
+def test_reactivate_can_replace_granted_capabilities(session_factory: sessionmaker) -> None:
+    """OAuth reactivation may install explicit capability metadata."""
+    user_a, _user_b = _create_users(session_factory)
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        owned = repository.create(_new_account(user_a))
+        session.commit()
+        repository.disconnect_owned(owned.id, user_a)
+        session.commit()
+        restored = repository.reactivate_owned(
+            owned.id,
+            user_a,
+            "oauth-new-locator-0001",
+            granted_capabilities=(
+                CommunicationCapability.MAIL_READ,
+                CommunicationCapability.MAIL_SEND,
+            ),
+            replace_granted_capabilities=True,
+        )
+        session.commit()
+
+    assert restored is not None
+    assert restored.status is ConnectorAccountStatus.ACTIVE
+    assert restored.credential_ref == "oauth-new-locator-0001"
+    assert restored.granted_capabilities == (
+        CommunicationCapability.MAIL_READ,
+        CommunicationCapability.MAIL_SEND,
+    )
 
 
 def test_uow_commit_and_rollback(session_factory: sessionmaker) -> None:

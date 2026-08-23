@@ -67,6 +67,13 @@ class UnsupportedMailboxAuthorizationProviderError(ECIPlatformError):
         super().__init__("Mailbox authorization provider is not supported.")
 
 
+class MailboxOAuthAuthorizationDeniedError(ECIPlatformError):
+    """Raised when the mailbox provider reports consent denial."""
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox authorization was denied.")
+
+
 class WorkflowActionNotExecutableError(ECIPlatformError):
     """Raised when an owned action cannot begin external execution.
 

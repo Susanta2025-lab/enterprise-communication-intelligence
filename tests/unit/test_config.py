@@ -28,6 +28,9 @@ _SETTINGS_ENV_VARS = (
     "OIDC_REQUIRED_PERMISSION",
     "DATABASE_URL",
     "OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS",
+    "GMAIL_OAUTH_CLIENT_ID",
+    "GMAIL_OAUTH_CLIENT_SECRET",
+    "GMAIL_OAUTH_REDIRECT_URI",
 )
 
 
@@ -62,6 +65,10 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.oidc_required_permission == "communications:analyze"
     assert settings.database_url is None
     assert settings.oauth_authorization_session_ttl_seconds == 600
+    assert settings.gmail_oauth_client_id is None
+    assert settings.gmail_oauth_client_secret is None
+    assert settings.gmail_oauth_redirect_uri is None
+    assert settings.gmail_oauth_is_configured is False
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -596,3 +603,89 @@ def test_oauth_authorization_session_ttl_bounds(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("OAUTH_AUTHORIZATION_SESSION_TTL_SECONDS", "not-an-int")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+_GMAIL_OAUTH_REDIRECT = "https://eci.example.invalid/api/v1/oauth/callbacks/gmail"
+_GMAIL_OAUTH_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
+_GMAIL_OAUTH_SECRET = "gmail-oauth-client-secret-sentinel"
+
+
+def test_gmail_oauth_settings_are_optional(clear_settings_env: None) -> None:
+    """Ordinary startup must not require Gmail OAuth configuration."""
+    settings = Settings(_env_file=None)
+    assert settings.gmail_oauth_is_configured is False
+    assert settings.app_env == "development"
+
+
+def test_gmail_oauth_settings_load_together(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Complete Gmail OAuth settings load without becoming the production store."""
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", f"  {_GMAIL_OAUTH_CLIENT_ID}  ")
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_SECRET", f"  {_GMAIL_OAUTH_SECRET}  ")
+    monkeypatch.setenv("GMAIL_OAUTH_REDIRECT_URI", f"  {_GMAIL_OAUTH_REDIRECT}  ")
+    settings = Settings(_env_file=None)
+    assert settings.gmail_oauth_client_id == _GMAIL_OAUTH_CLIENT_ID
+    assert settings.gmail_oauth_redirect_uri == _GMAIL_OAUTH_REDIRECT
+    assert settings.gmail_oauth_is_configured is True
+    assert settings.gmail_oauth_client_secret is not None
+    assert settings.gmail_oauth_client_secret.get_secret_value() == _GMAIL_OAUTH_SECRET
+    blob = f"{settings!r}{settings}{settings.model_dump()!s}"
+    assert _GMAIL_OAUTH_SECRET not in blob
+    assert "**********" in repr(settings.gmail_oauth_client_secret)
+
+
+def test_gmail_oauth_partial_configuration_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A half-configured Gmail OAuth client must not start."""
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", _GMAIL_OAUTH_CLIENT_ID)
+    monkeypatch.delenv("GMAIL_OAUTH_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GMAIL_OAUTH_REDIRECT_URI", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_gmail_oauth_redirect_uri_must_be_absolute_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redirect URIs must be absolute http(s) URLs without fragments."""
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", _GMAIL_OAUTH_CLIENT_ID)
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_SECRET", _GMAIL_OAUTH_SECRET)
+    monkeypatch.setenv("GMAIL_OAUTH_REDIRECT_URI", "/oauth/callbacks/gmail")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv(
+        "GMAIL_OAUTH_REDIRECT_URI",
+        f"{_GMAIL_OAUTH_REDIRECT}#fragment",
+    )
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_gmail_oauth_secret_is_hidden_in_validation_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rejected Gmail OAuth configuration must not echo the client secret."""
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", _GMAIL_OAUTH_CLIENT_ID)
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_SECRET", _GMAIL_OAUTH_SECRET)
+    monkeypatch.setenv("GMAIL_OAUTH_REDIRECT_URI", "not-a-url")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None)
+    assert _GMAIL_OAUTH_SECRET not in str(exc_info.value)
+
+
+def test_production_does_not_require_gmail_oauth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production startup must not fail solely because Gmail OAuth is unset."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.delenv("GMAIL_OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GMAIL_OAUTH_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GMAIL_OAUTH_REDIRECT_URI", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.app_env == "production"
+    assert settings.gmail_oauth_is_configured is False

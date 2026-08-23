@@ -206,6 +206,7 @@ def test_no_phase_13b_alembic_migration() -> None:
     names = {path.name for path in versions.glob("*.py")}
     assert any(name.startswith("13a0001") for name in names)
     assert not any("13b" in name for name in names)
+    assert not any("13c" in name for name in names)
 
 
 def test_credential_ref_is_not_uniquely_constrained() -> None:

@@ -99,8 +99,12 @@ class ConnectorAccountRepository(ABC):
         connector_account_id: UUID,
         user_id: UUID,
         credential_ref: str | None,
+        *,
+        granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
+        replace_granted_capabilities: bool = False,
     ) -> ConnectorAccountRecord | None:
         """Reactivate an owned disconnected or reauth-required account.
 
-        Replaces ``credential_ref``. ``granted_capabilities`` are unchanged.
+        Replaces ``credential_ref``. ``granted_capabilities`` stay unchanged
+        unless ``replace_granted_capabilities`` is true.
         """

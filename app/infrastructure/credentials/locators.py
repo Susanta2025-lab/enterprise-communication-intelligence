@@ -38,6 +38,15 @@ def generate_credential_locator() -> str:
     return f"{_LOCATOR_PREFIX}{secrets.token_hex(_LOCATOR_RANDOM_BYTES)}"
 
 
+def is_oauth_credential_locator(credential_ref: object) -> bool:
+    """Return True when ``credential_ref`` uses the server-generated OAuth prefix."""
+    return (
+        isinstance(credential_ref, str)
+        and credential_ref.startswith(_LOCATOR_PREFIX)
+        and is_valid_credential_ref(credential_ref)
+    )
+
+
 def create_communication_credential(
     store: CommunicationCredentialStore,
     *,

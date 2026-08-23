@@ -83,7 +83,10 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `GET /api/v1/workflow-actions/{action_id}`
 - `POST /api/v1/workflow-actions/{action_id}/approve`
 - `POST /api/v1/workflow-actions/{action_id}/reject`
-- `POST /api/v1/workflow-actions/{action_id}/execute`
+- `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
+- `POST /api/v1/connector-accounts/gmail/authorize` (`communications:connect`)
+
+`GET /api/v1/oauth/callbacks/gmail` is the Google redirect target and does not use the ECI bearer token.
 
 Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Analyze, workflow, and send do not imply each other. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
 
@@ -110,7 +113,8 @@ FastAPI route (app/api/routes/*)
   ↓ dependency injection
   ├── CommunicationAnalysisWorkflowService (analyze / history)
   ├── WorkflowActionService (workflow proposal and approval)
-  └── WorkflowActionExecutionService (execute)
+  ├── WorkflowActionExecutionService (execute)
+  └── GmailMailboxOAuthService (Gmail connect / Google callback)
 ```
 
 Routes validate the incoming request via Pydantic, resolve a workflow or execution service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

@@ -7,6 +7,7 @@ from app.application.exceptions import (
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
+    MailboxOAuthAuthorizationDeniedError,
     UnsupportedMailboxAuthorizationProviderError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
@@ -27,6 +28,7 @@ from app.core.exceptions import (
     ConnectorRateLimitError,
     ConnectorUnavailableError,
     ECIPlatformError,
+    MailboxOAuthAuthorizationFailedError,
     PersistenceError,
     ServiceUnavailableError,
     UnsupportedCommunicationCredentialProviderError,
@@ -52,6 +54,8 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountInvalidRequestError, ECIPlatformError)
     assert issubclass(MailboxAuthorizationSessionInvalidError, ECIPlatformError)
+    assert issubclass(MailboxOAuthAuthorizationDeniedError, ECIPlatformError)
+    assert issubclass(MailboxOAuthAuthorizationFailedError, ECIPlatformError)
     assert issubclass(UnsupportedMailboxAuthorizationProviderError, ECIPlatformError)
     assert issubclass(WorkflowActionNotFoundError, ECIPlatformError)
     assert issubclass(WorkflowActionConflictError, ECIPlatformError)
@@ -88,14 +92,29 @@ def test_mailbox_authorization_errors_are_generic() -> None:
     """State failures must not include state, user, or verifier material."""
     invalid = MailboxAuthorizationSessionInvalidError()
     unsupported = UnsupportedMailboxAuthorizationProviderError()
+    denied = MailboxOAuthAuthorizationDeniedError()
+    failed = MailboxOAuthAuthorizationFailedError()
     assert invalid.message == "Mailbox authorization session is invalid."
     assert unsupported.message == "Mailbox authorization provider is not supported."
-    for text in (invalid.message, unsupported.message, str(invalid), str(unsupported)):
+    assert denied.message == "Mailbox authorization was denied."
+    assert failed.message == "Mailbox authorization failed."
+    for text in (
+        invalid.message,
+        unsupported.message,
+        denied.message,
+        failed.message,
+        str(invalid),
+        str(unsupported),
+        str(denied),
+        str(failed),
+    ):
         assert "state" not in text.lower() or "session" in text.lower()
         assert "user_id" not in text
         assert "pkce" not in text.lower()
         assert "verifier" not in text.lower()
         assert "gmail" not in text.lower()
+        assert "refresh" not in text.lower()
+        assert "token" not in text.lower()
 
 
 def test_workflow_action_errors_have_generic_messages() -> None:

@@ -194,6 +194,9 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
         connector_account_id: UUID,
         user_id: UUID,
         credential_ref: str | None,
+        *,
+        granted_capabilities: tuple | None = None,
+        replace_granted_capabilities: bool = False,
     ) -> ConnectorAccountRecord | None:
         record = self.get_owned(connector_account_id, user_id)
         if record is None:
@@ -203,6 +206,11 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             ConnectorAccountStatus.REAUTH_REQUIRED,
         }:
             return None
+        capabilities = (
+            granted_capabilities
+            if replace_granted_capabilities
+            else record.granted_capabilities
+        )
         updated = ConnectorAccountRecord(
             id=record.id,
             user_id=record.user_id,
@@ -212,7 +220,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             status=ConnectorAccountStatus.ACTIVE,
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
-            granted_capabilities=record.granted_capabilities,
+            granted_capabilities=capabilities,
         )
         self._accounts[record.id] = updated
         return updated

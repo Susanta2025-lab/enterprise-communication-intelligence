@@ -8,6 +8,7 @@ from app.domain.models.analysis import (
     Summary,
 )
 from app.domain.models.capabilities import (
+    is_mail_send_executable,
     normalize_communication_capabilities,
     parse_stored_communication_capabilities,
     require_requested_communication_capabilities,
@@ -27,6 +28,7 @@ __all__ = [
     "WorkflowAction",
     "normalize_communication_capabilities",
     "parse_stored_communication_capabilities",
+    "is_mail_send_executable",
     "require_requested_communication_capabilities",
     "serialize_communication_capabilities",
 ]

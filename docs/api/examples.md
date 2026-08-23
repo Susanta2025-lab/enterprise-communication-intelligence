@@ -243,3 +243,21 @@ curl -sS -X POST http://localhost:8000/api/v1/communications/analyze \
 ```
 
 (Exact `loc`/`msg` values follow FastAPI's standard Pydantic v2 error format.)
+
+## Gmail mailbox authorize (requires OIDC)
+
+`POST /api/v1/connector-accounts/gmail/authorize` always requires an authenticated principal. `AUTH_MODE=disabled` returns `401`. The Google callback is public and is not shown with a bearer token.
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/gmail/authorize \
+  -H "Authorization: Bearer <access-token-with-communications:connect>"
+```
+
+```json
+{
+  "authorization_url": "https://accounts.google.com/o/oauth2/auth?...",
+  "expires_at": "2026-08-23T12:10:00+00:00"
+}
+```
+
+The JSON omits state, PKCE verifier, client secret, and tokens. Live Google Cloud consent is an operator step outside automated tests.

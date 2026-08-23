@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import PersistenceError
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     ConnectorAccountRepository,
@@ -145,8 +145,23 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
         connector_account_id: UUID,
         user_id: UUID,
         credential_ref: str | None,
+        *,
+        granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
+        replace_granted_capabilities: bool = False,
     ) -> ConnectorAccountRecord | None:
         """Reactivate an owned disconnected or reauth-required account."""
+        values: dict[str, object] = {
+            "status": ConnectorAccountStatus.ACTIVE.value,
+            "credential_ref": credential_ref,
+            "updated_at": utc_now(),
+        }
+        if replace_granted_capabilities:
+            try:
+                values["granted_capabilities"] = serialize_communication_capabilities(
+                    granted_capabilities
+                )
+            except ValueError as exc:
+                raise PersistenceError(_GENERIC_FAILURE) from exc
         statement = (
             update(ConnectorAccount)
             .where(
@@ -159,11 +174,7 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
                     )
                 ),
             )
-            .values(
-                status=ConnectorAccountStatus.ACTIVE.value,
-                credential_ref=credential_ref,
-                updated_at=utc_now(),
-            )
+            .values(**values)
         )
         result = self._session.execute(statement)
         if result.rowcount != 1:

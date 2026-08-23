@@ -61,6 +61,9 @@ Exception handlers are registered on the FastAPI app:
 | `InvalidWorkflowTransitionError` | `409` | `{"detail": "Invalid workflow state transition."}` | `invalid_workflow_transition` (info) |
 | `WorkflowActionConflictError` | `409` | `{"detail": "Workflow action was updated concurrently."}` | `workflow_action_conflict` (warning) |
 | `WorkflowActionNotExecutableError` | `409` | `{"detail": "Workflow action is not executable."}` | `workflow_action_not_executable` (info) |
+| `MailboxAuthorizationSessionInvalidError` | `400` | `{"detail": "Mailbox authorization session is invalid."}` | `mailbox_authorization_session_invalid` (info) |
+| `MailboxOAuthAuthorizationDeniedError` | `400` | `{"detail": "Mailbox authorization was denied."}` | `mailbox_oauth_authorization_denied` (info) |
+| `MailboxOAuthAuthorizationFailedError` | `400` | `{"detail": "Mailbox authorization failed."}` | `mailbox_oauth_authorization_failed` (info) |
 | `PersistenceError` | `503` | `{"detail": "Persistence is currently unavailable."}` | `persistence_unavailable` (warning) |
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
 | `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
@@ -81,7 +84,7 @@ When `AUTH_MODE=oidc`, analyze requires a bearer token. History and workflow rou
 | Unknown or cross-user `analysis_id` | `404` | not set | `{"detail": "Analysis not found."}` |
 | Unknown or cross-user workflow action | `404` | not set | `{"detail": "Workflow action not found."}` |
 
-Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. None of those permissions implies another. `communications:workflow` does not authorize external sending.
+Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Gmail authorize requires `communications:connect`. The Google callback does not use the ECI bearer token. None of those permissions implies another. `communications:workflow` does not authorize external sending.
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -131,8 +134,9 @@ Readiness returns the same generic `503` body when persistence is configured and
 | `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject/execute return the updated action. Execute 200 + `failed` is a recorded definite provider rejection. |
 | `201` | Workflow action created | `POST /api/v1/workflow-actions` |
 | `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
-| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, and execute always (`AUTH_MODE=disabled` included) |
-| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute |
+| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, and Gmail authorize always (`AUTH_MODE=disabled` included). The Google callback is public. |
+| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail authorize |
+| `400` | Mailbox OAuth failure | Invalid/expired/consumed state, Google consent denial, or sanitized authorization failure |
 | `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError` or `WorkflowActionNotFoundError` |
 | `409` | Workflow conflict | No usable draft, invalid transition, concurrent update, not executable, or re-execute of EXECUTING/EXECUTED/FAILED |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |

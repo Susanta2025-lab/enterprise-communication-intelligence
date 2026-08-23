@@ -39,6 +39,10 @@ from app.domain.interfaces.mailbox_authorization_session_repository import (
     MailboxAuthorizationSessionRepository,
     NewMailboxAuthorizationSession,
 )
+from app.domain.interfaces.mailbox_oauth_client import (
+    MailboxOAuthAuthorizationResult,
+    MailboxOAuthClient,
+)
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionRepository,
@@ -65,6 +69,8 @@ __all__ = [
     "IdentityRepository",
     "MailboxAuthorizationSessionRecord",
     "MailboxAuthorizationSessionRepository",
+    "MailboxOAuthAuthorizationResult",
+    "MailboxOAuthClient",
     "NewMailboxAuthorizationSession",
     "MessagePage",
     "NewAnalysis",

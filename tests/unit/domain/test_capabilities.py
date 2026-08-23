@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.enums import CommunicationCapability
 from app.domain.models.capabilities import (
+    is_mail_send_executable,
     normalize_communication_capabilities,
     parse_stored_communication_capabilities,
     require_requested_communication_capabilities,
@@ -76,4 +77,17 @@ def test_requested_capabilities_must_be_explicit() -> None:
     assert required == (
         CommunicationCapability.MAIL_READ,
         CommunicationCapability.MAIL_SEND,
+    )
+
+
+def test_mail_send_executable_preserves_legacy_null() -> None:
+    """Unknown grant metadata remains executable; explicit grants require mail.send."""
+    assert is_mail_send_executable(None) is True
+    assert is_mail_send_executable(()) is False
+    assert is_mail_send_executable((CommunicationCapability.MAIL_READ,)) is False
+    assert (
+        is_mail_send_executable(
+            (CommunicationCapability.MAIL_READ, CommunicationCapability.MAIL_SEND)
+        )
+        is True
     )

@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnvironment = Literal["development", "staging", "production"]
@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     oidc_required_permission: str = "communications:analyze"
     database_url: str | None = None
     oauth_authorization_session_ttl_seconds: int = Field(default=600, ge=60, le=1800)
+    gmail_oauth_client_id: str | None = None
+    gmail_oauth_client_secret: SecretStr | None = None
+    gmail_oauth_redirect_uri: str | None = None
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -207,6 +210,77 @@ class Settings(BaseSettings):
         if scheme.startswith("sqlite") and not parsed.path:
             raise ValueError("DATABASE_URL is malformed.")
         return value
+
+    @field_validator("gmail_oauth_client_id", mode="before")
+    @classmethod
+    def normalize_gmail_oauth_client_id(cls, value: object) -> object:
+        """Treat blank Gmail OAuth client IDs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("gmail_oauth_client_secret", mode="before")
+    @classmethod
+    def normalize_gmail_oauth_client_secret(cls, value: object) -> object:
+        """Treat blank Gmail OAuth client secrets as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("gmail_oauth_redirect_uri", mode="before")
+    @classmethod
+    def normalize_gmail_oauth_redirect_uri(cls, value: object) -> object:
+        """Treat blank Gmail OAuth redirect URIs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("gmail_oauth_redirect_uri")
+    @classmethod
+    def validate_gmail_oauth_redirect_uri(cls, value: str | None) -> str | None:
+        """Require an absolute http(s) redirect URI with no fragment."""
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.fragment:
+            raise ValueError("GMAIL_OAUTH_REDIRECT_URI must be an absolute http(s) URL.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_gmail_oauth_settings_together(self) -> Self:
+        """Require Gmail OAuth fields together when any one is provided.
+
+        Ordinary mock/local startup does not set these variables. Partial
+        configuration is rejected so a connect path is never half-enabled.
+        """
+        secret_value = None
+        if self.gmail_oauth_client_secret is not None:
+            secret_value = self.gmail_oauth_client_secret.get_secret_value()
+        present = (
+            self.gmail_oauth_client_id is not None,
+            secret_value is not None,
+            self.gmail_oauth_redirect_uri is not None,
+        )
+        if any(present) and not all(present):
+            raise ValueError(
+                "GMAIL_OAUTH_CLIENT_ID, GMAIL_OAUTH_CLIENT_SECRET, and "
+                "GMAIL_OAUTH_REDIRECT_URI must be set together."
+            )
+        return self
+
+    @property
+    def gmail_oauth_is_configured(self) -> bool:
+        """Return True when Gmail OAuth client settings are complete."""
+        secret = self.gmail_oauth_client_secret
+        return bool(
+            self.gmail_oauth_client_id
+            and secret is not None
+            and secret.get_secret_value()
+            and self.gmail_oauth_redirect_uri
+        )
 
     @model_validator(mode="after")
     def validate_foundry_settings_when_selected(self) -> Self:

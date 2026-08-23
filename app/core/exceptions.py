@@ -53,6 +53,17 @@ class CommunicationCredentialConflictError(ECIPlatformError):
         super().__init__(message)
 
 
+class MailboxOAuthAuthorizationFailedError(ECIPlatformError):
+    """Raised when mailbox authorization cannot be completed.
+
+    Covers invalid identity assertions, missing refresh material, missing
+    required grants, and other sanitized provider-exchange failures.
+    """
+
+    def __init__(self, message: str = "Mailbox authorization failed.") -> None:
+        super().__init__(message)
+
+
 class UnsupportedCommunicationCredentialProviderError(ECIPlatformError):
     """Raised when credential resolution is requested for an unsupported provider."""
 

@@ -12,6 +12,7 @@ from app.application.services.communication_analysis import CommunicationAnalysi
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
+from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
@@ -394,7 +395,20 @@ def get_communication_credential_resolver(
         Depends(require_authenticated_communications_send),
     ],
 ) -> CommunicationCredentialResolver:
-    """Return the local/dev environment-backed credential resolver."""
+    """Return the execute credential resolver after send authorization.
+
+    Legacy locators use the environment resolver. When Gmail OAuth is enabled
+    in a non-production process, ``oauth-`` locators use the shared in-memory
+    store. Production does not use the memory store.
+    """
+    settings = get_settings()
+    from app.infrastructure.oauth.runtime import (
+        build_runtime_communication_credential_resolver,
+        gmail_oauth_connect_available,
+    )
+
+    if gmail_oauth_connect_available(settings):
+        return build_runtime_communication_credential_resolver(settings)
     from app.infrastructure.credentials.environment import (
         EnvironmentCommunicationCredentialResolver,
     )
@@ -441,4 +455,60 @@ def get_workflow_action_execution_service(
         IdentityResolver(uow_factory),
         uow_factory,
         executor_factory,
+    )
+
+
+def get_gmail_mailbox_oauth_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+) -> GmailMailboxOAuthService:
+    """Build Gmail OAuth start orchestration after communications:connect.
+
+    Persistence, OAuth adapter, and credential-store construction run in this
+    function body so unauthorized requests never reach them.
+    """
+    return _build_gmail_mailbox_oauth_service()
+
+
+def get_gmail_mailbox_oauth_callback_service() -> GmailMailboxOAuthService:
+    """Build Gmail OAuth callback orchestration without an ECI bearer token."""
+    return _build_gmail_mailbox_oauth_service()
+
+
+def _build_gmail_mailbox_oauth_service() -> GmailMailboxOAuthService:
+    settings = get_settings()
+    from app.domain.interfaces.communication_credential_store import (
+        CommunicationCredentialRecord,
+    )
+    from app.infrastructure.credentials.locators import create_communication_credential
+    from app.infrastructure.oauth.runtime import (
+        build_gmail_oauth_client,
+        gmail_oauth_connect_available,
+        require_shared_oauth_store,
+    )
+
+    if not gmail_oauth_connect_available(settings):
+        raise ServiceUnavailableError("Gmail mailbox authorization is unavailable.")
+    uow_factory = require_unit_of_work_factory(get_unit_of_work_factory())
+    store = require_shared_oauth_store(settings)
+    oauth_client = build_gmail_oauth_client(settings)
+
+    def create_stored_credential(
+        secret_material: bytes,
+    ) -> CommunicationCredentialRecord:
+        return create_communication_credential(
+            store,
+            provider="gmail",
+            secret_material=secret_material,
+        )
+
+    return GmailMailboxOAuthService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        oauth_client,
+        store,
+        create_stored_credential,
+        session_ttl_seconds=settings.oauth_authorization_session_ttl_seconds,
     )

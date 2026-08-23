@@ -284,4 +284,41 @@ Repeated reject is not idempotent. Rejecting an already rejected or approved act
   - `409 Conflict` — not APPROVED, already `executing`/`executed`/`failed`, not executable, or concurrent update. Body for not-executable: `{"detail": "Workflow action is not executable."}`
   - `503` — persistence unavailable before TX1 (prior status unchanged; execution did not reach the provider stage), missing mailbox secret after TX1 (stored `executing`; the provider request did not occur), Gmail pre-send unavailability, or uncertain provider outcome after TX1. HTTP 503 + EXECUTING means ECI cannot safely establish or complete execution; do not retry automatically. Not every 503 means a provider send may have occurred.
 
-Unauthorized and forbidden requests do not open an execution unit of work, resolve credentials, retrieve tokens, or call the mailbox provider. Create, list, get, approve, and reject remain `communications:workflow`. Provider-specific error bodies are not returned. There is no retry route.
+Unauthorized and forbidden requests do not open an execution unit of work, resolve credentials, retrieve tokens, or call the mailbox provider. Create, list, get, approve, and reject remain `communications:workflow`. Provider-specific error bodies are not returned. There is no retry route. Explicit OAuth accounts without `mail.send` are not executable (`409`); legacy `granted_capabilities=NULL` accounts keep Phase 12 eligibility.
+
+---
+
+## `POST /api/v1/connector-accounts/gmail/authorize`
+
+**Purpose:** Start a server-side Gmail mailbox consent session and return the Google authorization URL. This is mailbox OAuth, not ECI login.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/gmail/authorize`
+- **Request body:** none. Callers cannot supply scopes, redirect URI, state, PKCE, or `credential_ref`.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `GmailAuthorizationStartResponse` (`authorization_url`, `expires_at`)
+- **Status codes:**
+  - `200 OK` — Google authorization URL for the browser
+  - `401` / `403` — authentication/authorization failure
+  - `400` — mailbox authorization could not be started
+  - `503` — Gmail OAuth is unconfigured, persistence is unavailable, or `APP_ENV=production` (in-memory OAuth store is not durable production storage)
+
+Authorization runs before unit-of-work, OAuth adapter, and credential-store construction. Raw state, PKCE verifier, and client secret are not returned.
+
+---
+
+## `GET /api/v1/oauth/callbacks/gmail`
+
+**Purpose:** Google redirect target for Gmail mailbox consent. Ownership comes from the Phase 13A authorization session.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/oauth/callbacks/gmail`
+- **Query:** `code`, `state`, and `error` when Google supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
+- **Authentication:** none. This is not an ECI bearer-token route.
+- **Response model:** `GmailAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`)
+- **Status codes:**
+  - `200 OK` — Gmail connector account created, reactivated, or reused
+  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read`
+  - `503` — Gmail OAuth unavailable, persistence failure, or credential-store compensation failure
+
+Invalid state does not call Google. Consent denial consumes the session and does not exchange a token. Tokens are never returned. Live Google Cloud setup remains an external operator step; automated tests mock Google.

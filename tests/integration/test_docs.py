@@ -68,6 +68,16 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/api/v1/workflow-actions/{action_id}/approve" in schema["paths"]
     assert "/api/v1/workflow-actions/{action_id}/reject" in schema["paths"]
     assert "/api/v1/workflow-actions/{action_id}/execute" in schema["paths"]
+    assert "/api/v1/connector-accounts/gmail/authorize" in schema["paths"]
+    assert "/api/v1/oauth/callbacks/gmail" in schema["paths"]
+    authorize = schema["paths"]["/api/v1/connector-accounts/gmail/authorize"]["post"]
+    callback = schema["paths"]["/api/v1/oauth/callbacks/gmail"]["get"]
+    assert "requestBody" not in authorize
+    assert authorize.get("security") == [{"HTTPBearer": []}]
+    assert "401" in authorize["responses"]
+    assert "403" in authorize["responses"]
+    assert callback.get("security") in (None, [])
+    assert "401" not in callback["responses"]
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"

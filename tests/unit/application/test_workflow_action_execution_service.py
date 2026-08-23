@@ -19,7 +19,12 @@ from app.core.exceptions import (
     ServiceUnavailableError,
 )
 from app.core.security import AuthenticatedPrincipal
-from app.domain.enums import ConnectorAccountStatus, WorkflowActionStatus, WorkflowActionType
+from app.domain.enums import (
+    CommunicationCapability,
+    ConnectorAccountStatus,
+    WorkflowActionStatus,
+    WorkflowActionType,
+)
 from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
@@ -810,6 +815,60 @@ def test_legacy_null_granted_capabilities_remain_executable() -> None:
     assert result.status is WorkflowActionStatus.EXECUTED
     assert len(executor.calls) == 1
     assert executor.calls[0].action_id == approved.id
+
+
+def test_explicit_mail_send_capability_remains_executable() -> None:
+    """OAuth accounts that were granted mail.send may still enter EXECUTING."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        provider=_PROVIDER,
+        granted_capabilities=(
+            CommunicationCapability.MAIL_READ,
+            CommunicationCapability.MAIL_SEND,
+        ),
+    )
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    service, executor = _execution_service(unit)
+    result = service.execute(_principal(), action.id)
+    assert result.status is WorkflowActionStatus.EXECUTED
+    assert len(executor.calls) == 1
+
+
+def test_explicit_missing_mail_send_is_not_executable() -> None:
+    """Known absence of mail.send fails before APPROVED → EXECUTING."""
+    user_id = uuid4()
+    account = sample_connector_account(
+        user_id,
+        provider=_PROVIDER,
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    action = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+        workflow_actions={action.id: action},
+    )
+    commits_before = unit.commit_calls
+    service, executor = _execution_service(unit)
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), action.id)
+    assert executor.calls == []
+    assert unit.commit_calls == commits_before
+    assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
 
 
 def test_reauth_required_connector_account_is_not_executable() -> None:

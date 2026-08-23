@@ -11,7 +11,8 @@ app/
 │       ├── health.py         # GET /health, GET /api/v1/health, GET /api/v1/readiness
 │       ├── communications.py # POST /api/v1/communications/analyze
 │       ├── analyses.py       # GET/DELETE /api/v1/analyses
-│       └── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
+│       ├── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
+│       └── gmail_oauth.py       # POST gmail authorize; GET Google callback
 ├── application/
 │   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account and workflow-action errors
 │   └── services/
@@ -22,7 +23,9 @@ app/
 │       ├── workflow_actions.py  # WorkflowActionService (create/get/list/approve/reject)
 │       ├── workflow_action_execution.py  # WorkflowActionExecutionService (execute-after-approval)
 │       ├── identity.py       # IdentityResolver
-│       └── analysis_history.py  # AnalysisHistoryService
+│       ├── analysis_history.py  # AnalysisHistoryService
+│       ├── mailbox_authorization_sessions.py
+│       └── gmail_mailbox_oauth.py  # Gmail connect start/callback orchestration
 ├── core/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
@@ -45,6 +48,7 @@ app/
 │   │   ├── communication_action_executor_factory.py  # CommunicationActionExecutorFactory
 │   │   ├── communication_credential_resolver.py  # CommunicationCredentialResolver, AccessTokenProvider
 │   │   ├── communication_credential_store.py     # CommunicationCredentialStore, opaque records
+│   │   ├── mailbox_oauth_client.py  # MailboxOAuthClient, MailboxOAuthAuthorizationResult
 │   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
 │   │   ├── analysis_repository.py
@@ -85,7 +89,11 @@ app/
 │   │   ├── memory.py          # InMemoryCommunicationCredentialStore
 │   │   ├── locators.py        # server-generated credential_ref issuance
 │   │   ├── refresh.py         # RefreshableCredentialAdapter boundary
-│   │   └── oauth.py           # OAuthCommunicationCredentialResolver (not execute default)
+│   │   ├── oauth.py           # OAuthCommunicationCredentialResolver
+│   │   └── composite.py       # oauth- locator vs environment routing
+│   ├── oauth/
+│   │   ├── google.py          # Google authorization, ID-token verify, Gmail refresh adapter
+│   │   └── runtime.py         # shared in-memory store; production fail-closed connect
 │   ├── executors/
 │   │   ├── factory.py         # ProviderCommunicationActionExecutorFactory (account-driven routing)
 │   │   ├── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)
@@ -108,6 +116,7 @@ app/
 │   ├── health.py               # LivenessResponse, HealthResponse, ReadinessResponse
 │   ├── analysis.py             # CommunicationAnalysisResponse, history items
 │   ├── workflow.py             # WorkflowActionCreateRequest, WorkflowActionResponse, list wrapper
+│   ├── oauth.py                # Gmail authorization start/callback responses
 │   └── errors.py                # ErrorResponse (OpenAPI documentation only)
 ├── utils/                       # empty scaffold package — no implementation
 └── main.py                      # FastAPI app factory, lifespan, exception handlers

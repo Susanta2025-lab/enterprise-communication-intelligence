@@ -12,12 +12,19 @@ from app.api.routes import health
 from app.application.exceptions import (
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    MailboxAuthorizationSessionInvalidError,
+    MailboxOAuthAuthorizationDeniedError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
 from app.core.config import get_settings
-from app.core.exceptions import ECIPlatformError, PersistenceError, ServiceUnavailableError
+from app.core.exceptions import (
+    ECIPlatformError,
+    MailboxOAuthAuthorizationFailedError,
+    PersistenceError,
+    ServiceUnavailableError,
+)
 from app.core.logging import configure_logging, get_logger
 from app.core.telemetry import error_class
 from app.domain.exceptions import InvalidWorkflowTransitionError
@@ -116,6 +123,33 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("workflow_action_not_executable", error_class=error_class(exc))
         return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxAuthorizationSessionInvalidError)
+    async def mailbox_authorization_session_invalid_handler(
+        _request: Request,
+        exc: MailboxAuthorizationSessionInvalidError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_authorization_session_invalid", error_class=error_class(exc))
+        return JSONResponse(status_code=400, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxOAuthAuthorizationDeniedError)
+    async def mailbox_oauth_authorization_denied_handler(
+        _request: Request,
+        exc: MailboxOAuthAuthorizationDeniedError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_oauth_authorization_denied", error_class=error_class(exc))
+        return JSONResponse(status_code=400, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxOAuthAuthorizationFailedError)
+    async def mailbox_oauth_authorization_failed_handler(
+        _request: Request,
+        exc: MailboxOAuthAuthorizationFailedError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_oauth_authorization_failed", error_class=error_class(exc))
+        return JSONResponse(status_code=400, content={"detail": exc.message})
 
     @application.exception_handler(PersistenceError)
     async def persistence_error_handler(

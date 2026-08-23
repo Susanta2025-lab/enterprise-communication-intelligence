@@ -61,3 +61,16 @@ def require_requested_communication_capabilities(
     if normalized is None:
         raise ValueError("requested_capabilities must be an explicit list.")
     return normalized
+
+
+def is_mail_send_executable(
+    granted_capabilities: tuple[CommunicationCapability, ...] | None,
+) -> bool:
+    """Return whether execute may proceed given stored grant metadata.
+
+    ``None`` preserves Phase 12 legacy eligibility. An explicit tuple requires
+    ``mail.send``.
+    """
+    if granted_capabilities is None:
+        return True
+    return CommunicationCapability.MAIL_SEND in granted_capabilities

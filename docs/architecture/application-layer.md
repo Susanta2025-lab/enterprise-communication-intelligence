@@ -106,7 +106,26 @@ It does **not** store access tokens, refresh tokens, authorization codes, or sec
 
 `EnvironmentCommunicationCredentialResolver` (`app/infrastructure/credentials/environment.py`) is the local/development implementation and remains the production execute composition in Phase 13B. It maps `(provider, credential_ref)` to `ECI_COMMUNICATION_CREDENTIAL_<PROVIDER>_<NORMALIZED_REF>_ACCESS_TOKEN`. `credential_ref` is not unique on `ConnectorAccount`, so the provider slug is part of the secret key. Locators may use hyphens but not underscores, so hyphen-to-underscore encoding cannot collide. Secret lookup happens when the returned callable is invoked. Mailbox tokens are not loaded into `Settings`. Missing mailbox environment variables do not prevent startup. `WorkflowActionExecutionService` does not import or call the resolver; `ProviderCommunicationActionExecutorFactory` resolves the locator into an `AccessTokenProvider` before TX1 and the token callable is invoked only after TX1 closes.
 
-Phase 13B adds a provider-neutral `CommunicationCredentialStore` (`app/domain/interfaces/communication_credential_store.py`) and `OAuthCommunicationCredentialResolver` (`app/infrastructure/credentials/oauth.py`). Secrets are opaque bytes stored outside PostgreSQL. Locators are server-generated. Token refresh/acquisition uses an injected adapter; `resolve()` still performs no store or adapter I/O. An in-process access-token cache and per-credential lock exist in-process only. Multi-instance rotation uses compare-and-set on an opaque secret version. This is not Google OAuth, Microsoft OAuth, Azure Key Vault, or AWS Secrets Manager. The refreshable resolver is constructed through an explicit hook and is not the current execute default. See [ADR-022](../decisions/ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md).
+Phase 13B adds a provider-neutral `CommunicationCredentialStore` (`app/domain/interfaces/communication_credential_store.py`) and `OAuthCommunicationCredentialResolver` (`app/infrastructure/credentials/oauth.py`). Secrets are opaque bytes stored outside PostgreSQL. Locators are server-generated. Token refresh/acquisition uses an injected adapter; `resolve()` still performs no store or adapter I/O. An in-process access-token cache and per-credential lock exist in-process only. Multi-instance rotation uses compare-and-set on an opaque secret version.
+
+Phase 13C adds a Google implementation of that adapter plus Gmail connect HTTP. `GmailMailboxOAuthService` starts a Phase 13A session, builds the Google authorization URL, consumes state, then exchanges the code outside any database transaction. Verified Google `sub` is `external_account_id`. Granted Gmail scopes map to `mail.read` / `mail.send`. Development composition shares one in-memory store between callback storage and the refreshable resolver; `oauth-` locators use that resolver and legacy locators keep the environment resolver. Production does not use the memory store as durable OAuth storage. Microsoft OAuth, Key Vault, and Secrets Manager are not implemented. See [ADR-021](../decisions/ADR-021-mailbox-delegated-oauth-authorization-architecture.md) and [ADR-022](../decisions/ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md).
+
+## Gmail mailbox OAuth
+
+`GmailMailboxOAuthService` (`app/application/services/gmail_mailbox_oauth.py`) orchestrates mailbox consent, not ECI login:
+
+```text
+communications:connect
+→ MailboxAuthorizationSessionService.start (gmail, connect)
+→ Google authorization URL (Phase 13A state + PKCE S256)
+→ unauthenticated Google callback (code, state, error)
+→ consume session, close UoW
+→ Google code exchange and ID-token verification
+→ credential-store create
+→ short ConnectorAccount persist/reactivate
+```
+
+Google HTTP never runs while a database unit of work is open. Callers cannot supply `credential_ref`, redirect URI, or scopes. Tokens are never returned. Active duplicate connections do not overwrite a live locator; unused secret material is deleted.
 
 ## Provider Failure Translation
 
@@ -172,6 +191,6 @@ AuthenticatedPrincipal
 
 Constructor injection supplies `IdentityResolver`, a unit-of-work factory, and a `CommunicationActionExecutorFactory`. There is no global `ACTION_EXECUTOR` setting. FastAPI `get_workflow_action_execution_service` is gated by `communications:send`.
 
-The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, disconnected, unsupported-provider, and missing/malformed-credential accounts raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Known `CommunicationActionExecutionError` becomes durable `FAILED` and is returned over HTTP as 200 with status `FAILED`. Unexpected executor exceptions and `ServiceUnavailableError` are not converted into `FAILED`; the row remains `EXECUTING` and the execute API returns 503. Automatic retry is prohibited. `EXECUTING`, `EXECUTED`, and `FAILED` cannot be re-executed. See [ADR-020](../decisions/ADR-020-uncertain-communication-execution-semantics.md).
+The executor command is the approved snapshot (`approved_reply_body`) plus provider-neutral routing (`connector_account_id`, `provider_message_id`, `provider` from the owned `ConnectorAccount`). It is not `proposed_reply_body` and not a reloaded analysis draft. Analysis hard-delete does not block execution. Targetless, missing, cross-user, disconnected, unsupported-provider, missing/malformed-credential, and explicit OAuth accounts without `mail.send` raise `WorkflowActionNotExecutableError` inside the execution unit of work before the `APPROVED` → `EXECUTING` write, TX1 commit, or executor call. Legacy accounts with `granted_capabilities=NULL` keep Phase 12 eligibility. Known `CommunicationActionExecutionError` becomes durable `FAILED` and is returned over HTTP as 200 with status `FAILED`. Unexpected executor exceptions and `ServiceUnavailableError` are not converted into `FAILED`; the row remains `EXECUTING` and the execute API returns 503. Automatic retry is prohibited. `EXECUTING`, `EXECUTED`, and `FAILED` cannot be re-executed. See [ADR-020](../decisions/ADR-020-uncertain-communication-execution-semantics.md).
 
 Production execute routes `gmail` and `microsoft_graph` through the factory. Fake execution remains available for isolated tests and is not production-routed. `CommunicationConnector` remains read-only. `CommunicationCredentialResolver` is used by the factory to produce an `AccessTokenProvider`; the application service does not import the resolver or invoke tokens.

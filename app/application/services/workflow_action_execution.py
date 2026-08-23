@@ -40,6 +40,7 @@ from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionSaveOutcome,
     WorkflowActionSaveResult,
 )
+from app.domain.models.capabilities import is_mail_send_executable
 from app.domain.models.workflow import WorkflowAction
 
 logger = get_logger(__name__)
@@ -245,7 +246,9 @@ class WorkflowActionExecutionService:
 
 
 def _connector_account_is_usable(account: ConnectorAccountRecord | None) -> bool:
-    return account is not None and account.status is ConnectorAccountStatus.ACTIVE
+    if account is None or account.status is not ConnectorAccountStatus.ACTIVE:
+        return False
+    return is_mail_send_executable(account.granted_capabilities)
 
 
 def _execution_command(
