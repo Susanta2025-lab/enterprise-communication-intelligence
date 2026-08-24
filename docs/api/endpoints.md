@@ -402,11 +402,17 @@ Ownership is verified before secret-store operations. Repeated disconnect is ide
 
 ---
 
-## Phase 14 mailbox contract (not served in 14A)
+## Direct-text analyze versus connected-mailbox analyze
 
-Phase 14A freezes the provider-neutral public contract. These routes are **not** mounted and must not appear in OpenAPI until a later slice can perform the documented operation.
+`POST /api/v1/communications/analyze` remains the direct-text path. It requires only `communications:analyze`, does not use connector accounts, and does not call mailbox connectors.
+
+`POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` is the connected-mailbox path mounted in Phase 14C. It requires `communications:read` and `communications:analyze`. It fetches one owned mailbox message, then reuses the existing analysis workflow.
+
+Bounded mailbox listing is **not** mounted.
 
 ### `GET /api/v1/connector-accounts/{connector_account_id}/messages`
+
+Not served. The public contract remains frozen for Phase 14D.
 
 - **Authorization:** authenticated principal + `communications:read`
 - **Query:** `ConnectorAccountMessageListQuery` — `page_size` (default 10, maximum 100) and opaque `cursor`
@@ -417,10 +423,11 @@ Phase 14A freezes the provider-neutral public contract. These routes are **not**
 
 ### `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`
 
-- **Authorization:** authenticated principal + `communications:read` + `communications:analyze`
+Served in Phase 14C.
+
+- **Authorization:** authenticated principal + `communications:read` + `communications:analyze`. `AUTH_MODE=disabled` returns `401`. `communications:send` is not required.
 - **Request body:** `ConnectorAccountMessageAnalyzeRequest` — `{ "provider_message_id": "<opaque>" }`
 - **Response:** existing `CommunicationAnalysisResponse` (`analysis`, `provider`, optional `analysis_id`)
 - **Not returned:** raw message body, `credential_ref`, tokens, or provider OAuth metadata
-- **Established status codes:** `401` unauthenticated; `403` missing read or analyze; `404` unknown/not-owned account or unknown provider message; `409` owned account not currently usable; `422` invalid body; `503` transient unavailability
-
-Direct-text `POST /api/v1/communications/analyze` is unchanged and still requires only `communications:analyze`.
+- **Status codes:** `401` unauthenticated; `403` missing read or analyze; `404` unknown/not-owned account or unknown provider message; `409` owned account not currently usable; `422` invalid body; `500` unexpected normalization/internal failure; `503` transient credential/provider unavailability
+- **Behavior:** ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Draft replies remain suggestions. No workflow action is created and no send/reply occurs.

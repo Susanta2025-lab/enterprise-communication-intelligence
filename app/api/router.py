@@ -8,6 +8,7 @@ from app.api.routes import (
     connector_accounts,
     gmail_oauth,
     health,
+    mailbox_messages,
     microsoft_oauth,
     workflow_actions,
 )
@@ -25,4 +26,5 @@ def create_api_router() -> APIRouter:
     api_router.include_router(gmail_oauth.router, prefix=settings.api_v1_prefix)
     api_router.include_router(microsoft_oauth.router, prefix=settings.api_v1_prefix)
     api_router.include_router(connector_accounts.router, prefix=settings.api_v1_prefix)
+    api_router.include_router(mailbox_messages.router, prefix=settings.api_v1_prefix)
     return api_router

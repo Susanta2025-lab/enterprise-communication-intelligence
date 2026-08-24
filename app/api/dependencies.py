@@ -12,6 +12,9 @@ from app.application.services.communication_analysis import CommunicationAnalysi
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
+from app.application.services.connected_mailbox_analysis import (
+    ConnectedMailboxAnalysisService,
+)
 from app.application.services.connector_account_oauth import ConnectorAccountOAuthService
 from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
@@ -569,9 +572,8 @@ def get_communication_connector_factory(
 ) -> CommunicationConnectorFactory:
     """Build the account-driven production read factory after read authorization.
 
-    Future mailbox list/analyze routes can depend on this without
-    ``communications:send``. Construction does not fetch tokens or call
-    mailbox HTTP.
+    Mailbox-backed analyze depends on this without ``communications:send``.
+    Construction does not fetch tokens or call mailbox HTTP.
     """
     from app.infrastructure.connectors.factory import ProviderCommunicationConnectorFactory
 
@@ -607,6 +609,43 @@ def get_communication_analysis_workflow_service(
         principal=principal,
         identity_resolver=identity_resolver,
         history_service=history_service,
+    )
+
+
+def get_connected_mailbox_analysis_service(
+    principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read_and_analyze),
+    ],
+    analysis_service: Annotated[
+        CommunicationAnalysisService,
+        Depends(get_communication_analysis_service),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+    connector_factory: Annotated[
+        CommunicationConnectorFactory,
+        Depends(get_communication_connector_factory),
+    ],
+) -> ConnectedMailboxAnalysisService:
+    """Compose mailbox-backed analyze after read+analyze authorization.
+
+    Persistence and connector-factory construction run in this function body
+    only after authorization. Construction does not fetch tokens, refresh
+    OAuth, or call mailbox HTTP.
+    """
+    identity_resolver = IdentityResolver(uow_factory)
+    history_service = AnalysisHistoryService(uow_factory)
+    workflow = CommunicationAnalysisWorkflowService(
+        analysis_service,
+        principal=principal,
+        identity_resolver=identity_resolver,
+        history_service=history_service,
+    )
+    return ConnectedMailboxAnalysisService(
+        identity_resolver,
+        uow_factory,
+        connector_factory,
+        workflow,
     )
 
 

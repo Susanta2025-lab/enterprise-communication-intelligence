@@ -31,7 +31,7 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed.** Remaining slices have not started.
+Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed.** Remaining slices are 14D–14F.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -167,13 +167,15 @@ Exit: factory tests pass; `CommunicationConnector` remains distinct from `Commun
 
 ### 14C — Connected Message → AI Analysis
 
+**14C is Completed.**
+
 Objective: owned `ACTIVE` mailbox message → existing ingestion → AI analysis → optional history.
 
-Implementation surface: application orchestrator (for example `ConnectedMailboxAnalysisService`), analyze route, Gmail/Graph fake-HTTP integration, `MockAIProvider`.
+Implementation surface: `ConnectedMailboxAnalysisService`, mounted `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`, Gmail/Graph fake-HTTP integration, `MockAIProvider`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Existing `CommunicationIngestionService` and `CommunicationAnalysisWorkflowService` are reused. Durable `ACTIVE → REAUTH_REQUIRED` mutation on confirmed refresh failure remains 14E.
 
 Migration: none.
 
-Docs: OpenAPI text for the analyze route.
+Docs: OpenAPI and API docs distinguish direct-text analyze from connected-mailbox analyze. Listing remains undocumented as served.
 
 Live validation: no.
 

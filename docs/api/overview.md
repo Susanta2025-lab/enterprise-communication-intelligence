@@ -53,8 +53,8 @@ Client
   → GET/DELETE /api/v1/analyses (communications:analyze)
   → POST/GET /api/v1/workflow-actions (communications:workflow)
   → POST /api/v1/workflow-actions/{id}/execute (communications:send)
-  → GET /api/v1/connector-accounts/{id}/messages (communications:read; not served in 14A)
-  → POST /api/v1/connector-accounts/{id}/messages/analyze (communications:read + communications:analyze; not served in 14A)
+  → GET /api/v1/connector-accounts/{id}/messages (communications:read; not served; listing remains 14D)
+  → POST /api/v1/connector-accounts/{id}/messages/analyze (communications:read + communications:analyze; served in 14C)
 ```
 
 Configuration (`app/core/config.py`):
@@ -92,12 +92,13 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `GET /api/v1/oauth/callbacks/microsoft_graph` (no ECI bearer; ownership from the authorization session)
 - `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
 - `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
+- `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` (`communications:read` + `communications:analyze`)
 
-The Phase 14 mailbox list and mailbox-backed analyze routes are specified but not served in 14A. When implemented they will always require an authenticated principal (`AUTH_MODE=disabled` returns `401`) and `communications:read` (list) or `communications:read` plus `communications:analyze` (mailbox-backed analyze).
+Mailbox-backed analyze always requires an authenticated principal (`AUTH_MODE=disabled` returns `401`). Direct-text `POST /api/v1/communications/analyze` still requires only `communications:analyze` and does not use connector accounts. Bounded mailbox listing is not served.
 
 `GET /api/v1/oauth/callbacks/gmail` and `GET /api/v1/oauth/callbacks/microsoft_graph` are provider redirect targets and do not use the ECI bearer token. CONNECT versus REAUTHORIZE is taken from the consumed authorization session. Reauthorization requires the verified mailbox identity to match the bound account.
 
-Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Future mailbox listing requires `communications:read`. Future mailbox-backed analyze requires `communications:read` and `communications:analyze`. Analyze, workflow, send, connect, and read do not imply each other. Direct-text analyze does not require `communications:read`. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Mailbox-backed analyze requires `communications:read` and `communications:analyze`. Future mailbox listing requires `communications:read`. Analyze, workflow, send, connect, and read do not imply each other. Direct-text analyze does not require `communications:read`. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
 
 Permissions are read only from bounded claims `scp`, `scope`, or `roles`. Internal users store only `issuer` and `subject`; they are not a session store or login database.
 
@@ -120,10 +121,11 @@ request_id middleware
   ↓
 FastAPI route (app/api/routes/*)
   ↓ dependency injection
-  ├── CommunicationAnalysisWorkflowService (analyze / history)
+  ├── CommunicationAnalysisWorkflowService (direct-text analyze / history)
+  ├── ConnectedMailboxAnalysisService (mailbox-backed analyze)
   ├── WorkflowActionService (workflow proposal and approval)
   ├── WorkflowActionExecutionService (execute)
   └── mailbox OAuth services (Gmail/Microsoft connect/callback; disconnect; reauthorize)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow, execution, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 10 added no connector message-ingestion HTTP endpoints. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow, execution, mailbox-analyze, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 14C mounts mailbox-backed analyze only; bounded listing remains later. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

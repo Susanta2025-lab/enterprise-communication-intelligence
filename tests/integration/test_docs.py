@@ -111,10 +111,24 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "credential_ref" not in serialized_lifecycle
     assert "refresh_token" not in serialized_lifecycle
     assert "/api/v1/connector-accounts/{connector_account_id}/messages" not in schema["paths"]
-    assert (
+    mailbox_analyze = schema["paths"][
         "/api/v1/connector-accounts/{connector_account_id}/messages/analyze"
-        not in schema["paths"]
-    )
+    ]
+    assert "get" not in mailbox_analyze
+    mailbox_analyze_post = mailbox_analyze["post"]
+    assert mailbox_analyze_post.get("security") == [{"HTTPBearer": []}]
+    assert "requestBody" in mailbox_analyze_post
+    assert "200" in mailbox_analyze_post["responses"]
+    assert "401" in mailbox_analyze_post["responses"]
+    assert "403" in mailbox_analyze_post["responses"]
+    assert "404" in mailbox_analyze_post["responses"]
+    assert "409" in mailbox_analyze_post["responses"]
+    assert "500" in mailbox_analyze_post["responses"]
+    assert "503" in mailbox_analyze_post["responses"]
+    serialized_mailbox = repr(mailbox_analyze_post)
+    assert "credential_ref" not in serialized_mailbox
+    assert "refresh_token" not in serialized_mailbox
+    assert "access_token" not in serialized_mailbox
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
@@ -313,7 +327,7 @@ def test_adr_020_records_uncertain_execution_without_unknown_state() -> None:
 
 
 def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
-    """Phase 14A documents communications:read without exposing mailbox HTTP."""
+    """Phase 14A documents communications:read; 14C mounts analyze, not listing."""
     root = Path(__file__).resolve().parents[2]
     adr = (
         root
@@ -341,5 +355,9 @@ def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
         root / "docs" / "roadmap" / "phase-14-connected-mailbox-analysis.md"
     ).read_text(encoding="utf-8")
     assert "**14A is Completed.**" in phase14
+    assert "**14B is Completed.**" in phase14
+    assert "**14C is Completed.**" in phase14
     assert "Phase 14 is **Next**" in phase14
-    assert "Remaining slices have not started" in phase14
+    assert "14D" in phase14
+    assert "14E" in phase14
+    assert "14F" in phase14

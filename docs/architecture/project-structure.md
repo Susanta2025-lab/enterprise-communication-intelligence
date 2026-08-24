@@ -14,13 +14,15 @@ app/
 │       ├── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
 │       ├── gmail_oauth.py       # POST gmail authorize; GET Google callback
 │       ├── microsoft_oauth.py   # POST microsoft_graph authorize; GET Microsoft callback
-│       └── connector_accounts.py  # POST disconnect / reauthorize owned accounts
+│       ├── connector_accounts.py  # POST disconnect / reauthorize owned accounts
+│       └── mailbox_messages.py    # POST .../messages/analyze (14C); listing not mounted
 ├── application/
 │   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account, mailbox-read, and workflow-action errors
 │   └── services/
 │       ├── communication_analysis.py  # CommunicationAnalysisService (AI-only)
 │       ├── communication_analysis_workflow.py  # persist-after-analyze workflow
 │       ├── communication_ingestion.py  # CommunicationIngestionService
+│       ├── connected_mailbox_analysis.py  # ConnectedMailboxAnalysisService
 │       ├── connector_accounts.py  # ConnectorAccountService
 │       ├── workflow_actions.py  # WorkflowActionService (create/get/list/approve/reject)
 │       ├── workflow_action_execution.py  # WorkflowActionExecutionService (execute-after-approval)

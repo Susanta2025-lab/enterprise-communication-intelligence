@@ -376,7 +376,8 @@ The mailbox-backed analyze response reuses `CommunicationAnalysisResponse`. It d
 - `GmailAuthorizationStartResponse` / `GmailAuthorizationCallbackResponse` — Gmail mailbox OAuth start and Google callback
 - `MicrosoftAuthorizationStartResponse` / `MicrosoftAuthorizationCallbackResponse` — Microsoft mailbox OAuth start and callback
 - `ConnectorAccountResponse` / `ConnectorAccountReauthorizeResponse` — disconnect metadata and reauthorize start
-- `ConnectorAccountMessageListQuery` / `ConnectorAccountMessageListItem` / `ConnectorAccountMessageListResponse` / `ConnectorAccountMessageAnalyzeRequest` — Phase 14 mailbox list/analyze contract (not served in 14A)
+- `ConnectorAccountMessageListQuery` / `ConnectorAccountMessageListItem` / `ConnectorAccountMessageListResponse` — Phase 14 mailbox list contract (not served; listing remains 14D)
+- `ConnectorAccountMessageAnalyzeRequest` — Phase 14C connected-mailbox analyze body; response reuses `CommunicationAnalysisResponse`
 - `ErrorResponse` (`app/schemas/errors.py`) — `detail: str`; used only for OpenAPI documentation of error responses (see [Error Handling](error-handling.md))
 
 These are not reused as domain models; they exist purely to describe the shape of the health/readiness/error responses in OpenAPI.

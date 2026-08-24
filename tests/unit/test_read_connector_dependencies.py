@@ -201,11 +201,17 @@ def test_api_does_not_instantiate_vendor_connectors_in_dependencies() -> None:
     assert "get_mailbox_read_credential_resolver" in source
 
 
-def test_mailbox_routes_remain_unmounted() -> None:
+def test_mailbox_analyze_is_mounted_and_listing_is_not() -> None:
     root = Path(__file__).resolve().parents[2] / "app" / "api"
     router = (root / "router.py").read_text(encoding="utf-8")
+    mailbox_routes = (root / "routes" / "mailbox_messages.py").read_text(encoding="utf-8")
+    assert "mailbox_messages" in router
+    assert "messages/analyze" in mailbox_routes
+    assert '@router.get(' not in mailbox_routes
+    assert "/messages\"" not in mailbox_routes.replace("/messages/analyze", "")
     for path in (root / "routes").glob("*.py"):
+        if path.name == "mailbox_messages.py":
+            continue
         source = path.read_text(encoding="utf-8")
         assert "/messages" not in source
         assert "messages/analyze" not in source
-    assert "messages" not in router

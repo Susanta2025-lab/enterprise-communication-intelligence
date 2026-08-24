@@ -87,7 +87,26 @@ It does **not**:
 - interpret vendor cursors or pagination tokens
 - import Gmail or Microsoft Graph types
 
-Identity, optional analysis persistence, and AI orchestration remain on `CommunicationAnalysisWorkflowService` and `CommunicationAnalysisService`. Connector HTTP routes are not present; callers construct a connector and this service below the API.
+Identity, optional analysis persistence, and AI orchestration remain on `CommunicationAnalysisWorkflowService` and `CommunicationAnalysisService`.
+
+## Connected mailbox analysis
+
+`ConnectedMailboxAnalysisService` is the HTTP use-case orchestrator for mailbox-backed analyze:
+
+```text
+authenticated principal
+→ find existing internal user
+→ load exact owned ConnectorAccount
+→ ACTIVE + routable provider + mail.read (+ locator)
+→ close persistence unit of work
+→ CommunicationConnectorFactory.create_for_account
+→ CommunicationIngestionService.analyze_message
+→ CommunicationAnalysisWorkflowService
+```
+
+The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O, mailbox HTTP, or AI. Confirmed permanent refresh failure is translated to the same not-available 409 without mutating account status (that mutation remains 14E). The service does not import Gmail or Graph types and does not create workflow actions or send mail.
+
+Direct-text `POST /api/v1/communications/analyze` does not use this service.
 
 ## Connector accounts
 

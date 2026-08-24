@@ -49,9 +49,9 @@ sequenceDiagram
 
 If save fails after a successful AI call, the workflow still returns HTTP 200 with the analysis and omits `analysis_id`. The provider is not retried.
 
-## Connector ingestion → analysis (not an HTTP endpoint)
+## Connector ingestion → analysis
 
-Phase 10 added no connector HTTP routes. This path exists below the product API. `CommunicationIngestionService` fetches one already-normalized message and reuses the existing workflow. Mailbox HTTP happens first, before workflow identity or history transactions. No database transaction is held open across the mailbox request or AI inference. When the workflow is constructed with an authenticated principal and persistence, it may persist a derived analysis (not raw mail) using the same short-transaction rules as HTTP analyze. Raw mailbox payloads are not persisted.
+Phase 10 added the below-HTTP ingestion path. Phase 14C mounts it for one owned mailbox message at `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`. `ConnectedMailboxAnalysisService` establishes ownership and mailbox usability, closes the persistence unit of work, then `CommunicationIngestionService` fetches one already-normalized message and reuses the existing workflow. Mailbox HTTP happens after that short ownership transaction and before workflow identity/history transactions. No database transaction is held open across the mailbox request or AI inference. When the workflow is constructed with an authenticated principal and persistence, it may persist a derived analysis (not raw mail) using the same short-transaction rules as HTTP analyze. Raw mailbox payloads are not persisted. Direct-text analyze remains a separate route and does not use connectors. Bounded listing is not mounted.
 
 ```mermaid
 sequenceDiagram
@@ -380,5 +380,5 @@ communications:analyze     (existing analyze / history)
 communications:workflow    (workflow proposal/approval HTTP)
 communications:send        (execute HTTP)
 communications:connect     (mailbox OAuth lifecycle HTTP)
-communications:read        (future mailbox listing; mailbox-backed analyze also requires analyze)
+communications:read        (mailbox-backed analyze also requires analyze; listing remains later)
 ```

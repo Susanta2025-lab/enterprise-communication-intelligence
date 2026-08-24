@@ -4,7 +4,7 @@
 
 Accepted
 
-Implemented in Phase 14A. This records the public authorization and contract boundary for connected mailbox listing and mailbox-backed AI analysis. It does not replace ADR-009 (application-user OIDC), ADR-015 (`CommunicationConnector` remains read-only), ADR-017 (`CommunicationActionExecutor` remains the write port), or ADR-021/ADR-023 (mailbox OAuth lifecycle). Listing HTTP and mailbox-backed analyze execution remain later Phase 14 slices.
+Implemented in Phase 14A. This records the public authorization and contract boundary for connected mailbox listing and mailbox-backed AI analysis. It does not replace ADR-009 (application-user OIDC), ADR-015 (`CommunicationConnector` remains read-only), ADR-017 (`CommunicationActionExecutor` remains the write port), or ADR-021/ADR-023 (mailbox OAuth lifecycle). Phase 14C mounts mailbox-backed analyze HTTP. Listing HTTP remains a later Phase 14 slice.
 
 ## Date
 
@@ -101,8 +101,9 @@ Unknown or cross-user connector accounts remain indistinguishable `404` (`Connec
 
 - Operators must provision `communications:read` before real-token mailbox listing or mailbox-backed analyze can succeed. That provisioning is a later live-validation step.
 - Direct-text analyze clients keep working with analyze-only tokens.
-- Later slices can implement listing and analyze execution against this contract without redesigning authorization or public schemas.
-- Phase 14B implemented the provider-neutral read factory (`CommunicationConnectorFactory` / `ProviderCommunicationConnectorFactory`). Application and API code depend on that port rather than constructing Gmail or Graph connectors. Access-token acquisition stays lazy. Confirmed permanent refresh failure remains `CommunicationCredentialReauthorizationRequiredError` on the read token path. The factory does not encode ownership, ACTIVE status, or `mail.read`. Mailbox list/analyze HTTP remains later slices.
+- Later slices can implement listing against this contract without redesigning authorization or public schemas.
+- Phase 14B implemented the provider-neutral read factory (`CommunicationConnectorFactory` / `ProviderCommunicationConnectorFactory`). Application and API code depend on that port rather than constructing Gmail or Graph connectors. Access-token acquisition stays lazy. Confirmed permanent refresh failure remains `CommunicationCredentialReauthorizationRequiredError` on the read token path. The factory does not encode ownership, ACTIVE status, or `mail.read`.
+- Phase 14C mounts `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` through `ConnectedMailboxAnalysisService`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Bounded listing HTTP remains a later slice. Durable `ACTIVE → REAUTH_REQUIRED` mutation on confirmed refresh failure remains Phase 14E.
 
 ## Benefits
 

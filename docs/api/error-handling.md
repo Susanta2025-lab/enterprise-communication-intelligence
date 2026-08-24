@@ -45,7 +45,7 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
     """Raised when an owned analysis has no usable draft reply to snapshot."""
 ```
 
-`ConnectedMailboxNotAvailableError` and `MailboxMessageNotFoundError` are also defined on `app/application/exceptions.py`. The former covers an owned connector account that cannot currently be used for mailbox read or mailbox-backed analyze without distinguishing DISCONNECTED, `REAUTH_REQUIRED`, missing `mail.read`, unsupported provider, or missing locator. The latter is the public not-found type for a provider message id. Cross-user connector existence remains `ConnectorAccountNotFoundError`.
+`ConnectedMailboxNotAvailableError` and `MailboxMessageNotFoundError` are also defined on `app/application/exceptions.py`. The former covers an owned connector account that cannot currently be used for mailbox read or mailbox-backed analyze without distinguishing DISCONNECTED, `REAUTH_REQUIRED`, missing `mail.read`, unsupported provider, or missing locator. The latter is the public not-found type for a provider message id. Cross-user connector existence remains `ConnectorAccountNotFoundError`. Phase 14C maps connector/credential failures onto these types plus existing `ServiceUnavailableError` (503) and sanitized 500s; it does not expose provider payloads in public error text.
 
 `app/domain/exceptions.py` defines `InvalidWorkflowTransitionError` with message `"Invalid workflow state transition."`. It is not an `ECIPlatformError` subclass and has a dedicated HTTP handler.
 
