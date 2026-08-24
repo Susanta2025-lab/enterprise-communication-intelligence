@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from typing import NoReturn
 from uuid import UUID
 
 from app.application.exceptions import (
@@ -25,6 +26,7 @@ from app.application.services.communication_ingestion import CommunicationIngest
 from app.application.services.connected_mailbox_access import (
     is_usable_for_mailbox_read,
     load_owned_connector_account,
+    persist_mailbox_reauthorization_required,
 )
 from app.application.services.identity import IdentityResolver
 from app.core.exceptions import (
@@ -82,8 +84,7 @@ class ConnectedMailboxAnalysisService:
         try:
             connector = self._connector_factory.create_for_account(account)
         except CommunicationCredentialReauthorizationRequiredError as exc:
-            self._log_rejected("reauthorization_required", account, started_at, exc)
-            raise ConnectedMailboxNotAvailableError() from None
+            self._reject_reauthorization_required(account, started_at, exc)
         except CommunicationConnectorNotAvailableError as exc:
             self._log_rejected("connector_unroutable", account, started_at, exc)
             raise ConnectedMailboxNotAvailableError() from None
@@ -107,8 +108,7 @@ class ConnectedMailboxAnalysisService:
             self._log_rejected("message_not_found", account, started_at, exc)
             raise MailboxMessageNotFoundError() from None
         except CommunicationCredentialReauthorizationRequiredError as exc:
-            self._log_rejected("reauthorization_required", account, started_at, exc)
-            raise ConnectedMailboxNotAvailableError() from None
+            self._reject_reauthorization_required(account, started_at, exc)
         except CommunicationConnectorNotAvailableError as exc:
             self._log_rejected("connector_unroutable", account, started_at, exc)
             raise ConnectedMailboxNotAvailableError() from None
@@ -175,6 +175,21 @@ class ConnectedMailboxAnalysisService:
             )
             raise ConnectedMailboxNotAvailableError()
         return record
+
+    def _reject_reauthorization_required(
+        self,
+        account: ConnectorAccountRecord,
+        started_at: float,
+        exc: Exception,
+    ) -> NoReturn:
+        self._log_rejected("reauthorization_required", account, started_at, exc)
+        persist_mailbox_reauthorization_required(
+            self._unit_of_work_factory,
+            account,
+            operation="analyze",
+            started_at=started_at,
+        )
+        raise ConnectedMailboxNotAvailableError() from None
 
     def _log_rejected(
         self,

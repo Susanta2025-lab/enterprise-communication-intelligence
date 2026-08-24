@@ -22,6 +22,7 @@ from app.core.exceptions import (
     ConnectorAuthenticationError,
     ConnectorInvalidCursorError,
     ConnectorMessageContentError,
+    ConnectorPermissionError,
     ConnectorRateLimitError,
     ConnectorUnavailableError,
     ServiceUnavailableError,
@@ -366,6 +367,7 @@ def test_invalid_cursor_is_sanitized_client_error() -> None:
         ConnectorUnavailableError(),
         ConnectorRateLimitError(),
         ConnectorAuthenticationError(),
+        ConnectorPermissionError(),
     ],
 )
 def test_transient_failures_are_unavailable(error: Exception) -> None:
@@ -381,6 +383,9 @@ def test_transient_failures_are_unavailable(error: Exception) -> None:
     assert "gmail" not in exc_info.value.message.lower()
     assert "token" not in exc_info.value.message.lower()
     assert len(connector.list_queries) == 1
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.ACTIVE
+    assert stored.credential_ref == account.credential_ref
 
 
 def test_permanent_refresh_failure_does_not_list() -> None:
@@ -402,10 +407,14 @@ def test_permanent_refresh_failure_does_not_list() -> None:
 
     assert factory.calls == 1
     assert connector.list_queries == []
-    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert stored.credential_ref == account.credential_ref
+    assert stored.granted_capabilities == account.granted_capabilities
+    assert stored.external_account_id == account.external_account_id
 
 
-def test_refresh_failure_during_list_does_not_mutate_status() -> None:
+def test_refresh_failure_during_list_marks_reauth_required() -> None:
     unit = InMemoryUnitOfWork()
     user_id = _seed_user(unit, _principal())
     account = _seed_account(unit, user_id)
@@ -419,7 +428,11 @@ def test_refresh_failure_during_list_does_not_mutate_status() -> None:
         _list(service, account.id)
 
     assert len(connector.list_queries) == 1
-    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert stored.credential_ref == account.credential_ref
+    assert stored.granted_capabilities == account.granted_capabilities
+    assert stored.external_account_id == account.external_account_id
 
 
 def test_unroutable_factory_result_is_mailbox_unavailable() -> None:

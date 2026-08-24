@@ -104,7 +104,7 @@ authenticated principal
 → CommunicationAnalysisWorkflowService
 ```
 
-The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O, mailbox HTTP, or AI. Confirmed permanent refresh failure is translated to the same not-available 409 without mutating account status (that mutation remains 14E). The service does not import Gmail or Graph types and does not create workflow actions or send mail.
+The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O, mailbox HTTP, or AI. Confirmed permanent refresh failure persists `ACTIVE → REAUTH_REQUIRED` for the exact owned account, then returns the same not-available 409. Transient credential/store/refresh failures and mailbox HTTP 401/403 after a valid token return 503 and leave the account `ACTIVE`. The service does not import Gmail or Graph types and does not create workflow actions or send mail.
 
 Direct-text `POST /api/v1/communications/analyze` does not use this service.
 
@@ -123,7 +123,7 @@ authenticated principal
 → map CommunicationMessage onto ConnectorAccountMessageListResponse
 ```
 
-Listing requires `communications:read` and does not require `communications:analyze`. The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O or mailbox HTTP. One list request corresponds to one bounded connector page (`page_size` becomes `ConnectorMessageQuery.limit`). Graph `@odata.nextLink` is normalized inside the Graph adapter; the application layer does not parse vendor cursors. Invalid/expired cursors identified by the connector become `MailboxPaginationCursorInvalidError` (400). Listing does not persist mailbox messages, invoke AI, create workflow actions, or send mail.
+Listing requires `communications:read` and does not require `communications:analyze`. The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O or mailbox HTTP. Confirmed permanent refresh failure persists `ACTIVE → REAUTH_REQUIRED` for the exact owned account, then returns the same not-available 409. Transient credential/store/refresh failures and mailbox HTTP 401/403 after a valid token return 503 and leave the account `ACTIVE`. One list request corresponds to one bounded connector page (`page_size` becomes `ConnectorMessageQuery.limit`). Graph `@odata.nextLink` is normalized inside the Graph adapter; the application layer does not parse vendor cursors. Invalid/expired cursors identified by the connector become `MailboxPaginationCursorInvalidError` (400). Listing does not persist mailbox messages, invoke AI, create workflow actions, or send mail. Repeated list or analyze requests are independent; this slice does not add idempotency keys or analysis reuse.
 
 Shared mailbox-read eligibility lives in `connected_mailbox_access.py` so listing and analyze keep the same pre-I/O policy.
 

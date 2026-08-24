@@ -748,7 +748,20 @@ def test_permanent_refresh_failure_returns_409_without_mailbox_http(
     assert resolver.token_calls == 1
     assert stub.requests == []
     assert provider.analyze.call_count == 0
-    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert stored.credential_ref == _GMAIL_LOCATOR
+    assert stored.granted_capabilities == (CommunicationCapability.MAIL_READ,)
+    assert stored.external_account_id == account.external_account_id
+    assert _GMAIL_LOCATOR not in response.text
+    with TestClient(application) as client:
+        follow_up = client.get(
+            _LIST_URL.format(connector_account_id=account.id),
+            headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+        )
+    assert follow_up.status_code == 409
+    assert resolver.token_calls == 1
+    assert stub.requests == []
 
 
 def test_transient_token_failure_returns_503(
@@ -802,6 +815,61 @@ def test_transient_token_failure_returns_503(
     assert response.status_code == 503
     assert provider.analyze.call_count == 0
     assert stub.requests == []
+    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+
+
+def test_mailbox_http_401_keeps_account_active(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    stub = GmailHttpStub()
+    stub.list_status = 401
+    stub.error_json = {"error": {"message": "SECRET_PROVIDER_PAYLOAD"}}
+    resolver = _CountingResolver(
+        EnvironmentCommunicationCredentialResolver(environ={_GMAIL_ENV: GMAIL_TOKEN}),
+    )
+    _clear_settings_env(monkeypatch)
+    _enable_oidc_env(monkeypatch)
+    get_settings.cache_clear()
+    unit = InMemoryUnitOfWork()
+    owner_id = _seed_owner(unit)
+    account = sample_connector_account(
+        owner_id,
+        provider="gmail",
+        credential_ref=_GMAIL_LOCATOR,
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    unit.connector_account_store[account.id] = account
+    validator = make_test_validator(private_key)
+    http_client = httpx.Client(transport=httpx.MockTransport(stub))
+    application = create_app()
+    application.dependency_overrides[get_token_validator] = lambda: validator
+    application.dependency_overrides[get_unit_of_work_factory] = lambda: UnitOfWorkFactory(unit)
+
+    def _http_client():
+        yield http_client
+
+    application.dependency_overrides[get_mailbox_read_http_client] = _http_client
+    application.dependency_overrides[get_mailbox_read_credential_resolver] = lambda: resolver
+    provider = MagicMock(wraps=MockAIProvider())
+    application.dependency_overrides[get_ai_provider] = lambda: provider
+    try:
+        with TestClient(application) as client:
+            response = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+            )
+    finally:
+        http_client.close()
+    assert response.status_code == 503
+    assert resolver.token_calls == 1
+    assert stub.requests
+    assert provider.analyze.call_count == 0
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.ACTIVE
+    assert stored.credential_ref == _GMAIL_LOCATOR
+    assert "SECRET_PROVIDER_PAYLOAD" not in response.text
+    assert GMAIL_TOKEN not in response.text
 
 
 def test_connector_timeout_returns_503(

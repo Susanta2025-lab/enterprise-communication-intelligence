@@ -31,7 +31,7 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed. 14D is Completed.** Remaining slices are 14E–14F.
+Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed. 14D is Completed. 14E is Completed.** Remaining slice is 14F.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -171,7 +171,7 @@ Exit: factory tests pass; `CommunicationConnector` remains distinct from `Commun
 
 Objective: owned `ACTIVE` mailbox message → existing ingestion → AI analysis → optional history.
 
-Implementation surface: `ConnectedMailboxAnalysisService`, mounted `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`, Gmail/Graph fake-HTTP integration, `MockAIProvider`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Existing `CommunicationIngestionService` and `CommunicationAnalysisWorkflowService` are reused. Durable `ACTIVE → REAUTH_REQUIRED` mutation on confirmed refresh failure remains 14E.
+Implementation surface: `ConnectedMailboxAnalysisService`, mounted `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`, Gmail/Graph fake-HTTP integration, `MockAIProvider`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Existing `CommunicationIngestionService` and `CommunicationAnalysisWorkflowService` are reused. Confirmed permanent refresh failure on this path now persists `ACTIVE → REAUTH_REQUIRED` for the exact owned account (14E).
 
 Migration: none.
 
@@ -199,17 +199,19 @@ Exit: listing is bounded, provider-neutral, and does not add sync/search/attachm
 
 ### 14E — Lifecycle / Privacy / Failure Hardening
 
+**14E is Completed.**
+
 Objective: DISCONNECTED / `REAUTH_REQUIRED` / missing `mail.read` / permanent vs transient refresh / sanitization.
 
-Implementation surface: failure matrix, `mark_reauth_required_owned` on confirmed read-path `invalid_grant`, privacy tests.
+Implementation surface: shared `persist_mailbox_reauthorization_required` on listing and analyze; confirmed permanent refresh (`CommunicationCredentialReauthorizationRequiredError`) persists exact-owned `ACTIVE → REAUTH_REQUIRED` while preserving `credential_ref`, `granted_capabilities`, and `external_account_id`; transient store/refresh and mailbox HTTP 401/403 after a valid token leave the account `ACTIVE`; ownership-safe CAS via existing `mark_reauth_required_owned`; privacy sentinel tests.
 
 Migration: none.
 
-Docs: none until 14F.
+Docs: 14E lifecycle/privacy notes in API, application-layer, sequence, and ADR-023/024 consequences. Root README sweep remains 14F.
 
 Live validation: no.
 
-Exit: owned unusable accounts do not leak cross-user existence; tokens and bodies stay out of responses and logs.
+Exit: owned unusable accounts do not leak cross-user existence; confirmed permanent refresh blocks further mailbox I/O until explicit reauthorization; tokens and bodies stay out of responses and logs.
 
 ### 14F — Live Validation + Documentation + Regression
 

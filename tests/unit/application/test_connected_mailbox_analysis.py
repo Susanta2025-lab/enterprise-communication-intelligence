@@ -28,6 +28,7 @@ from app.core.exceptions import (
     ConnectorAuthenticationError,
     ConnectorMessageContentError,
     ConnectorMessageNotFoundError,
+    ConnectorPermissionError,
     ConnectorRateLimitError,
     ConnectorUnavailableError,
     PersistenceError,
@@ -348,6 +349,7 @@ def test_message_not_found_does_not_call_ai() -> None:
         ConnectorUnavailableError(),
         ConnectorRateLimitError(),
         ConnectorAuthenticationError(),
+        ConnectorPermissionError(),
     ],
 )
 def test_transient_failures_are_unavailable_without_ai(error: Exception) -> None:
@@ -365,6 +367,9 @@ def test_transient_failures_are_unavailable_without_ai(error: Exception) -> None
     assert "token" not in exc_info.value.message.lower()
     assert connector.fetch_ids == [_PROVIDER_MESSAGE_ID]
     assert provider.calls == []
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.ACTIVE
+    assert stored.credential_ref == account.credential_ref
 
 
 def test_permanent_refresh_failure_does_not_fetch_or_analyze() -> None:
@@ -389,10 +394,13 @@ def test_permanent_refresh_failure_does_not_fetch_or_analyze() -> None:
     assert connector.fetch_ids == []
     assert provider.calls == []
     stored = unit.connector_account_store[account.id]
-    assert stored.status is ConnectorAccountStatus.ACTIVE
+    assert stored.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert stored.credential_ref == account.credential_ref
+    assert stored.granted_capabilities == account.granted_capabilities
+    assert stored.external_account_id == account.external_account_id
 
 
-def test_refresh_failure_during_fetch_skips_ai_and_does_not_mutate_status() -> None:
+def test_refresh_failure_during_fetch_skips_ai_and_marks_reauth_required() -> None:
     unit = InMemoryUnitOfWork()
     user_id = _seed_user(unit, _principal())
     account = _seed_account(unit, user_id)
@@ -408,7 +416,11 @@ def test_refresh_failure_during_fetch_skips_ai_and_does_not_mutate_status() -> N
 
     assert connector.fetch_ids == [_PROVIDER_MESSAGE_ID]
     assert provider.calls == []
-    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    stored = unit.connector_account_store[account.id]
+    assert stored.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert stored.credential_ref == account.credential_ref
+    assert stored.granted_capabilities == account.granted_capabilities
+    assert stored.external_account_id == account.external_account_id
 
 
 def test_unroutable_factory_result_is_mailbox_unavailable() -> None:
