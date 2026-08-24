@@ -1,7 +1,7 @@
 """User-owned connector account management.
 
 OAuth token exchange, secret-store resolution, and vendor mailbox access are
-intentionally outside this service. Future authorization happens before a short
+intentionally outside this service. Authorization happens before a short
 connector-account unit of work, never inside a long database transaction.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -19,20 +19,27 @@ from app.application.exceptions import (
     ConnectorAccountNotFoundError,
 )
 from app.application.services.identity import IdentityResolver
-from app.core.exceptions import PersistenceError, ServiceUnavailableError
+from app.core.exceptions import (
+    CommunicationCredentialUnavailableError,
+    PersistenceError,
+    ServiceUnavailableError,
+)
 from app.core.logging import get_logger
 from app.core.security import AuthenticatedPrincipal
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
+from app.domain.interfaces.communication_credential_store import CommunicationCredentialStore
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     NewConnectorAccount,
 )
+from app.domain.interfaces.mailbox_token_revoker import MailboxTokenRevoker
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 
 logger = get_logger(__name__)
 
 _UNAVAILABLE = "Persistence is currently unavailable."
+_CREDENTIAL_UNAVAILABLE = "Communication credential is unavailable."
 _DUPLICATE = "Connector account is already registered."
 _DEFAULT_LIST_LIMIT = 20
 _MAX_LIST_LIMIT = 100
@@ -59,9 +66,13 @@ class ConnectorAccountService:
         self,
         identity_resolver: IdentityResolver,
         unit_of_work_factory: Callable[[], PersistenceUnitOfWork],
+        credential_store: CommunicationCredentialStore | None = None,
+        token_revokers: Mapping[str, MailboxTokenRevoker] | None = None,
     ) -> None:
         self._identity_resolver = identity_resolver
         self._unit_of_work_factory = unit_of_work_factory
+        self._credential_store = credential_store
+        self._token_revokers = dict(token_revokers) if token_revokers is not None else {}
 
     def register(
         self,
@@ -191,15 +202,32 @@ class ConnectorAccountService:
         principal: AuthenticatedPrincipal,
         connector_account_id: UUID,
     ) -> ConnectorAccountResult:
-        """Disconnect an owned account. Idempotent for already-disconnected rows."""
+        """Disconnect an owned account. Idempotent for already-disconnected rows.
+
+        Ownership is verified before secret-store or provider operations.
+        Local credential deletion is the authoritative ECI security boundary.
+        Provider-scoped Google revocation is best-effort after local success.
+        """
         started_at = time.perf_counter()
         user_id = self._identity_resolver.find_existing(principal)
         if user_id is None:
             raise ConnectorAccountNotFoundError()
+        record = self._load_owned(connector_account_id, user_id, started_at)
+        if record is None:
+            raise ConnectorAccountNotFoundError()
+
+        locator = record.credential_ref
+        secret_material: bytes | None = None
+        if locator:
+            secret_material = self._delete_stored_credential(locator, started_at)
+
         try:
             with self._unit_of_work_factory() as uow:
-                record = uow.connector_accounts.disconnect_owned(connector_account_id, user_id)
-                if record is not None:
+                updated = uow.connector_accounts.disconnect_owned(
+                    connector_account_id,
+                    user_id,
+                )
+                if updated is not None:
                     uow.commit()
         except PersistenceError as exc:
             logger.warning(
@@ -211,17 +239,97 @@ class ConnectorAccountService:
             )
             raise ServiceUnavailableError(_UNAVAILABLE) from None
 
-        if record is None:
+        if updated is None:
             raise ConnectorAccountNotFoundError()
+
+        if secret_material is not None:
+            self._revoke_provider_grant_best_effort(
+                provider=record.provider,
+                secret_material=secret_material,
+                started_at=started_at,
+            )
 
         logger.info(
             "connector_account_disconnected",
             operation="disconnect",
-            provider=record.provider,
-            connector_id=str(record.id),
+            provider=updated.provider,
+            connector_id=str(updated.id),
             duration_ms=elapsed_ms(started_at),
         )
-        return _to_result(record)
+        return _to_result(updated)
+
+    def _load_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+        started_at: float,
+    ) -> ConnectorAccountRecord | None:
+        try:
+            with self._unit_of_work_factory() as uow:
+                return uow.connector_accounts.get_owned(connector_account_id, user_id)
+        except PersistenceError as exc:
+            logger.warning(
+                "connector_account_persistence_failed",
+                operation="disconnect",
+                connector_id=str(connector_account_id),
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise ServiceUnavailableError(_UNAVAILABLE) from None
+
+    def _delete_stored_credential(self, locator: str, started_at: float) -> bytes | None:
+        store = self._credential_store
+        if store is None:
+            logger.warning(
+                "connector_account_credential_store_unavailable",
+                operation="disconnect",
+                duration_ms=elapsed_ms(started_at),
+                error_class="CommunicationCredentialUnavailableError",
+            )
+            raise ServiceUnavailableError(_CREDENTIAL_UNAVAILABLE)
+        try:
+            stored = store.get(locator)
+            store.delete(locator)
+        except CommunicationCredentialUnavailableError:
+            logger.warning(
+                "connector_account_credential_store_unavailable",
+                operation="disconnect",
+                duration_ms=elapsed_ms(started_at),
+                error_class="CommunicationCredentialUnavailableError",
+            )
+            raise ServiceUnavailableError(_CREDENTIAL_UNAVAILABLE) from None
+        except Exception as exc:
+            logger.warning(
+                "connector_account_credential_store_unavailable",
+                operation="disconnect",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise ServiceUnavailableError(_CREDENTIAL_UNAVAILABLE) from None
+        if stored is None:
+            return None
+        return stored.secret_material
+
+    def _revoke_provider_grant_best_effort(
+        self,
+        *,
+        provider: str,
+        secret_material: bytes,
+        started_at: float,
+    ) -> None:
+        revoker = self._token_revokers.get(provider)
+        if revoker is None:
+            return
+        try:
+            revoker.revoke(secret_material)
+        except Exception as exc:
+            logger.warning(
+                "connector_account_provider_revoke_best_effort_failed",
+                operation="disconnect",
+                provider=provider,
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
 
     def _register_or_reuse(
         self,

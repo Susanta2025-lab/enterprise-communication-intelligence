@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 12C and extended in Phase 12D and Phase 12E. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` are provider-specific write adapters behind `CommunicationActionExecutor`. Phase 12E routes them through `CommunicationActionExecutorFactory` from an owned `ConnectorAccount` and exposes `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. Credential lookup remains the environment-backed local/dev resolver. Uncertain-outcome semantics are recorded in [ADR-020](ADR-020-uncertain-communication-execution-semantics.md): retry, `EXECUTION_UNKNOWN`, and outbox work are not implemented.
+The decision is implemented for Phase 12C and extended in Phase 12D and Phase 12E. `MicrosoftGraphCommunicationActionExecutor` and `GmailCommunicationActionExecutor` are provider-specific write adapters behind `CommunicationActionExecutor`. Phase 12E routes them through `CommunicationActionExecutorFactory` from an owned `ConnectorAccount` and exposes `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. Phase 12 credential lookup used the environment-backed local/dev resolver. Phase 13 later added production mailbox OAuth and durable stores behind the same `AccessTokenProvider` port without changing this write-port decision. See [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md), [ADR-022](ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md), and [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md). Uncertain-outcome semantics are recorded in [ADR-020](ADR-020-uncertain-communication-execution-semantics.md): retry, `EXECUTION_UNKNOWN`, and outbox work are not implemented.
 
 ## Date
 
@@ -107,7 +107,7 @@ POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send
 
 ## Consequences
 
-- Production Graph and Gmail reply adapters are reachable through the execute API when the owned account is `ACTIVE`, the provider is `gmail` or `microsoft_graph`, and `credential_ref` is a structurally valid locator. The current secret backend is environment-backed local/dev lookup, not a managed secret store and not production OAuth.
+- Production Graph and Gmail reply adapters are reachable through the execute API when the owned account is `ACTIVE`, the provider is `gmail` or `microsoft_graph`, and `credential_ref` is a structurally valid locator. Phase 12 used environment-backed local/dev lookup. Phase 13 added production mailbox OAuth and Key Vault / Secrets Manager stores behind the same `AccessTokenProvider` contract.
 - Composition is:
 
 ```text

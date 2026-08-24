@@ -15,6 +15,7 @@ from app.application.services.identity import IdentityResolver
 from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.exceptions import (
+    CommunicationCredentialReauthorizationRequiredError,
     PersistenceError,
     ServiceUnavailableError,
 )
@@ -1078,3 +1079,79 @@ def test_unexpected_factory_resolver_error_keeps_approved() -> None:
     assert unit.commit_calls == commits_before
     assert transport_calls["count"] == 0
     assert unit.workflow_action_store[action.id].status is WorkflowActionStatus.APPROVED
+
+
+class _ReauthRequiredExecutor(CommunicationActionExecutor):
+    def __init__(self) -> None:
+        self.calls: list[CommunicationActionExecution] = []
+
+    def execute(self, command: CommunicationActionExecution) -> None:
+        self.calls.append(command)
+        raise CommunicationCredentialReauthorizationRequiredError()
+
+
+def test_permanent_refresh_failure_marks_account_reauth_required_and_action_failed() -> None:
+    """Confirmed invalid_grant before provider HTTP is a definite no-send."""
+    unit, user_id, analysis_id = _seeded_unit()
+    account = next(iter(unit.connector_account_store.values()))
+    locator = account.credential_ref
+    granted = account.granted_capabilities
+    approved = _approved_action(unit, analysis_id)
+    executor = _ReauthRequiredExecutor()
+    service, _fake = _execution_service(unit, executor=executor)
+    result = service.execute(_principal(), approved.id)
+    assert result.status is WorkflowActionStatus.FAILED
+    assert len(executor.calls) == 1
+    updated = unit.connector_account_store[account.id]
+    assert updated.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert updated.credential_ref == locator
+    assert updated.granted_capabilities == granted
+    assert updated.user_id == user_id
+
+
+def test_reauth_required_account_fails_active_gate_before_tx1() -> None:
+    """Subsequent execute is rejected before EXECUTING after REAUTH_REQUIRED."""
+    unit, user_id, analysis_id = _seeded_unit()
+    account = next(iter(unit.connector_account_store.values()))
+    approved = _approved_action(unit, analysis_id)
+    executor = _ReauthRequiredExecutor()
+    service, _fake = _execution_service(unit, executor=executor)
+    failed = service.execute(_principal(), approved.id)
+    assert failed.status is WorkflowActionStatus.FAILED
+    second = _rehydrate(
+        owner_user_id=user_id,
+        connector_account_id=account.id,
+        provider_message_id=_PROVIDER_MESSAGE_ID,
+    )
+    unit.workflow_action_store[second.id] = second
+    commits_before = unit.commit_calls
+    with pytest.raises(WorkflowActionNotExecutableError):
+        service.execute(_principal(), second.id)
+    assert unit.workflow_action_store[second.id].status is WorkflowActionStatus.APPROVED
+    assert unit.commit_calls == commits_before
+    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.REAUTH_REQUIRED
+
+
+def test_transient_token_failure_does_not_mark_reauth_required() -> None:
+    """Store/network token unavailability keeps EXECUTING and 503 semantics."""
+    unit, _user_id, analysis_id = _seeded_unit()
+    account = next(iter(unit.connector_account_store.values()))
+    approved = _approved_action(unit, analysis_id)
+
+    class _UnavailableExecutor(CommunicationActionExecutor):
+        def __init__(self) -> None:
+            self.calls: list[CommunicationActionExecution] = []
+
+        def execute(self, command: CommunicationActionExecution) -> None:
+            self.calls.append(command)
+            raise ServiceUnavailableError(
+                "Communication action execution is currently unavailable."
+            )
+
+    executor = _UnavailableExecutor()
+    service, _fake = _execution_service(unit, executor=executor)
+    with pytest.raises(ServiceUnavailableError):
+        service.execute(_principal(), approved.id)
+    assert unit.workflow_action_store[approved.id].status is WorkflowActionStatus.EXECUTING
+    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    assert unit.connector_account_store[account.id].credential_ref == account.credential_ref

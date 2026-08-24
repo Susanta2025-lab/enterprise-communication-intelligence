@@ -189,6 +189,28 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
         self._accounts[record.id] = updated
         return updated
 
+    def mark_reauth_required_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+    ) -> ConnectorAccountRecord | None:
+        record = self.get_owned(connector_account_id, user_id)
+        if record is None or record.status is not ConnectorAccountStatus.ACTIVE:
+            return None
+        updated = ConnectorAccountRecord(
+            id=record.id,
+            user_id=record.user_id,
+            provider=record.provider,
+            external_account_id=record.external_account_id,
+            credential_ref=record.credential_ref,
+            status=ConnectorAccountStatus.REAUTH_REQUIRED,
+            created_at=record.created_at,
+            updated_at=datetime.now(UTC),
+            granted_capabilities=record.granted_capabilities,
+        )
+        self._accounts[record.id] = updated
+        return updated
+
     def reactivate_owned(
         self,
         connector_account_id: UUID,

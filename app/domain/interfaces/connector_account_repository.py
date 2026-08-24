@@ -94,6 +94,23 @@ class ConnectorAccountRepository(ABC):
         """
 
     @abstractmethod
+    def mark_reauth_required_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+    ) -> ConnectorAccountRecord | None:
+        """Mark an owned ACTIVE account as reauthorization-required.
+
+        Preserves ``credential_ref`` and ``granted_capabilities``. Does not
+        match by locator alone. Non-ACTIVE owned rows are left unchanged
+        and return None.
+
+        Returns:
+            The updated record when the owned row was ACTIVE. None when the
+            id is unknown, not owned, or not ACTIVE.
+        """
+
+    @abstractmethod
     def reactivate_owned(
         self,
         connector_account_id: UUID,

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.core.exceptions import (
     CommunicationActionExecutionError,
+    CommunicationCredentialReauthorizationRequiredError,
     CommunicationCredentialUnavailableError,
     ServiceUnavailableError,
 )
@@ -767,6 +768,25 @@ def test_credential_unavailable_is_unavailable_before_http(
     assert not isinstance(exc_info.value, CommunicationActionExecutionError)
     assert "credential" not in exc_info.value.message.lower()
     assert exc_info.value.__cause__ is None
+
+
+def test_reauthorization_required_propagates_before_http(
+    gmail_reply_executor: tuple,
+) -> None:
+    _executor, stub, client, _tokens = gmail_reply_executor
+
+    def permanent_failure() -> str:
+        raise CommunicationCredentialReauthorizationRequiredError()
+
+    executor = GmailCommunicationActionExecutor(
+        http_client=client,
+        access_token_provider=permanent_failure,
+    )
+
+    with pytest.raises(CommunicationCredentialReauthorizationRequiredError):
+        executor.execute(execution_command())
+
+    assert stub.requests == []
 
 
 def test_environment_resolver_missing_token_is_unavailable_before_http() -> None:

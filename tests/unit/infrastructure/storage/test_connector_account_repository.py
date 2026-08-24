@@ -231,6 +231,69 @@ def test_disconnect_clears_credential_ref_and_is_idempotent(
         assert repository.disconnect_owned(uuid4(), user_a) is None
 
 
+def test_mark_reauth_required_preserves_locator_and_capabilities(
+    session_factory: sessionmaker,
+) -> None:
+    """ACTIVE → REAUTH_REQUIRED keeps credential_ref and grants; others are unchanged."""
+    user_a, user_b = _create_users(session_factory)
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        owned = repository.create(
+            _new_account(
+                user_a,
+                granted_capabilities=(
+                    CommunicationCapability.MAIL_READ,
+                    CommunicationCapability.MAIL_SEND,
+                ),
+            )
+        )
+        session.commit()
+        account_id = owned.id
+        locator = owned.credential_ref
+
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        marked = repository.mark_reauth_required_owned(account_id, user_a)
+        session.commit()
+
+    assert marked is not None
+    assert marked.status is ConnectorAccountStatus.REAUTH_REQUIRED
+    assert marked.credential_ref == locator
+    assert marked.granted_capabilities == (
+        CommunicationCapability.MAIL_READ,
+        CommunicationCapability.MAIL_SEND,
+    )
+
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        assert repository.mark_reauth_required_owned(account_id, user_a) is None
+        assert repository.mark_reauth_required_owned(account_id, user_b) is None
+        winner = repository.reactivate_owned(
+            account_id,
+            user_a,
+            "oauth-new-locator-0001",
+            granted_capabilities=(CommunicationCapability.MAIL_READ,),
+            replace_granted_capabilities=True,
+        )
+        session.commit()
+        loser = repository.reactivate_owned(
+            account_id,
+            user_a,
+            "oauth-loser-locator-0002",
+            granted_capabilities=(
+                CommunicationCapability.MAIL_READ,
+                CommunicationCapability.MAIL_SEND,
+            ),
+            replace_granted_capabilities=True,
+        )
+
+    assert winner is not None
+    assert winner.status is ConnectorAccountStatus.ACTIVE
+    assert winner.credential_ref == "oauth-new-locator-0001"
+    assert winner.granted_capabilities == (CommunicationCapability.MAIL_READ,)
+    assert loser is None
+
+
 def test_reactivate_replaces_credential_ref(session_factory: sessionmaker) -> None:
     """Reactivation restores active status and replaces the opaque locator."""
     user_a, _user_b = _create_users(session_factory)

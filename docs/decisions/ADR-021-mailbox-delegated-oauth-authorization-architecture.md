@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 13A. The provider-neutral authorization-session, capability, permission, and persistence foundation exists. Real Google OAuth, Microsoft OAuth, token exchange, refresh, Key Vault, and Secrets Manager are not implemented in 13A.
+The decision is implemented for Phase 13A. The provider-neutral authorization-session, capability, permission, and persistence foundation exists. Real Google OAuth, Microsoft OAuth, refresh, Key Vault, and Secrets Manager were delivered in 13C–13E. Disconnect, reauthorization, and permanent-refresh lifecycle policy are recorded in [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 
 ## Date
 

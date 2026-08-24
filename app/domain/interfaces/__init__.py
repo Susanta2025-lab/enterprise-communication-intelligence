@@ -43,6 +43,7 @@ from app.domain.interfaces.mailbox_oauth_client import (
     MailboxOAuthAuthorizationResult,
     MailboxOAuthClient,
 )
+from app.domain.interfaces.mailbox_token_revoker import MailboxTokenRevoker
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionRepository,
@@ -71,6 +72,7 @@ __all__ = [
     "MailboxAuthorizationSessionRepository",
     "MailboxOAuthAuthorizationResult",
     "MailboxOAuthClient",
+    "MailboxTokenRevoker",
     "NewMailboxAuthorizationSession",
     "MessagePage",
     "NewAnalysis",

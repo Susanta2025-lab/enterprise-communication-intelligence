@@ -4,6 +4,20 @@ Operator runbook for deploying the already verified ECI Docker image to Azure Co
 
 **Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics and deployed image `eci-api:phase7a-5f4f5f8` (revision `eci-api-dev--0000001`). `eci-api-dev` remains in `rg-eci-deploy-dev` with operator `/32` ingress and min replicas 0. Do not re-run mutating commands unless a later prompt requests it. Never delete `rg-eci-dev`.
 
+## Current architecture vs this historical runbook (Phase 13)
+
+This file remains the Phase 6C/7 Azure hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13.
+
+Current ECI application architecture (code and documentation; not a claim that `eci-api-dev` was redeployed):
+
+- Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP). Analyze is not an anonymous public API.
+- Mailbox delegated OAuth is a separate identity domain from that login (Gmail/Microsoft consent → opaque credential store → `ConnectorAccount.credential_ref`).
+- Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault `eci-kv-oauth-dev-susanta` at the store/factory path.
+- Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
+- Production ACA would use managed identity for Key Vault. The retained Container App image (`eci-api:phase7a-5f4f5f8` / later CD tags recorded elsewhere) has **not** been redeployed or certified as a complete Phase 13 mailbox-OAuth runtime.
+
+See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
+
 ## Current operational state (Phase 7)
 
 ```text
@@ -115,7 +129,7 @@ Do **not** set `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, Foundry API keys, or AC
 
 ## Ingress / security
 
-ECI has no application-user authentication. `POST /api/v1/communications/analyze` must not stay open to the internet.
+Historical Phase 6C context: at that time the deployed image had no application-user authentication, so `POST /api/v1/communications/analyze` must not stay open to the internet. Phase 8 later added OIDC. Network `/32` restriction remains operator access control and is not a substitute for API authentication.
 
 Plan:
 

@@ -30,14 +30,14 @@ No OAuth or credential fields are added to `CommunicationActionExecution`.
 
 ## Status
 
-Phase 13 is **In Progress**.
+Phase 13 is **Completed**.
 
-- **13A is Completed:** OAuth domain, authorization session, `communications:connect`, PKCE S256, provider-neutral capabilities, `REAUTH_REQUIRED`, schema/migration, ADR-021. No real Google or Microsoft OAuth.
-- **13B is Completed:** opaque credential store, server-generated locators, in-memory store, refreshable `AccessTokenProvider` foundation, in-process cache/locks, CAS rotation, ADR-022. No real Google or Microsoft OAuth. Environment-backed execute remains the runtime default.
-- **13C is Completed:** Google OAuth / Gmail credential lifecycle. Live Google Cloud project validation remains an external operator step.
-- **13D is Completed:** Microsoft Entra OAuth / Graph credential lifecycle. Live Entra consent and an explicitly approved Graph reply were validated locally.
+- **13A is Completed:** OAuth domain, authorization session, `communications:connect`, PKCE S256, provider-neutral capabilities, `REAUTH_REQUIRED`, schema/migration, ADR-021. That slice did not implement real Google or Microsoft OAuth.
+- **13B is Completed:** opaque credential store, server-generated locators, in-memory store, refreshable `AccessTokenProvider` foundation, in-process cache/locks, CAS rotation, ADR-022. That slice did not implement real Google or Microsoft OAuth. Environment-backed execute remains the local/dev default for legacy locators.
+- **13C is Completed:** Google OAuth / Gmail credential lifecycle. Live Google consent and an explicitly approved Gmail reply were validated locally. That is not cloud-hosted ACA/ECS OAuth certification.
+- **13D is Completed:** Microsoft Entra OAuth / Graph credential lifecycle. Live Entra consent and an explicitly approved Graph reply were validated locally. That is not cloud-hosted ACA/ECS OAuth certification.
 - **13E is Completed:** Azure Key Vault and AWS Secrets Manager `CommunicationCredentialStore` backends, explicit `CREDENTIAL_STORE_BACKEND` selection, production fail-closed rules, PostgreSQL advisory-lock coordination, and live Azure/AWS store validation recorded below.
-- **13F is Not Started:** disconnect/reauthorization, production hardening, documentation, and regression.
+- **13F is Completed:** owned disconnect HTTP, exact-account reauthorization, Google best-effort token revocation, Microsoft local-only disconnect, permanent refresh → `REAUTH_REQUIRED`, production hardening, documentation consolidation, and regression. No new live Google/Microsoft/Azure/AWS calls were made in 13F.
 
 Phase 12 remains **Completed**.
 
@@ -82,7 +82,7 @@ Implemented:
 - `APP_ENV=production` does not use the in-memory store as durable OAuth storage
 - Gmail connector and executor remain OAuth-unaware `AccessTokenProvider` consumers
 
-Not in 13C: live Google Cloud project setup, Microsoft OAuth, Key Vault, Secrets Manager, disconnect/reauthorize HTTP, automatic replies, or a new Alembic revision. Alembic head remains `13a0001`. Live Google consent remains an external validation step.
+Not in 13C: Microsoft OAuth, Key Vault, Secrets Manager, disconnect/reauthorize HTTP, automatic replies, or a new Alembic revision. Alembic head remains `13a0001`. Live Google consent and an explicitly approved Gmail reply were validated locally outside automated CI; that is not cloud-hosted ACA/ECS OAuth certification. The controlled local analysis `connector_account_id` bind used for that smoke test is not production API behavior.
 
 ### 13D — Microsoft Entra OAuth / Graph credential lifecycle
 
@@ -161,7 +161,68 @@ Final code verification for this slice: `python -m pip check` passed; `python -m
 
 ### 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression
 
-Operational disconnect/reauthorize flows, documentation consolidation, and regression. Broad README updates belong here.
+Operational mailbox credential lifecycle on the Phase 13A–13E foundation. No Alembic revision. ADR-023 records the durable decisions. Broad README and architecture documentation consolidation belongs here.
+
+Implemented:
+
+**Disconnect**
+
+- `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` requires `communications:connect`
+- Ownership is verified before secret-store or provider HTTP. Unknown and cross-user ids are indistinguishable `404`
+- Response is sanitized connector-account metadata only (`id`, `provider`, `external_account_id`, `status`, granted capabilities, timestamps). Never `credential_ref`, tokens, or store URIs
+- Successful local disconnect: `status=DISCONNECTED`, `credential_ref=NULL`, `granted_capabilities=NULL`, stored delegated credential deleted
+- Store delete happens before clearing the database locator. Store unavailability while deletion is required fails closed (`503`) and leaves the locator
+- Store delete success plus later DB update failure remains fail-closed and retryable; the secret is not recreated
+- Repeated disconnect of an already `DISCONNECTED` account is idempotent
+- Cached access tokens are invalidated by existing store mutation listeners
+- Local credential deletion is the authoritative ECI security boundary: after success ECI no longer possesses usable delegated material for that account
+
+**Provider revocation**
+
+- Google: `GoogleMailboxTokenRevoker` posts the refresh token to `https://oauth2.googleapis.com/revoke` best-effort after successful local disconnect. Remote failure does not restore local access. Tokens are never logged. Provider HTTP stays outside database transactions
+- Microsoft: no Graph `revokeSignInSessions` or other broad session revocation. Local credential deletion is the ECI guarantee. Microsoft-side application consent may remain until the user or admin removes it through Microsoft/Entra consent controls
+
+**Reauthorization**
+
+- `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` requires `communications:connect`
+- Uses the bound account's provider. Callers cannot switch provider or supply scopes
+- `DISCONNECTED` and `REAUTH_REQUIRED` are accepted. `ACTIVE` returns `409`
+- Starts `MailboxAuthorizationSession` with `purpose=REAUTHORIZE` and the exact owned `connector_account_id`
+- PKCE S256 and high-entropy single-use SHA-256 state remain as in 13A. Callback remains unauthenticated
+- Callback requires `purpose=REAUTHORIZE` and a bound account id. Verified provider mailbox identity must equal the existing `external_account_id`. Selecting a different mailbox is rejected; a second connector account is not created
+- Successful reauthorization reactivates the exact bound account: `ACTIVE`, new opaque `credential_ref`, freshly granted capability list
+- Newly created secret material is compensated on identity/provider mismatch, account-state conflict, persistence failure, or binding validation failure
+- Concurrent reauthorization compare-and-set yields at most one winner; a loser deletes any newly created credential it cannot attach
+- Stale `REAUTH_REQUIRED` locators are deleted before attaching the new locator. Delete-old failure is fail-closed and retryable by starting reauthorization again
+
+**Permanent refresh → `REAUTH_REQUIRED`**
+
+- Confirmed `CommunicationCredentialReauthorizationRequiredError` (for example `invalid_grant`) during execute marks the exact owned account `ACTIVE` → `REAUTH_REQUIRED`
+- Locator and last-known granted capabilities are preserved. Subsequent execute fails the ACTIVE gate before TX1 and before provider I/O
+- Token acquisition happens before provider send HTTP, so a confirmed permanent refresh failure records workflow `FAILED` (definite no-send) rather than leaving `EXECUTING`
+- Transient store/network/token-service unavailability keeps Phase 12 semantics: action remains `EXECUTING`, HTTP `503`, account does **not** become `REAUTH_REQUIRED`
+- ADR-020 duplicate-send protections are unchanged. Gmail and Graph executors remain OAuth-unaware `AccessTokenProvider` consumers except for preserving the dedicated reauthorization-required signal
+
+**Production hardening**
+
+- OAuth state remains SHA-256 only in PostgreSQL. PKCE verifier never leaves server persistence
+- Production still rejects the in-memory credential backend. Azure uses `DefaultAzureCredential`; AWS uses the boto3 default chain. No AWS access-key or Azure client-secret Settings
+- PostgreSQL advisory-lock keys derive only from opaque `credential_ref`. PostgreSQL stores no OAuth credential material
+- Expired authorization sessions remain TTL-bounded. `MailboxAuthorizationSessionService.delete_expired` exists for operator/opportunistic cleanup. Phase 13F does not add a background worker
+- Automatic replies, mailbox synchronization/webhooks, retry/reconciliation/exactly-once delivery, and user-facing connector ingestion HTTP remain out of scope
+
+Not in 13F: a new Alembic revision, managed Azure PostgreSQL / Amazon RDS, cloud-hosted Gmail/Graph OAuth certification of the retained ACA/ECS services, live disconnect/reauthorize against real Google or Microsoft mailboxes, or any new cloud resource. 13F automated implementation used fakes/mocks only.
+
+Automated verification:
+
+- `python -m pip check` passed
+- `python -m ruff check .` passed
+- targeted 13F and related regression tests: 760 passed
+- `tests/postgres` with `ECI_POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://eci:eci@localhost:5433/eci_test`: 71 passed
+- full pytest with PostgreSQL enabled: 1753 passed
+- `git diff --check` passed
+
+No live Google, Microsoft, Azure, or AWS calls were made in 13F. Cached cloud/OAuth credentials were not consumed. No cloud resources were created or deleted.
 
 ## Deliverables
 
@@ -170,7 +231,7 @@ Operational disconnect/reauthorize flows, documentation consolidation, and regre
 - [x] Phase 13C — Google OAuth / Gmail Credential Lifecycle (completed)
 - [x] Phase 13D — Microsoft Entra OAuth / Graph Credential Lifecycle (completed)
 - [x] Phase 13E — Azure Key Vault + AWS Secrets Manager Production Backends (completed)
-- [ ] Phase 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression (not started)
+- [x] Phase 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression (completed)
 
 ## Identity boundary
 
@@ -196,14 +257,14 @@ Never use mailbox OAuth credentials to authenticate to the ECI REST API.
 
 OAuth-created Gmail and Microsoft Graph accounts always receive an explicit capability list. When `granted_capabilities` is explicit, execute requires `mail.send` before `APPROVED` → `EXECUTING`. Legacy environment-backed accounts with `NULL` capabilities keep Phase 12 eligibility.
 
-13A disconnect of an owned account sets `DISCONNECTED`, nulls `credential_ref`, and nulls `granted_capabilities`. Remaining grant metadata after the locator is removed would misrepresent the account. Provider token revocation remains 13F.
+Owned disconnect sets `DISCONNECTED`, nulls `credential_ref`, and nulls `granted_capabilities`. Remaining grant metadata after the locator is removed would misrepresent the account. Google token revocation is best-effort after that local success. Microsoft uses local deletion only. See ADR-023.
 
 ## Account status
 
-| Status | 13A meaning |
+| Status | Meaning |
 |---|---|
-| `ACTIVE` | Credential operational / account eligible subject to later capability checks |
-| `DISCONNECTED` | User intentionally disconnected |
-| `REAUTH_REQUIRED` | Provider credential later determined permanently unusable; user consent required again |
+| `ACTIVE` | Credential operational / account eligible subject to capability checks |
+| `DISCONNECTED` | User intentionally disconnected; ECI no longer possesses delegated credential material |
+| `REAUTH_REQUIRED` | Confirmed permanent provider refresh failure; locator and last-known grants may remain for controlled cleanup; execution is blocked |
 
-13A does not implement automatic transitions from token-refresh failures.
+`REAUTH_REQUIRED` is not treated like `DISCONNECTED`. Transient credential-store or token-service unavailability does not change account status.

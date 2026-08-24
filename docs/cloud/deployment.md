@@ -4,6 +4,8 @@ Phase 6C deploys one provider-independent Docker image to local Docker, Azure Co
 
 Phase 8 adds application-user OIDC, Azure managed HTTPS confirmation, AWS ALB verification then teardown, and GitHub Actions CI/CD with OIDC federation. Operator `/32` ingress restriction is network access control, not a substitute for API authentication. Production clouds use `AUTH_MODE=oidc`.
 
+Phase 13 adds delegated mailbox OAuth and durable Azure Key Vault / AWS Secrets Manager credential stores in application code. Local Google/Microsoft consent and live store validation are recorded on the Phase 13 roadmap. The retained Container App and ECS service have not been redeployed or certified as a complete Phase 13 mailbox-OAuth runtime. Key Vault and Secrets Manager are mailbox OAuth backends, not `DATABASE_URL` injection.
+
 ## Same image
 
 ```text

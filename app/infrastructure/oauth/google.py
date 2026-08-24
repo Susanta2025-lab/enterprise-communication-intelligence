@@ -28,6 +28,7 @@ from app.domain.interfaces.mailbox_oauth_client import (
     MailboxOAuthAuthorizationResult,
     MailboxOAuthClient,
 )
+from app.domain.interfaces.mailbox_token_revoker import MailboxTokenRevoker
 from app.domain.models.capabilities import normalize_communication_capabilities
 from app.infrastructure.credentials.refresh import RefreshableCredentialResult
 
@@ -35,6 +36,7 @@ logger = get_logger(__name__)
 
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
+GOOGLE_REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 OPENID_SCOPE = "openid"
@@ -64,6 +66,7 @@ _CODE_CHALLENGE_METHOD = "S256"
 TokenFetcher = Callable[[str, str], Mapping[str, Any]]
 IdTokenVerifier = Callable[[str], Mapping[str, Any]]
 RefreshTransportFactory = Callable[[], Any]
+RevokeTransport = Callable[[str], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +307,53 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
         return claims
 
 
+class GoogleMailboxTokenRevoker(MailboxTokenRevoker):
+    """Revoke the Google grant encoded in stored Gmail secret material.
+
+    This is scoped to the refresh token issued to this ECI application. It is
+    not a Google-account-wide session revocation. Remote failure is raised to
+    the caller; disconnect treats it as best-effort after local credential
+    removal.
+    """
+
+    def __init__(self, *, transport: RevokeTransport | None = None) -> None:
+        self._transport = transport
+
+    def __repr__(self) -> str:
+        return "GoogleMailboxTokenRevoker()"
+
+    def revoke(self, secret_material: bytes) -> None:
+        """POST the stored refresh token to Google's token revocation endpoint."""
+        started_at = time.perf_counter()
+        stored = deserialize_google_mailbox_secret(secret_material)
+        try:
+            if self._transport is not None:
+                self._transport(stored.refresh_token)
+            else:
+                _post_google_revoke(stored.refresh_token)
+        except CommunicationCredentialUnavailableError:
+            logger.warning(
+                "gmail_oauth_token_revoke_unavailable",
+                operation="revoke",
+                duration_ms=elapsed_ms(started_at),
+                error_class="CommunicationCredentialUnavailableError",
+            )
+            raise
+        except Exception as exc:
+            logger.warning(
+                "gmail_oauth_token_revoke_unavailable",
+                operation="revoke",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise CommunicationCredentialUnavailableError() from None
+        logger.info(
+            "gmail_oauth_token_revoked",
+            operation="revoke",
+            duration_ms=elapsed_ms(started_at),
+        )
+
+
 class GoogleRefreshableCredentialAdapter:
     """Refresh Gmail access tokens from stored Google secret material."""
 
@@ -434,6 +484,40 @@ def deserialize_google_mailbox_secret(secret_material: bytes) -> _GoogleMailboxS
         scopes=tuple(scopes_value),
         subject=subject.strip(),
     )
+
+
+def _post_google_revoke(refresh_token: str) -> None:
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    payload = urllib.parse.urlencode({"token": refresh_token}).encode("ascii")
+    request = urllib.request.Request(
+        GOOGLE_REVOKE_URI,
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            status = int(getattr(response, "status", 200))
+    except TimeoutError:
+        raise CommunicationCredentialUnavailableError() from None
+    except urllib.error.HTTPError as exc:
+        status = int(exc.code)
+        if status >= 500:
+            raise CommunicationCredentialUnavailableError() from None
+        if status >= 400:
+            return
+        raise CommunicationCredentialUnavailableError() from None
+    except urllib.error.URLError:
+        raise CommunicationCredentialUnavailableError() from None
+    if status >= 500:
+        raise CommunicationCredentialUnavailableError()
+    if status >= 400:
+        return
+    if status < 200 or status >= 300:
+        raise CommunicationCredentialUnavailableError()
 
 
 def _google_refresh_credentials(

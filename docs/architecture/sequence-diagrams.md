@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-These diagrams describe the request flows implemented as of Phase 12. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. Production execute routes Graph or Gmail writers through `CommunicationActionExecutor`; the fake executor remains an isolated test double.
+These diagrams describe the request flows implemented through completed Phase 13. Source `.mmd` files live in [`docs/diagrams/`](../diagrams/README.md); the communication-analysis HTTP flows are combined in [`request-flow.mmd`](../diagrams/request-flow.mmd). Persistence mapping is in [`persistence.mmd`](../diagrams/persistence.mmd). Mailbox delegated OAuth (authorize, callback, disconnect, reauthorize, credential stores) is in [`mailbox-oauth.mmd`](../diagrams/mailbox-oauth.mmd). The sequence below uses `MockAIProvider` as the default local provider; `MicrosoftFoundryProvider` and `AmazonBedrockProvider` occupy the same `AIProvider` slot when selected. Connector adapters occupy the `CommunicationConnector` slot; vendor types do not appear above infrastructure. Production execute routes Graph or Gmail writers through `CommunicationActionExecutor`; the fake executor remains an isolated test double.
 
 ## Successful Communication-Analysis Request (analyze-only)
 
@@ -93,7 +93,7 @@ CommunicationMessage
 
 Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, or background-sync sequences.
 
-The following are **not implemented** as connector-ingestion or live-adapter flows: OAuth callback, production secret stores, background sync, and automatic replies. User-approved sending is a separate execute flow documented below. `CommunicationCredentialResolver` is a below-HTTP local/dev boundary; it is not a user-facing sequence.
+The following remain **not implemented** as connector-ingestion or live-adapter flows: background sync, automatic replies, and user-facing connector fetch/analyze HTTP. Mailbox OAuth authorize, callback, disconnect, and reauthorize are a separate lifecycle documented in [`mailbox-oauth.mmd`](../diagrams/mailbox-oauth.mmd). User-approved sending is a separate execute flow documented below. `CommunicationCredentialResolver` remains a below-HTTP boundary that yields `AccessTokenProvider`; OAuth locators use the refreshable store-backed resolver, and legacy locators keep the environment-backed local/dev path.
 
 ## Identity failure before AI
 

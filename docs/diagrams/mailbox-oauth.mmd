@@ -1,0 +1,29 @@
+flowchart TD
+    User["ECI user"]
+    Entra["Microsoft Entra ID"]
+    JWT["OIDC JWT"]
+    API["ECI API"]
+    Session["MailboxAuthorizationSession<br/>SHA-256 state + PKCE S256"]
+    Google["Google OAuth"]
+    Microsoft["Microsoft identity platform"]
+    Store["CommunicationCredentialStore"]
+    KV["Azure Key Vault"]
+    SM["AWS Secrets Manager"]
+    PG["PostgreSQL<br/>locator + advisory lock<br/>no OAuth tokens"]
+    Account["ConnectorAccount<br/>opaque credential_ref"]
+    Resolver["OAuthCommunicationCredentialResolver"]
+    Token["AccessTokenProvider"]
+    Exec["Gmail / Graph executor"]
+
+    User --> Entra --> JWT --> API
+    API -->|"communications:connect<br/>authorize / reauthorize / disconnect"| Session
+    Session --> Google
+    Session --> Microsoft
+    Google --> Store
+    Microsoft --> Store
+    Store --> KV
+    Store --> SM
+    Store --> PG
+    KV --> Account
+    SM --> Account
+    Account --> Resolver --> Token --> Exec

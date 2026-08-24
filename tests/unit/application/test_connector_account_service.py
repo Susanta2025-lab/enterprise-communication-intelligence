@@ -16,6 +16,7 @@ from app.core.exceptions import PersistenceError, ServiceUnavailableError
 from app.core.security import AuthenticatedPrincipal
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRecord
+from app.infrastructure.credentials.memory import InMemoryCommunicationCredentialStore
 from tests.support.in_memory_persistence import InMemoryUnitOfWork, UnitOfWorkFactory
 from tests.support.jwt_tokens import TEST_PERMISSION
 
@@ -49,7 +50,8 @@ def _service(
     else:
         stored = (factory._units[0],)
     identity = IdentityResolver(factory)
-    return ConnectorAccountService(identity, factory), stored
+    store = InMemoryCommunicationCredentialStore()
+    return ConnectorAccountService(identity, factory, credential_store=store), stored
 
 
 def test_register_creates_identity_and_active_account() -> None:

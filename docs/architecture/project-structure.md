@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 13E (Phase 12 complete; 13A–13E complete; 13F not started). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of completed Phase 13 (13A–13F). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -13,7 +13,8 @@ app/
 │       ├── analyses.py       # GET/DELETE /api/v1/analyses
 │       ├── workflow_actions.py  # POST/GET workflow-actions; POST approve/reject/execute
 │       ├── gmail_oauth.py       # POST gmail authorize; GET Google callback
-│       └── microsoft_oauth.py   # POST microsoft_graph authorize; GET Microsoft callback
+│       ├── microsoft_oauth.py   # POST microsoft_graph authorize; GET Microsoft callback
+│       └── connector_accounts.py  # POST disconnect / reauthorize owned accounts
 ├── application/
 │   ├── exceptions.py         # AnalysisFailedError, AnalysisNotFoundError, connector-account and workflow-action errors
 │   └── services/
@@ -26,8 +27,10 @@ app/
 │       ├── identity.py       # IdentityResolver
 │       ├── analysis_history.py  # AnalysisHistoryService
 │       ├── mailbox_authorization_sessions.py
-│       ├── gmail_mailbox_oauth.py  # Gmail connect start/callback orchestration
-│       └── microsoft_mailbox_oauth.py  # Microsoft Graph connect start/callback orchestration
+│       ├── mailbox_oauth_reauthorization.py  # exact-account reauthorize persist/identity match
+│       ├── connector_account_oauth.py  # provider-dispatch reauthorize start
+│       ├── gmail_mailbox_oauth.py  # Gmail connect/reauthorize start/callback
+│       └── microsoft_mailbox_oauth.py  # Microsoft Graph connect/reauthorize start/callback
 ├── core/
 │   ├── config.py             # Settings (Pydantic Settings) and get_settings()
 │   ├── logging.py            # structlog configuration, get_logger()
@@ -51,6 +54,7 @@ app/
 │   │   ├── communication_credential_resolver.py  # CommunicationCredentialResolver, AccessTokenProvider
 │   │   ├── communication_credential_store.py     # CommunicationCredentialStore, opaque records
 │   │   ├── mailbox_oauth_client.py  # MailboxOAuthClient, MailboxOAuthAuthorizationResult
+│   │   ├── mailbox_token_revoker.py  # MailboxTokenRevoker (provider-neutral; Google-only impl)
 │   │   ├── connector_account_repository.py
 │   │   ├── identity_repository.py
 │   │   ├── analysis_repository.py
@@ -97,9 +101,10 @@ app/
 │   │   ├── secret_names.py    # locator → Key Vault / Secrets Manager names
 │   │   ├── azure_key_vault.py # AzureKeyVaultCommunicationCredentialStore
 │   │   ├── aws_secrets_manager.py
-│   │   └── factory.py         # backend selection; production rejects memory
+│   │   ├── factory.py         # backend selection; production rejects memory
+│   │   └── mutation.py        # PostgreSQL advisory-lock keys for credential mutations
 │   ├── oauth/
-│   │   ├── google.py          # Google authorization, ID-token verify, Gmail refresh adapter
+│   │   ├── google.py          # Google authorization, ID-token verify, Gmail refresh, best-effort revoke
 │   │   ├── microsoft.py       # Microsoft identity platform v2 authorize/exchange/refresh
 │   │   └── runtime.py         # store selection; production requires durable backend
 │   ├── executors/
@@ -124,7 +129,7 @@ app/
 │   ├── health.py               # LivenessResponse, HealthResponse, ReadinessResponse
 │   ├── analysis.py             # CommunicationAnalysisResponse, history items
 │   ├── workflow.py             # WorkflowActionCreateRequest, WorkflowActionResponse, list wrapper
-│   ├── oauth.py                # Gmail/Microsoft authorization start/callback responses
+│   ├── oauth.py                # Gmail/Microsoft start/callback; connector-account lifecycle responses
 │   └── errors.py                # ErrorResponse (OpenAPI documentation only)
 ├── utils/                       # empty scaffold package — no implementation
 └── main.py                      # FastAPI app factory, lifespan, exception handlers
@@ -151,11 +156,12 @@ tests/
 │   ├── test_docs.py
 │   ├── test_ingestion_boundary.py
 │   ├── test_gmail_ingestion_boundary.py
-│   └── test_microsoft_graph_ingestion_boundary.py
+│   ├── test_microsoft_graph_ingestion_boundary.py
+│   └── test_connector_account_lifecycle.py
 └── postgres/                    # skipped locally unless ECI_POSTGRES_TEST_DATABASE_URL is set
 
 alembic/
-└── versions/                    # 9a0001, 10b0001, 11b0001, 12a0001
+└── versions/                    # 9a0001, 10b0001, 11b0001, 12a0001, 13a0001
 
 docs/
 ├── roadmap/                     # phase-by-phase roadmap
@@ -173,12 +179,12 @@ deployment/
 
 ## Role of Each Top-Level Package
 
-- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete Gmail/Graph executor. Phase 10 added no connector routes. Phase 11C adds `app/api/routes/workflow_actions.py` over `WorkflowActionService`. Phase 12E adds execute over `WorkflowActionExecutionService`. Analyze/history keep `communications:analyze`; proposal/approval require `communications:workflow`; execute requires `communications:send` and a real principal.
+- **`app/api`** — HTTP transport layer. Owns FastAPI routers, request/response wiring, and dependency injection. No business logic. Never imports a concrete AI provider class or a concrete Gmail/Graph executor. Phase 10 added no connector message-ingestion routes. Phase 11C adds `app/api/routes/workflow_actions.py` over `WorkflowActionService`. Phase 12E adds execute over `WorkflowActionExecutionService`. Phase 13 adds Gmail/Microsoft authorize and callbacks plus owned disconnect/reauthorize. Analyze/history keep `communications:analyze`; proposal/approval require `communications:workflow`; execute requires `communications:send`; mailbox connect/disconnect/reauthorize require `communications:connect`.
 - **`app/application`** — Use-case orchestration. `CommunicationAnalysisService` coordinates AI providers. Workflow, identity, and history services add user-owned persistence around that AI path. `CommunicationIngestionService` fetches a normalized message through `CommunicationConnector` and reuses the existing workflow. `ConnectorAccountService` manages user-owned connector accounts. `WorkflowActionService` creates, lists, retrieves, approves, and rejects durable workflow actions. `WorkflowActionExecutionService` executes an approved action through `CommunicationActionExecutorFactory`. `CommunicationAnalysisWorkflowService` is persist-after-analyze orchestration; it is not the Phase 11 `WorkflowAction` service.
 - **`app/core`** — Cross-cutting infrastructure shared by every layer: configuration, structured logging, JWT bearer validation, and the base exception hierarchy, including connector-neutral errors.
 - **`app/domain`** — Provider-independent business vocabulary: enums, models (including `WorkflowAction`), schemas, `AIProvider`, `CommunicationConnector`, `CommunicationActionExecutor`, `CommunicationCredentialResolver`, `CommunicationCredentialStore`, and persistence repository/UoW interfaces. No framework, SQLAlchemy, or cloud dependencies.
 - **`app/providers`** — Concrete `AIProvider` implementations plus the selection factory. `mock`, `microsoft_foundry`, and `amazon_bedrock` are implemented. `common/` holds the shared LLM analysis contract used by the two real adapters. `aws/` and `azure/` remain unused Phase 3 vendor scaffolds; they are not active provider implementations and were not used for Bedrock. Communication connectors do not live here.
-- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (`EnvironmentCommunicationCredentialResolver`, in-memory `CommunicationCredentialStore`, `OAuthCommunicationCredentialResolver`). Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`, `ProviderCommunicationActionExecutorFactory`). `monitoring/` and `parsers/` remain empty scaffolds.
+- **`app/infrastructure`** — Persistence runtime lives in `storage/`. Communication connector adapters live in `connectors/` (`fake`, `gmail`, `microsoft_graph`, plus `common` token/HTML helpers). Mailbox credential resolution lives in `credentials/` (environment resolver, in-memory store, OAuth resolver, Azure Key Vault store, AWS Secrets Manager store). Google/Microsoft OAuth HTTP lives in `oauth/`. Write-port adapters live in `executors/` (`FakeCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `MicrosoftGraphCommunicationActionExecutor`, `ProviderCommunicationActionExecutorFactory`). `monitoring/` and `parsers/` remain empty scaffolds.
 - **`app/schemas`** — Transport-only Pydantic response models for endpoints that don't map solely to a domain concept (health, readiness, analyze `analysis_id`, history items, workflow actions, generic error responses). Kept separate from `app/domain/schemas`, which holds business-meaningful request/response schemas.
 - **`app/utils`** — Empty scaffold package; no shared utility functions have been introduced yet.
 - **`tests`** — Mirrors the `app` structure for unit tests (`tests/unit`) and adds black-box HTTP tests (`tests/integration`) using FastAPI's `TestClient`. Connector ingestion-boundary tests live under `tests/integration/`. PostgreSQL dialect tests live in `tests/postgres/` and skip unless an explicit test URL is set. Default local tests run offline with no Docker, Azure, AWS, Gmail, or Microsoft Graph network calls.

@@ -45,10 +45,11 @@ class ConnectorAccountStatus(StrEnum):
 
     ``ACTIVE`` means the credential is operational and the account is eligible
     subject to later capability checks. ``DISCONNECTED`` means the user
-    intentionally disconnected. ``REAUTH_REQUIRED`` means the provider
-    credential was later determined permanently unusable and user consent is
-    required again. Phase 13A stores the state only; it does not automatically
-    transition accounts from token-refresh failures.
+    intentionally disconnected and ECI no longer possesses delegated
+    credential material. ``REAUTH_REQUIRED`` means a permanent provider
+    refresh failure was confirmed and user consent is required again. The
+    locator may remain for controlled cleanup. Execution is rejected until
+    reauthorization.
     """
 
     ACTIVE = "active"

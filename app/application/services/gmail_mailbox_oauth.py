@@ -13,12 +13,17 @@ from datetime import datetime
 from uuid import UUID
 
 from app.application.exceptions import (
+    ConnectorAccountConflictError,
     MailboxAuthorizationSessionInvalidError,
     MailboxOAuthAuthorizationDeniedError,
 )
 from app.application.services.identity import IdentityResolver
 from app.application.services.mailbox_authorization_sessions import (
     MailboxAuthorizationSessionService,
+)
+from app.application.services.mailbox_oauth_reauthorization import (
+    load_reauthorization_target,
+    persist_reauthorized_connector_account,
 )
 from app.core.exceptions import (
     CommunicationCredentialUnavailableError,
@@ -42,6 +47,9 @@ from app.domain.interfaces.communication_credential_store import (
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     NewConnectorAccount,
+)
+from app.domain.interfaces.mailbox_authorization_session_repository import (
+    ConsumedMailboxAuthorizationSession,
 )
 from app.domain.interfaces.mailbox_oauth_client import (
     MailboxOAuthAuthorizationResult,
@@ -108,11 +116,37 @@ class GmailMailboxOAuthService:
         principal: AuthenticatedPrincipal,
     ) -> GmailMailboxAuthorizationStartResult:
         """Create a connect session and return the Google authorization URL."""
+        return self._start_authorization(
+            principal,
+            purpose=MailboxAuthorizationPurpose.CONNECT.value,
+            connector_account_id=None,
+        )
+
+    def start_reauthorization(
+        self,
+        principal: AuthenticatedPrincipal,
+        connector_account_id: UUID,
+    ) -> GmailMailboxAuthorizationStartResult:
+        """Create a reauthorize session bound to the owned Gmail account."""
+        return self._start_authorization(
+            principal,
+            purpose=MailboxAuthorizationPurpose.REAUTHORIZE.value,
+            connector_account_id=connector_account_id,
+        )
+
+    def _start_authorization(
+        self,
+        principal: AuthenticatedPrincipal,
+        *,
+        purpose: str,
+        connector_account_id: UUID | None,
+    ) -> GmailMailboxAuthorizationStartResult:
         started_at = time.perf_counter()
         session = self._sessions.start_authorization(
             principal,
             provider=_PROVIDER_SLUG,
-            purpose=MailboxAuthorizationPurpose.CONNECT.value,
+            purpose=purpose,
+            connector_account_id=connector_account_id,
         )
         try:
             authorization_url = self._oauth_client.build_authorization_url(
@@ -158,6 +192,12 @@ class GmailMailboxOAuthService:
             provider=_PROVIDER_SLUG,
             state=state,
         )
+        if consumed.purpose is MailboxAuthorizationPurpose.REAUTHORIZE:
+            return self._complete_reauthorization(
+                consumed=consumed,
+                code=code,
+                started_at=started_at,
+            )
         if consumed.purpose is not MailboxAuthorizationPurpose.CONNECT:
             raise MailboxOAuthAuthorizationFailedError()
         try:
@@ -217,6 +257,94 @@ class GmailMailboxOAuthService:
             status=account.status,
             granted_capabilities=account.granted_capabilities or exchanged.granted_capabilities,
             reused_existing=reused,
+        )
+
+    def _complete_reauthorization(
+        self,
+        *,
+        consumed: ConsumedMailboxAuthorizationSession,
+        code: str,
+        started_at: float,
+    ) -> GmailMailboxAuthorizationCallbackResult:
+        if consumed.connector_account_id is None:
+            raise MailboxOAuthAuthorizationFailedError()
+        try:
+            exchanged = self._oauth_client.exchange_authorization_code(
+                code=code,
+                code_verifier=consumed.pkce_verifier,
+            )
+        except (MailboxOAuthAuthorizationFailedError, ServiceUnavailableError):
+            raise
+        except Exception as exc:
+            logger.warning(
+                "gmail_oauth_callback_exchange_failed",
+                operation="callback",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise MailboxOAuthAuthorizationFailedError() from None
+        if CommunicationCapability.MAIL_READ not in exchanged.granted_capabilities:
+            logger.info(
+                "gmail_oauth_required_read_grant_missing",
+                operation="callback",
+                duration_ms=elapsed_ms(started_at),
+            )
+            raise MailboxOAuthAuthorizationFailedError()
+        stored = self._store_credential(exchanged)
+        try:
+            bound = load_reauthorization_target(
+                self._unit_of_work_factory,
+                user_id=consumed.user_id,
+                connector_account_id=consumed.connector_account_id,
+                provider=_PROVIDER_SLUG,
+                external_account_id=exchanged.external_account_id,
+                unavailable_message=_UNAVAILABLE,
+            )
+            previous_locator = bound.credential_ref
+            if previous_locator and previous_locator != stored.credential_ref:
+                self._compensate_stored_credential(previous_locator, started_at)
+            account = persist_reauthorized_connector_account(
+                self._unit_of_work_factory,
+                user_id=consumed.user_id,
+                connector_account_id=consumed.connector_account_id,
+                provider=_PROVIDER_SLUG,
+                external_account_id=exchanged.external_account_id,
+                credential_ref=stored.credential_ref,
+                granted_capabilities=exchanged.granted_capabilities,
+                unavailable_message=_UNAVAILABLE,
+            )
+        except Exception as exc:
+            self._compensate_stored_credential(stored.credential_ref, started_at)
+            if isinstance(
+                exc,
+                (
+                    ServiceUnavailableError,
+                    MailboxOAuthAuthorizationFailedError,
+                    ConnectorAccountConflictError,
+                ),
+            ):
+                raise
+            logger.warning(
+                "gmail_oauth_callback_persist_failed",
+                operation="callback",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise ServiceUnavailableError(_UNAVAILABLE) from None
+        logger.info(
+            "gmail_oauth_reauthorization_completed",
+            operation="callback",
+            connector_account_id=str(account.id),
+            reused_existing=False,
+            duration_ms=elapsed_ms(started_at),
+        )
+        return GmailMailboxAuthorizationCallbackResult(
+            connector_account_id=account.id,
+            provider=account.provider,
+            external_account_id=account.external_account_id,
+            status=account.status,
+            granted_capabilities=account.granted_capabilities or exchanged.granted_capabilities,
+            reused_existing=False,
         )
 
     def _consume_provider_error(self, *, state: str | None, started_at: float) -> None:

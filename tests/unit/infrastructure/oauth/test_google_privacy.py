@@ -68,6 +68,29 @@ def test_google_oauth_objects_omit_secrets_from_repr() -> None:
     assert "GoogleRefreshableCredentialAdapter()" in repr(adapter)
 
 
+def test_google_revoke_omits_token_from_logs_and_repr(
+    log_events: list[dict],
+) -> None:
+    from app.infrastructure.oauth.google import GoogleMailboxTokenRevoker
+
+    seen: list[str] = []
+
+    def transport(refresh_token: str) -> None:
+        seen.append(refresh_token)
+
+    revoker = GoogleMailboxTokenRevoker(transport=transport)
+    material = serialize_google_mailbox_secret(
+        refresh_token=_REFRESH,
+        scopes=(GMAIL_READONLY_SCOPE,),
+        subject=_SUB,
+    )
+    revoker.revoke(material)
+    assert seen == [_REFRESH]
+    blob = f"{revoker!r}{log_events!r}"
+    _assert_opaque(blob)
+    assert "GoogleMailboxTokenRevoker()" in repr(revoker)
+
+
 def test_exchange_failures_omit_secrets(
     log_events: list[dict],
 ) -> None:

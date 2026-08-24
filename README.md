@@ -67,7 +67,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 ### Authentication
 
 * Provider-independent OIDC JWT validation
-* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute)
+* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for mailbox OAuth lifecycle)
 * Fail-closed production (`APP_ENV=production` requires `AUTH_MODE=oidc`)
 * First live identity provider: Microsoft Entra ID (single-tenant resource application)
 
@@ -95,6 +95,12 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * `POST /api/v1/workflow-actions`, `GET /api/v1/workflow-actions`, `GET /api/v1/workflow-actions/{action_id}`
 * `POST /api/v1/workflow-actions/{action_id}/approve` and `.../reject`
 * `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
+* `POST /api/v1/connector-accounts/gmail/authorize` (`communications:connect`)
+* `GET /api/v1/oauth/callbacks/gmail` (unauthenticated Google redirect; ownership from the authorization session)
+* `POST /api/v1/connector-accounts/microsoft_graph/authorize` (`communications:connect`)
+* `GET /api/v1/oauth/callbacks/microsoft_graph` (unauthenticated Microsoft redirect; ownership from the authorization session)
+* `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
+* `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
 * Request validation
 * Structured error handling
 * Reusable domain schemas
@@ -119,7 +125,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Connector ingestion into the existing analysis workflow (below the HTTP surface)
 * Controlled local live adapter verification for Gmail and Microsoft Graph, stopping at `CommunicationMessage`
 
-Phase 10 does not include production OAuth, connector HTTP APIs, background synchronization, or automatic replies.
+Phase 10 historically did not include production OAuth, connector HTTP APIs, background synchronization, or automatic replies. Phase 13 added mailbox OAuth lifecycle HTTP. Connector message-ingestion HTTP and synchronization remain future work.
 
 ### Workflow Automation
 
@@ -136,7 +142,28 @@ Phase 10 does not include production OAuth, connector HTTP APIs, background sync
 * Distinct analyze / workflow / send permissions
 * Uncertain provider outcomes remain `EXECUTING` and return HTTP 503; they are not automatically retried
 
-Phase 12 does not include automatic replies, production OAuth lifecycle, managed secret-store mailbox backends, retry/reconciliation, or exactly-once delivery.
+Phase 12 does not include automatic replies, retry/reconciliation, or exactly-once delivery. Production mailbox OAuth lifecycle and managed secret-store backends were added in Phase 13.
+
+### Mailbox Delegated OAuth
+
+* Delegated Gmail OAuth (confidential web-server authorization-code + PKCE S256)
+* Delegated Microsoft Graph OAuth (Microsoft identity platform v2 + PKCE S256)
+* Distinct `communications:connect` permission
+* Server-side authorization sessions: SHA-256 OAuth state, PKCE verifier never returned, single-use consume
+* Opaque `CommunicationCredentialStore` (memory for local/dev; Azure Key Vault; AWS Secrets Manager)
+* Refreshable `AccessTokenProvider` lifecycle; access tokens are not stored
+* Explicit `granted_capabilities` (`mail.read`, `mail.send`); legacy `NULL` keeps Phase 12 environment-backed execute eligibility
+* Connector-account statuses `ACTIVE`, `DISCONNECTED`, `REAUTH_REQUIRED`
+* Disconnect HTTP removes ECI's stored delegated credential and clears locator/grants
+* Reauthorize HTTP binds the exact owned account; callback identity must match `external_account_id`
+* Azure Key Vault durable OAuth backend with `DefaultAzureCredential` / managed identity
+* AWS Secrets Manager durable OAuth backend with boto3 default chain / ECS Task Role
+* PostgreSQL advisory-lock mutation coordination keyed by opaque `credential_ref` (PostgreSQL stores no OAuth tokens)
+* Locally live-validated Google consent and an explicitly approved Gmail reply
+* Locally live-validated Microsoft consent and an explicitly approved Graph reply
+* Live-validated Azure Key Vault and AWS Secrets Manager credential-store backends
+
+Phase 13 does not add automatic replies, mailbox synchronization/webhooks, user-facing connector ingestion/analyze HTTP, or cloud-hosted end-to-end mailbox OAuth certification of the retained ACA/ECS deployments.
 
 ### Engineering
 
@@ -195,6 +222,13 @@ Phase 12 does not include automatic replies, production OAuth lifecycle, managed
 * ✅ Phase 12E – Execute API + communications:send
 * ✅ Phase 12F – Failure Semantics, Privacy, Documentation & Regression
 * ✅ Phase 12 – Production Communication Execution
+* ✅ Phase 13A – OAuth Domain, Authorization Session & Security Foundation
+* ✅ Phase 13B – Credential Store + Refreshable Access-Token Foundation
+* ✅ Phase 13C – Google OAuth / Gmail Credential Lifecycle
+* ✅ Phase 13D – Microsoft Entra OAuth / Graph Credential Lifecycle
+* ✅ Phase 13E – Azure Key Vault + AWS Secrets Manager Production Backends
+* ✅ Phase 13F – Disconnect, Reauthorization, Production Hardening & Documentation
+* ✅ Phase 13 – Production Mailbox OAuth
 
 ---
 
@@ -278,9 +312,34 @@ Graph /reply  or  Gmail profile + metadata + send
 TX2 EXECUTED | FAILED
 ```
 
-`CommunicationConnector` remains read-only. `CommunicationActionExecutor` is a separate write port. Uncertain provider or credential failure after TX1 returns HTTP 503 and leaves the row `EXECUTING`. There is no retry route and no automatic reply.
+`CommunicationConnector` remains read-only. `CommunicationActionExecutor` is a separate write port. Uncertain provider or credential failure after TX1 returns HTTP 503 and leaves the row `EXECUTING`. Confirmed permanent refresh failure (`invalid_grant`) before provider send HTTP marks the exact owned account `REAUTH_REQUIRED` and records the action `FAILED`. There is no retry route and no automatic reply.
 
-Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, AI workload identity, and GitHub deploy identity.
+Identity domains stay separate:
+
+```text
+ECI application identity:
+Entra/OIDC JWT → AuthenticatedPrincipal → users.id
+
+Mailbox delegated identity:
+ECI user → Google/Microsoft consent → authorization session
+        → credential store → ConnectorAccount.credential_ref
+        → runtime refresh → AccessTokenProvider
+
+Cloud workload identity:
+Azure Container Apps → Managed Identity / DefaultAzureCredential
+AWS ECS → ECS Task Role / boto3 default credential chain
+```
+
+Durable mailbox credentials:
+
+```text
+Azure Key Vault + PostgreSQL advisory-lock coordination
+AWS Secrets Manager + PostgreSQL advisory-lock coordination
+```
+
+PostgreSQL stores only the opaque locator and coordination locks. It does not store OAuth access tokens, refresh tokens, or cloud secret payloads.
+
+Microsoft Foundry authenticates with Microsoft Entra ID through `DefaultAzureCredential`. Amazon Bedrock authenticates with boto3's standard credential chain. Neither adapter stores static cloud keys in ECI Settings. Database identity is separate from user identity, mailbox delegated identity, AI workload identity, and GitHub deploy identity.
 
 The same Docker image runs locally with the mock provider, on Azure Container Apps with Foundry, and on Amazon ECS Fargate with Bedrock. Cloud differences are environment variables and workload identity, not separate applications.
 
@@ -420,10 +479,11 @@ deployment/
 * GitHub Actions CI/CD
 * GitHub OIDC federation
 * PostgreSQL persistence (SQLAlchemy / Alembic; CI `postgres:16`)
+* Azure Key Vault mailbox credential store (implemented; live store-validated)
+* AWS Secrets Manager mailbox credential store (implemented; live store-validated)
 
 **Later**
 
-* Live Azure Key Vault / AWS Secrets Manager certification (application backends exist in Phase 13E; mocked/offline tests only)
 * Managed Azure PostgreSQL / Amazon RDS
 * Distributed tracing / OpenTelemetry
 * Custom metrics, dashboards, and alerts
@@ -457,6 +517,31 @@ az login
 ```
 
 The current development Foundry deployment uses GPT-5.4-mini.
+
+## Mailbox credential store configuration
+
+Mailbox OAuth credentials are selected independently of `AI_PROVIDER`.
+
+```env
+CREDENTIAL_STORE_BACKEND=memory
+```
+
+Local/dev and tests may use the in-memory store. `APP_ENV=production` rejects `memory`. Durable backends:
+
+```env
+CREDENTIAL_STORE_BACKEND=azure_key_vault
+AZURE_KEY_VAULT_URL=https://<vault-name>.vault.azure.net
+```
+
+```env
+CREDENTIAL_STORE_BACKEND=aws_secrets_manager
+AWS_SECRETS_MANAGER_REGION=eu-south-2
+AWS_SECRETS_MANAGER_NAMESPACE=eci/mailbox-oauth
+```
+
+Durable backends require PostgreSQL (`DATABASE_URL`) so credential mutations can take transaction-scoped advisory locks keyed by the opaque `credential_ref`. Settings hold only the vault URL / region / namespace. They do not hold Azure client secrets, AWS access keys, OAuth refresh tokens, or Key Vault/Secrets Manager payloads.
+
+For Gmail/Microsoft connect, also configure the non-secret OAuth client identifiers and redirect URIs documented in `.env.example`. Client secrets are environment values, not API fields.
 
 For Amazon Bedrock:
 
@@ -538,6 +623,13 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 12D – Gmail Reply Executor       | ✅ Completed   |
 | ↳ Phase 12E – Execute API + send         | ✅ Completed   |
 | ↳ Phase 12F – Semantics, Privacy & Docs  | ✅ Completed   |
+| Phase 13 – Production Mailbox OAuth      | ✅ Completed   |
+| ↳ Phase 13A – OAuth Domain & Sessions    | ✅ Completed   |
+| ↳ Phase 13B – Credential Store Foundation| ✅ Completed   |
+| ↳ Phase 13C – Gmail OAuth Lifecycle      | ✅ Completed   |
+| ↳ Phase 13D – Microsoft Graph OAuth      | ✅ Completed   |
+| ↳ Phase 13E – Key Vault / Secrets Manager| ✅ Completed   |
+| ↳ Phase 13F – Disconnect & Reauthorization | ✅ Completed |
 
 ---
 
@@ -562,10 +654,10 @@ The current implementation intentionally focuses on architecture and application
 Not yet implemented:
 
 * Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
-* Production Gmail/Microsoft OAuth lifecycle, token refresh, and connector HTTP APIs
+* User-facing connector message ingestion / Gmail-Outlook → analyze HTTP
 * Mailbox synchronization, webhooks, and attachments
-* Automatic replies, retry/reconciliation, exactly-once delivery, or live-provider send validation
-* Live Key Vault / Secrets Manager certification of mailbox secrets (Phase 13E application backends exist; operator live validation is pending)
+* Automatic replies, retry/reconciliation, or exactly-once delivery
+* Cloud-hosted end-to-end Gmail/Graph OAuth certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, and Secrets Manager validation is recorded; those retained deployments have not been redeployed as a Phase 13 runtime)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached

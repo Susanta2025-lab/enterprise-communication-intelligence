@@ -12,7 +12,11 @@ from urllib.parse import quote
 
 import httpx
 
-from app.core.exceptions import CommunicationActionExecutionError, ServiceUnavailableError
+from app.core.exceptions import (
+    CommunicationActionExecutionError,
+    CommunicationCredentialReauthorizationRequiredError,
+    ServiceUnavailableError,
+)
 from app.core.logging import get_logger
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import WorkflowActionType
@@ -98,6 +102,8 @@ class MicrosoftGraphCommunicationActionExecutor(CommunicationActionExecutor):
     ) -> str:
         try:
             token = self._access_token_provider()
+        except CommunicationCredentialReauthorizationRequiredError:
+            raise
         except Exception:
             unavailable = ServiceUnavailableError(_UNAVAILABLE)
             _log_failure(command, started_at, unavailable, status_class="unavailable")

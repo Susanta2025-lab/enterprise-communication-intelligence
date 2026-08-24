@@ -293,6 +293,33 @@ Returned by `GET /api/v1/oauth/callbacks/microsoft_graph` after a successful Mic
 
 The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
 
+## `ConnectorAccountResponse` (`app/schemas/oauth.py`)
+
+Returned by `POST /api/v1/connector-accounts/{connector_account_id}/disconnect`. Extra fields are forbidden.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | `UUID` | Connector-account id |
+| `provider` | `str` | Stored provider (`gmail` or `microsoft_graph`) |
+| `external_account_id` | `str` | Provider mailbox identity |
+| `status` | `ConnectorAccountStatus` | After success, `disconnected` |
+| `granted_capabilities` | `tuple[CommunicationCapability, ...] \| None` | After success, `null` |
+| `created_at` | `datetime` | Created timestamp |
+| `updated_at` | `datetime` | Updated timestamp |
+
+The response omits `credential_ref`, tokens, user id, and provider error bodies.
+
+## `ConnectorAccountReauthorizeResponse` (`app/schemas/oauth.py`)
+
+Returned by `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize`. Extra fields are forbidden.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `authorization_url` | `str` | Provider authorization URL for the account's stored provider |
+| `expires_at` | `datetime` | Session expiry |
+
+The response omits `state`, PKCE verifier, `credential_ref`, and tokens.
+
 ## API-Level Schemas (not domain schemas)
 
 `app/schemas/` (distinct from `app/domain/schemas/`) holds transport-only response models used by the health endpoints:
@@ -304,6 +331,8 @@ The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client s
 - `AnalysisHistoryItem` / `AnalysisHistoryListResponse` — owned history
 - `WorkflowActionCreateRequest` / `WorkflowActionResponse` / `WorkflowActionListResponse` — workflow proposal, approval, and execute
 - `GmailAuthorizationStartResponse` / `GmailAuthorizationCallbackResponse` — Gmail mailbox OAuth start and Google callback
+- `MicrosoftAuthorizationStartResponse` / `MicrosoftAuthorizationCallbackResponse` — Microsoft mailbox OAuth start and callback
+- `ConnectorAccountResponse` / `ConnectorAccountReauthorizeResponse` — disconnect metadata and reauthorize start
 - `ErrorResponse` (`app/schemas/errors.py`) — `detail: str`; used only for OpenAPI documentation of error responses (see [Error Handling](error-handling.md))
 
 These are not reused as domain models; they exist purely to describe the shape of the health/readiness/error responses in OpenAPI.

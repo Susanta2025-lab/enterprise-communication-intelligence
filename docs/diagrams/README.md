@@ -6,7 +6,8 @@ Mermaid source files for ECI Platform.
 
 | File | Represents |
 |---|---|
-| [`architecture.mmd`](architecture.mmd) | The implemented layered system through Phase 10: HTTP analyze path plus Gmail/Graph → `CommunicationConnector` → `CommunicationMessage` → `CommunicationIngestionService` → existing analysis workflow → `AIProvider` and PostgreSQL. `ConnectorAccountService` is shown off the HTTP path. Phase 11 workflow HTTP and Phase 12 execute sequences are documented in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md), not in this `.mmd` file. |
+| [`architecture.mmd`](architecture.mmd) | Layered system: HTTP analyze path, connector ingestion below HTTP, and Phase 13 mailbox OAuth / credential-store edges. Phase 11/12 execute sequences remain in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). |
+| [`mailbox-oauth.mmd`](mailbox-oauth.mmd) | Phase 13 mailbox delegated OAuth: authorize/reauthorize/disconnect, credential stores, PostgreSQL advisory coordination, runtime refresh |
 | [`request-flow.mmd`](request-flow.mmd) | Sequence diagram of analyze: validation, identity TX, AI inference, history save, and failure paths including 503-before-AI |
 | [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider`, and the configuration-driven factory |
 | [`deployment-azure.mmd`](deployment-azure.mmd) | Azure Container Apps path: same image → ACR → Container Apps → user-assigned Managed Identity → Microsoft Foundry |
@@ -14,7 +15,7 @@ Mermaid source files for ECI Platform.
 | [`observability-application.mmd`](observability-application.mmd) | Common application telemetry: HTTP → request_id middleware → API → service → provider → structlog JSON → stdout |
 | [`observability-azure.mmd`](observability-azure.mmd) | Azure observability: stdout JSON → Container Apps → Log Analytics, plus native Azure Monitor metrics (min 0 / max 1) |
 | [`observability-aws.mmd`](observability-aws.mmd) | AWS observability: stdout JSON → awslogs → CloudWatch Logs, plus standard AWS/ECS CPU and memory (desiredCount 0 when idle) |
-| [`identity.mmd`](identity.mmd) | Identity classes: Client → Entra → JWT → ECI; ECI → Foundry UAMI / Bedrock task role; GitHub → OIDC deploy identities; PostgreSQL identity future/not provisioned |
+| [`identity.mmd`](identity.mmd) | Identity classes: Client → Entra → JWT → ECI; mailbox delegated OAuth; ECI → Foundry UAMI / Bedrock task role / Key Vault / Secrets Manager; GitHub → OIDC deploy identities; PostgreSQL identity future/not provisioned |
 | [`cicd.mmd`](cicd.mmd) | GitHub Actions quality plus PostgreSQL integration; CD build-once → ACR → Azure Container Apps and ECR → ECS |
 | [`ingress.mmd`](ingress.mmd) | Azure HTTPS → Container Apps → ECI; AWS current operator `/32` HTTP (verification-only); AWS ALB HTTPS verified then torn down |
 | [`persistence.mmd`](persistence.mmd) | OIDC principal → IdentityResolver → users/external_identities → analysis workflow → AI provider and PostgreSQL history |
@@ -22,7 +23,7 @@ Mermaid source files for ECI Platform.
 
 ## Implemented vs. Placeholder
 
-`architecture.mmd`, `request-flow.mmd`, and `provider-abstraction.mmd` describe the analyze and connector paths as they exist today. `architecture.mmd` includes the Phase 10 connector path below the HTTP product surface. It does not depict workflow proposal/approval HTTP, the `CommunicationActionExecutor` write path, production OAuth, token storage, or background workers. Phase 11 and Phase 12 sequences live in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). The connector-to-workflow edges are the implemented composition path; they are not a claim that a live mailbox has been passed through Foundry or Bedrock.
+`architecture.mmd`, `request-flow.mmd`, `mailbox-oauth.mmd`, and `provider-abstraction.mmd` describe the analyze, connector, and mailbox-OAuth paths as they exist today. `architecture.mmd` includes the Phase 10 connector path below the HTTP product surface and Phase 13 credential-store edges. It does not depict every workflow execute branch. Phase 11 and Phase 12 sequences live in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). Production mailbox OAuth is implemented; PostgreSQL does not store OAuth tokens. Background workers and automatic replies are not depicted because they are not implemented.
 
 `deployment-azure.mmd` and `deployment-aws.mmd` describe the Phase 6C hosting paths. Direct Fargate public-IP ingress is verification-only. See [`docs/cloud/deployment.md`](../cloud/deployment.md).
 

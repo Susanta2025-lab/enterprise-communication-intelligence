@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.application.exceptions import (
+    ConnectorAccountConflictError,
     ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
     UnsupportedMailboxAuthorizationProviderError,
@@ -26,6 +27,7 @@ from app.core.security import AuthenticatedPrincipal
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import (
     CommunicationCapability,
+    ConnectorAccountStatus,
     MailboxAuthorizationProvider,
     MailboxAuthorizationPurpose,
 )
@@ -270,6 +272,13 @@ class MailboxAuthorizationSessionService:
             raise ServiceUnavailableError(_UNAVAILABLE) from None
         if record is None or record.provider != provider.value:
             raise ConnectorAccountNotFoundError()
+        if record.status is ConnectorAccountStatus.ACTIVE:
+            raise ConnectorAccountConflictError()
+        if record.status not in {
+            ConnectorAccountStatus.DISCONNECTED,
+            ConnectorAccountStatus.REAUTH_REQUIRED,
+        }:
+            raise ConnectorAccountConflictError()
         return record.id
 
 

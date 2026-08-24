@@ -260,7 +260,32 @@ curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/gmail/authorize
 }
 ```
 
-The JSON omits state, PKCE verifier, client secret, and tokens. Live Google Cloud consent is an operator step outside automated tests.
+The JSON omits state, PKCE verifier, client secret, and tokens.
+
+## Disconnect (requires OIDC)
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/<connector-account-id>/disconnect \
+  -H "Authorization: Bearer <access-token-with-communications:connect>"
+```
+
+The JSON includes `id`, `provider`, `external_account_id`, `status`, `granted_capabilities`, and timestamps. It omits `credential_ref` and tokens.
+
+## Reauthorize (requires OIDC)
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/<connector-account-id>/reauthorize \
+  -H "Authorization: Bearer <access-token-with-communications:connect>"
+```
+
+```json
+{
+  "authorization_url": "https://accounts.google.com/o/oauth2/auth?...",
+  "expires_at": "2026-08-24T12:10:00+00:00"
+}
+```
+
+`ACTIVE` accounts return `409`. Callbacks remain unauthenticated.
 
 ## Microsoft mailbox authorize (requires OIDC)
 

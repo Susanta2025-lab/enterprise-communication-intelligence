@@ -96,7 +96,7 @@ Durable rules:
 
 - In-process token cache is not coherent across replicas. That is accepted because access tokens are short-lived and secret material uses CAS.
 - 13B cannot live-certify Google or Microsoft token refresh.
-- A permanently invalid refresh credential still surfaces as unavailable/uncertain execution until later lifecycle work maps it onto `REAUTH_REQUIRED`.
+- A permanently invalid refresh credential is mapped by application execution onto `REAUTH_REQUIRED` for the exact owned account. See [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 
 ## Validation
 

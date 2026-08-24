@@ -1,6 +1,6 @@
 # Cloud Roadmap
 
-This is the cloud-integration view of Phase 6 through Phase 10. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+This is the cloud-integration view of Phase 6 through completed Phase 13. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
 
 ## Provider integration
 
@@ -64,4 +64,4 @@ Environment-backed `CommunicationCredentialResolver` and user-approved Graph/Gma
 
 Controlled live adapter verification was local and stopped at `CommunicationMessage`.
 
-Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). Phase 12 adds user-approved Gmail and Microsoft Graph reply execution through `POST /api/v1/workflow-actions/{action_id}/execute`. Phase 13E Azure Key Vault and AWS Secrets Manager mailbox credential stores are implemented and live-validated at the store/factory path; live cloud-hosted OAuth certification and automatic replies remain later work. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, `DATABASE_URL` injection from Key Vault/Secrets Manager, managed PostgreSQL, and advanced observability remain later work.
+Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). Phase 12 adds user-approved Gmail and Microsoft Graph reply execution through `POST /api/v1/workflow-actions/{action_id}/execute`. Phase 13 implements delegated Gmail/Microsoft OAuth, disconnect/reauthorize HTTP, Azure Key Vault and AWS Secrets Manager mailbox credential stores, and PostgreSQL advisory-lock coordination. Local Google/Microsoft consent and explicitly approved replies, plus live Key Vault/Secrets Manager store validation, are recorded on the Phase 13 roadmap. Live cloud-hosted OAuth certification of the retained ACA/ECS services and automatic replies remain later work. AWS persistent HTTPS requires a custom domain and ACM before an ALB is recreated. Private networking, `DATABASE_URL` injection from Key Vault/Secrets Manager, managed PostgreSQL, and advanced observability remain later work.

@@ -12,6 +12,8 @@ from app.application.services.communication_analysis import CommunicationAnalysi
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
+from app.application.services.connector_account_oauth import ConnectorAccountOAuthService
+from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAuthService
@@ -568,4 +570,51 @@ def _build_microsoft_mailbox_oauth_service() -> MicrosoftMailboxOAuthService:
         store,
         create_stored_credential,
         session_ttl_seconds=settings.oauth_authorization_session_ttl_seconds,
+    )
+
+
+def get_connector_account_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+) -> ConnectorAccountService:
+    """Build connector-account lifecycle after communications:connect.
+
+    Persistence and credential-store construction run in this function body so
+    unauthorized requests never reach them.
+    """
+    return _build_connector_account_service()
+
+
+def get_connector_account_oauth_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+) -> ConnectorAccountOAuthService:
+    """Build reauthorization start after communications:connect."""
+    accounts = _build_connector_account_service()
+    return ConnectorAccountOAuthService(
+        accounts,
+        _build_gmail_mailbox_oauth_service,
+        _build_microsoft_mailbox_oauth_service,
+    )
+
+
+def _build_connector_account_service() -> ConnectorAccountService:
+    settings = get_settings()
+    from app.infrastructure.oauth.google import GoogleMailboxTokenRevoker
+    from app.infrastructure.oauth.runtime import require_shared_oauth_store
+
+    uow_factory = require_unit_of_work_factory(get_unit_of_work_factory())
+    store = require_shared_oauth_store(settings)
+    revokers: dict = {}
+    if settings.gmail_oauth_is_configured:
+        revokers["gmail"] = GoogleMailboxTokenRevoker()
+    return ConnectorAccountService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        credential_store=store,
+        token_revokers=revokers,
     )

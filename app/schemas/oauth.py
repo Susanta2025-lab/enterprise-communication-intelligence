@@ -48,3 +48,26 @@ class MicrosoftAuthorizationCallbackResponse(BaseModel):
     external_account_id: str
     status: ConnectorAccountStatus
     granted_capabilities: tuple[CommunicationCapability, ...]
+
+
+class ConnectorAccountResponse(BaseModel):
+    """Safe connector-account metadata. Omits locators and tokens."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    provider: str
+    external_account_id: str
+    status: ConnectorAccountStatus
+    granted_capabilities: tuple[CommunicationCapability, ...] | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConnectorAccountReauthorizeResponse(BaseModel):
+    """Browser redirect target for reauthorization. Omits state, PKCE, and locators."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    authorization_url: str
+    expires_at: datetime

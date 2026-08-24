@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.application.exceptions import (
+    ConnectorAccountConflictError,
     ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
     UnsupportedMailboxAuthorizationProviderError,
@@ -74,7 +75,7 @@ def _owned_gmail_account(user_id: UUID) -> ConnectorAccountRecord:
         provider="gmail",
         external_account_id="mailbox-001",
         credential_ref="demo-account",
-        status=ConnectorAccountStatus.ACTIVE,
+        status=ConnectorAccountStatus.DISCONNECTED,
         created_at=now,
         updated_at=now,
         granted_capabilities=None,
@@ -133,6 +134,67 @@ def test_start_reauthorize_requires_owned_matching_account() -> None:
     assert result.authorization_session_id == stored.id
     assert stored.connector_account_id == account.id
     assert stored.purpose is MailboxAuthorizationPurpose.REAUTHORIZE
+
+
+def test_start_reauthorize_active_account_conflicts() -> None:
+    """ACTIVE accounts cannot start a reauthorize session."""
+    user_id = uuid4()
+    now = datetime.now(UTC)
+    account = ConnectorAccountRecord(
+        id=uuid4(),
+        user_id=user_id,
+        provider="gmail",
+        external_account_id="mailbox-001",
+        credential_ref="oauth-active-locator-01",
+        status=ConnectorAccountStatus.ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+    )
+    service, _units = _service(unit)
+    with pytest.raises(ConnectorAccountConflictError):
+        service.start_authorization(
+            _principal(),
+            provider="gmail",
+            purpose="reauthorize",
+            connector_account_id=account.id,
+        )
+    assert unit.mailbox_authorization_session_store == {}
+
+
+def test_start_reauthorize_reauth_required_account_is_accepted() -> None:
+    """REAUTH_REQUIRED accounts may start a reauthorize session."""
+    user_id = uuid4()
+    now = datetime.now(UTC)
+    account = ConnectorAccountRecord(
+        id=uuid4(),
+        user_id=user_id,
+        provider="gmail",
+        external_account_id="mailbox-001",
+        credential_ref="oauth-stale-locator-01",
+        status=ConnectorAccountStatus.REAUTH_REQUIRED,
+        created_at=now,
+        updated_at=now,
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    unit = InMemoryUnitOfWork(
+        identities={(_ISSUER_A, _SUBJECT_A): user_id},
+        connector_accounts={account.id: account},
+    )
+    service, _units = _service(unit)
+    result = service.start_authorization(
+        _principal(),
+        provider="gmail",
+        purpose="reauthorize",
+        connector_account_id=account.id,
+    )
+    stored = next(iter(unit.mailbox_authorization_session_store.values()))
+    assert stored.purpose is MailboxAuthorizationPurpose.REAUTHORIZE
+    assert stored.connector_account_id == account.id
+    assert result.authorization_session_id == stored.id
 
 
 def test_cross_user_reauthorize_is_not_found() -> None:

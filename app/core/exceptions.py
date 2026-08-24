@@ -40,9 +40,10 @@ class CommunicationCredentialReauthorizationRequiredError(
 ):
     """Raised when stored refreshable credential material is permanently unusable.
 
-    Compatible with existing unavailable execution semantics. Token resolution
-    must not mutate ConnectorAccount. Mapping onto REAUTH_REQUIRED is later
-    credential-lifecycle work.
+    Compatible with existing unavailable execution semantics at the resolver.
+    Token resolution does not mutate ConnectorAccount. Application execution
+    maps this signal onto ``REAUTH_REQUIRED`` for the exact owned account
+    after TX1, before provider message HTTP.
     """
 
 

@@ -52,7 +52,7 @@ API does not import executor implementations. The composition root in `app/api/d
 
 ## Credential resolution dependency direction
 
-Domain defines `CommunicationCredentialResolver`, `AccessTokenProvider`, and `CommunicationCredentialStore`. Infrastructure implements the environment-backed resolver, an in-memory store, and the refreshable OAuth resolver. `WorkflowActionExecutionService` does not import the resolver. The production factory resolves the locator before TX1 and does not invoke the returned token callable. Execute composition currently injects the environment resolver.
+Domain defines `CommunicationCredentialResolver`, `AccessTokenProvider`, and `CommunicationCredentialStore`. Infrastructure implements the environment-backed resolver, an in-memory store, Azure Key Vault and AWS Secrets Manager stores, and the refreshable OAuth resolver. `WorkflowActionExecutionService` does not import the resolver. The production factory resolves the locator before TX1 and does not invoke the returned token callable. `oauth-` locators use the OAuth resolver; legacy locators keep the environment resolver.
 
 ```text
                     Domain
@@ -61,12 +61,13 @@ Domain defines `CommunicationCredentialResolver`, `AccessTokenProvider`, and `Co
               ↗                 ↖
  Application                     Infrastructure
  depends on factory port         implements env resolver,
- (does not import resolver)      in-memory store, and
-                                 refreshable resolver
+ (does not import resolver)      in-memory / Key Vault /
+                                 Secrets Manager stores,
+                                 and refreshable resolver
                                  (credentials/)
 ```
 
-The environment resolver and refreshable resolver do not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`. Google and Microsoft mailbox OAuth adapters live in `app/infrastructure/oauth/`. Cloud secret backends are Phase 13E `CommunicationCredentialStore` implementations selected by `CREDENTIAL_STORE_BACKEND`.
+The environment resolver and refreshable resolver do not import Gmail/Graph adapters, SQLAlchemy, FastAPI, Azure Key Vault, AWS Secrets Manager, or OAuth SDKs. Mailbox tokens are not loaded into `Settings`. Google and Microsoft mailbox OAuth adapters live in `app/infrastructure/oauth/`. Cloud secret backends are `CommunicationCredentialStore` implementations selected by `CREDENTIAL_STORE_BACKEND`.
 
 ## Explicit Rules (Verified Against Source)
 
@@ -83,4 +84,4 @@ The environment resolver and refreshable resolver do not import Gmail/Graph adap
 
 ## Where Cloud SDKs Are Allowed
 
-Azure SDK imports are allowed only inside `app/providers/microsoft_foundry/`. boto3 imports are allowed only inside `app/providers/amazon_bedrock/`. `app/providers/common/` maps structured LLM output onto domain models and must not import Azure or AWS SDKs. Domain, application, and API modules must not import cloud SDKs. Persistence uses PostgreSQL through SQLAlchemy/psycopg, not Azure or AWS database SDKs. Gmail and Graph mailbox access uses REST via `httpx` in `app/infrastructure/connectors/` and Graph/Gmail reply writes use `httpx` in `app/infrastructure/executors/`; those adapters must not import Azure or AWS SDKs.
+Azure SDK imports are allowed only inside `app/providers/microsoft_foundry/` and `app/infrastructure/credentials/azure_key_vault.py`. boto3 imports are allowed only inside `app/providers/amazon_bedrock/` and `app/infrastructure/credentials/aws_secrets_manager.py`. `app/providers/common/` maps structured LLM output onto domain models and must not import Azure or AWS SDKs. Domain, application, and API modules must not import cloud SDKs. Persistence uses PostgreSQL through SQLAlchemy/psycopg, not Azure or AWS database SDKs. Gmail and Graph mailbox access uses REST via `httpx` in `app/infrastructure/connectors/` and Graph/Gmail reply writes use `httpx` in `app/infrastructure/executors/`; those adapters must not import Azure or AWS SDKs.

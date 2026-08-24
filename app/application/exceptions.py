@@ -28,6 +28,17 @@ class ConnectorAccountInvalidRequestError(ECIPlatformError):
         super().__init__("Connector account request is invalid.")
 
 
+class ConnectorAccountConflictError(ECIPlatformError):
+    """Raised when a connector-account lifecycle operation is not allowed.
+
+    Covers reauthorizing an ACTIVE account and other status conflicts.
+    The public message does not distinguish those cases.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Connector account cannot be updated.")
+
+
 class WorkflowActionNotFoundError(ECIPlatformError):
     """Raised when a workflow action is unknown or not owned by the caller."""
 

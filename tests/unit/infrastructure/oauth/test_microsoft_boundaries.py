@@ -53,6 +53,8 @@ def test_microsoft_http_stays_inside_oauth_adapter() -> None:
     assert "httpx" in microsoft_mod
     assert "import msal" not in microsoft_mod
     assert "from msal" not in microsoft_mod
+    assert "revokeSignInSessions" not in microsoft_mod
+    assert "revokesigninsessions" not in microsoft_mod.lower()
     runtime = (_OAUTH / "runtime.py").read_text(encoding="utf-8")
     assert "InMemoryCommunicationCredentialStore" in runtime
     assert "production" in runtime.lower()

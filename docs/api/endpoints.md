@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of Phase 12. Phase 10 added **no** connector HTTP endpoints. There is no `/api/v1/connectors` route. Connector capability currently exists below the HTTP product surface (`CommunicationConnector` → `CommunicationIngestionService` → existing analysis workflow). Phase 11C adds workflow proposal and approval routes. Phase 12E adds `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. There is no retry, PATCH, or DELETE workflow endpoint.
+All HTTP endpoints implemented in the repository as of completed Phase 13. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Connector fetch capability currently exists below the HTTP product surface. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize), not message ingestion.
 
 ## `GET /health`
 
@@ -358,4 +358,44 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
   - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read`
   - `503` — Microsoft OAuth unavailable, persistence failure, or credential-store compensation failure
 
-Invalid state does not call Microsoft. Consent denial consumes the session and does not exchange a token. Tokens are never returned. Live Entra setup remains an external operator step; automated tests mock Microsoft.
+Invalid state does not call Microsoft. Consent denial consumes the session and does not exchange a token. Tokens are never returned. CONNECT creates or reuses an account by verified `{tid}:{oid}`. REAUTHORIZE attaches a new credential only to the bound account and only when the verified identity matches. Automated tests mock Microsoft.
+
+---
+
+## `POST /api/v1/connector-accounts/{connector_account_id}/disconnect`
+
+**Purpose:** Remove ECI's stored delegated mailbox credential for an owned account and mark it disconnected. This is the authoritative ECI security boundary. It is not an automatic reply and not provider-wide session revocation.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/{connector_account_id}/disconnect`
+- **Request body:** none
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `ConnectorAccountResponse` (`id`, `provider`, `external_account_id`, `status`, `granted_capabilities`, `created_at`, `updated_at`)
+- **Status codes:**
+  - `200 OK` — account is `disconnected`; locator and grants are null
+  - `401` / `403` — authentication/authorization failure
+  - `404` — unknown id or not owned. Body: `{"detail": "Connector account not found."}`
+  - `503` — persistence or credential store unavailable while removal is required
+
+Ownership is verified before secret-store operations. Repeated disconnect is idempotent. `credential_ref` is never returned. Google grant revocation is best-effort after local credential removal. Microsoft-side application consent is not revoked (`revokeSignInSessions` is not called).
+
+---
+
+## `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize`
+
+**Purpose:** Start a server-side mailbox consent session bound to an existing owned connector account. The account's stored provider is used. Callers cannot switch provider or supply scopes.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/{connector_account_id}/reauthorize`
+- **Request body:** none
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `ConnectorAccountReauthorizeResponse` (`authorization_url`, `expires_at`)
+- **Status codes:**
+  - `200 OK` — provider authorization URL for the browser
+  - `401` / `403` — authentication/authorization failure
+  - `404` — unknown id or not owned
+  - `409` — account is `ACTIVE` or otherwise not reauthorizable. Body: `{"detail": "Connector account cannot be updated."}`
+  - `400` — mailbox reauthorization could not be started
+  - `503` — provider OAuth or persistence unavailable
+
+`DISCONNECTED` and `REAUTH_REQUIRED` are accepted. The callback remains unauthenticated. Successful reauthorization reactivates the exact bound account to `ACTIVE` with a new opaque locator and freshly granted capabilities. Selecting a different mailbox at consent is rejected.

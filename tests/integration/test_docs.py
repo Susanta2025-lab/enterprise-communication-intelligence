@@ -89,6 +89,28 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert ms_callback.get("security") in (None, [])
     assert "401" not in ms_callback["responses"]
 
+    disconnect = schema["paths"][
+        "/api/v1/connector-accounts/{connector_account_id}/disconnect"
+    ]["post"]
+    reauthorize = schema["paths"][
+        "/api/v1/connector-accounts/{connector_account_id}/reauthorize"
+    ]["post"]
+    assert disconnect.get("security") == [{"HTTPBearer": []}]
+    assert "401" in disconnect["responses"]
+    assert "403" in disconnect["responses"]
+    assert "404" in disconnect["responses"]
+    assert "503" in disconnect["responses"]
+    assert "requestBody" not in disconnect
+    assert reauthorize.get("security") == [{"HTTPBearer": []}]
+    assert "401" in reauthorize["responses"]
+    assert "403" in reauthorize["responses"]
+    assert "409" in reauthorize["responses"]
+    assert "404" in reauthorize["responses"]
+    assert "requestBody" not in reauthorize
+    serialized_lifecycle = repr(disconnect) + repr(reauthorize)
+    assert "credential_ref" not in serialized_lifecycle
+    assert "refresh_token" not in serialized_lifecycle
+
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
     assert "requestBody" in analyze_operation

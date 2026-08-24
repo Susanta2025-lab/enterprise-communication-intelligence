@@ -20,6 +20,7 @@ from app.application.exceptions import (
 from app.application.services.identity import IdentityResolver
 from app.core.exceptions import (
     CommunicationActionExecutionError,
+    CommunicationCredentialReauthorizationRequiredError,
     PersistenceError,
     ServiceUnavailableError,
 )
@@ -73,6 +74,29 @@ class WorkflowActionExecutionService:
 
         try:
             executor.execute(command)
+        except CommunicationCredentialReauthorizationRequiredError as exc:
+            logger.warning(
+                "workflow_action_execution_reauthorization_required",
+                operation="execute",
+                workflow_action_id=str(action_id),
+                connector_account_id=str(command.connector_account_id),
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            saved = self._commit_reauth_required_failure(
+                user_id,
+                action_id,
+                command.connector_account_id,
+                started_at,
+            )
+            logger.info(
+                "workflow_action_execution_recorded_failed",
+                operation="execute",
+                workflow_action_id=str(saved.id),
+                duration_ms=elapsed_ms(started_at),
+                status=saved.status.value,
+            )
+            return saved
         except CommunicationActionExecutionError as exc:
             logger.warning(
                 "workflow_action_execution_failed",
@@ -199,6 +223,49 @@ class WorkflowActionExecutionService:
             status=WorkflowActionStatus.EXECUTING.value,
         )
         return command, executor
+
+    def _commit_reauth_required_failure(
+        self,
+        user_id: UUID,
+        action_id: UUID,
+        connector_account_id: UUID,
+        started_at: float,
+    ) -> WorkflowAction:
+        """Mark the exact execution account REAUTH_REQUIRED and the action FAILED.
+
+        Token acquisition failed before provider message HTTP, so this is a
+        definite no-send outcome. The locator is preserved for later cleanup.
+        """
+        try:
+            with self._unit_of_work_factory() as uow:
+                uow.connector_accounts.mark_reauth_required_owned(
+                    connector_account_id,
+                    user_id,
+                )
+                action = uow.workflow_actions.get_owned(action_id, user_id)
+                if action is None:
+                    raise WorkflowActionNotFoundError()
+                action.mark_failed()
+                result = uow.workflow_actions.save_owned(
+                    action,
+                    expected_status=WorkflowActionStatus.EXECUTING,
+                )
+                saved = _require_save_success(result)
+                uow.commit()
+        except WorkflowActionNotFoundError:
+            raise
+        except WorkflowActionConflictError:
+            raise
+        except PersistenceError as exc:
+            logger.warning(
+                "workflow_action_persistence_failed",
+                operation="execute",
+                workflow_action_id=str(action_id),
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise ServiceUnavailableError(_UNAVAILABLE) from None
+        return saved
 
     def _commit_terminal(
         self,

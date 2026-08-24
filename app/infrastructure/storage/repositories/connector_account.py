@@ -140,6 +140,29 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
             return None
         return self.get_owned(connector_account_id, user_id)
 
+    def mark_reauth_required_owned(
+        self,
+        connector_account_id: UUID,
+        user_id: UUID,
+    ) -> ConnectorAccountRecord | None:
+        """Mark an owned ACTIVE account as reauthorization-required."""
+        statement = (
+            update(ConnectorAccount)
+            .where(
+                ConnectorAccount.id == connector_account_id,
+                ConnectorAccount.user_id == user_id,
+                ConnectorAccount.status == ConnectorAccountStatus.ACTIVE.value,
+            )
+            .values(
+                status=ConnectorAccountStatus.REAUTH_REQUIRED.value,
+                updated_at=utc_now(),
+            )
+        )
+        result = self._session.execute(statement)
+        if result.rowcount != 1:
+            return None
+        return self.get_owned(connector_account_id, user_id)
+
     def reactivate_owned(
         self,
         connector_account_id: UUID,

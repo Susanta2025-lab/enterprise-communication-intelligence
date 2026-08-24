@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import PersistenceError
-from app.domain.enums import ConnectorAccountStatus
+from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.connector_account_repository import NewConnectorAccount
 from app.infrastructure.storage.models import ConnectorAccount, User
 from app.infrastructure.storage.repositories.connector_account import (
@@ -30,12 +30,14 @@ def _new_account(
     *,
     external_account_id: str = _ACCOUNT,
     credential_ref: str | None = _CREDENTIAL_REF,
+    granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
 ) -> NewConnectorAccount:
     return NewConnectorAccount(
         user_id=user_id,
         provider=_PROVIDER,
         external_account_id=external_account_id,
         credential_ref=credential_ref,
+        granted_capabilities=granted_capabilities,
     )
 
 
@@ -303,6 +305,60 @@ def test_disconnect_rowcount_and_idempotent_update(session_factory: sessionmaker
         assert again.credential_ref is None
         assert again.granted_capabilities is None
         assert repository.disconnect_owned(created.id, user_b) is None
+
+
+def test_mark_reauth_required_and_concurrent_reactivate(
+    session_factory: sessionmaker,
+) -> None:
+    """REAUTH_REQUIRED preserves locator; concurrent reactivation has one winner."""
+    user_a, user_b = _create_users(session_factory)
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        created = repository.create(
+            _new_account(
+                user_a,
+                granted_capabilities=(
+                    CommunicationCapability.MAIL_READ,
+                    CommunicationCapability.MAIL_SEND,
+                ),
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        marked = repository.mark_reauth_required_owned(created.id, user_a)
+        session.commit()
+        assert marked is not None
+        assert marked.status is ConnectorAccountStatus.REAUTH_REQUIRED
+        assert marked.credential_ref == _CREDENTIAL_REF
+        assert marked.granted_capabilities == (
+            CommunicationCapability.MAIL_READ,
+            CommunicationCapability.MAIL_SEND,
+        )
+        assert repository.mark_reauth_required_owned(created.id, user_b) is None
+        winner = repository.reactivate_owned(
+            created.id,
+            user_a,
+            "oauth-winner-locator-01",
+            granted_capabilities=(CommunicationCapability.MAIL_READ,),
+            replace_granted_capabilities=True,
+        )
+        session.commit()
+        loser = repository.reactivate_owned(
+            created.id,
+            user_a,
+            "oauth-loser-locator-02",
+            granted_capabilities=(
+                CommunicationCapability.MAIL_READ,
+                CommunicationCapability.MAIL_SEND,
+            ),
+            replace_granted_capabilities=True,
+        )
+        assert winner is not None
+        assert winner.status is ConnectorAccountStatus.ACTIVE
+        assert winner.credential_ref == "oauth-winner-locator-01"
+        assert loser is None
 
 
 def test_deleting_user_cascades_connector_accounts(session_factory: sessionmaker) -> None:

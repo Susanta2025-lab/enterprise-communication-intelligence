@@ -87,7 +87,7 @@ def test_communication_action_execution_is_unchanged() -> None:
 
 
 def test_gmail_and_graph_executors_and_connectors_are_unchanged() -> None:
-    """13A does not modify production write or read adapters."""
+    """Executors and connectors remain OAuth-unaware AccessTokenProvider consumers."""
     from app.infrastructure.connectors.gmail import GmailCommunicationConnector
     from app.infrastructure.connectors.microsoft_graph import (
         MicrosoftGraphCommunicationConnector,
@@ -109,17 +109,25 @@ def test_gmail_and_graph_executors_and_connectors_are_unchanged() -> None:
         _ROOT / "app" / "infrastructure" / "connectors" / "gmail" / "connector.py",
         _ROOT / "app" / "infrastructure" / "connectors" / "microsoft_graph" / "connector.py",
         _ROOT / "app" / "domain" / "interfaces" / "communication_action_executor.py",
-        _ROOT / "app" / "domain" / "interfaces" / "communication_credential_resolver.py",
     ):
         source = path.read_text(encoding="utf-8")
         assert "MailboxAuthorizationSession" not in source
         assert "granted_capabilities" not in source
         assert "REAUTH_REQUIRED" not in source
+        assert "credential_ref" not in source
+    resolver = (
+        _ROOT / "app" / "domain" / "interfaces" / "communication_credential_resolver.py"
+    ).read_text(encoding="utf-8")
+    assert "MailboxAuthorizationSession" not in resolver
+    assert "granted_capabilities" not in resolver
+    assert "REAUTH_REQUIRED" not in resolver
+    assert "credential_ref" in resolver
+    assert "AccessTokenProvider" in resolver
     execution = (
         _ROOT / "app" / "application" / "services" / "workflow_action_execution.py"
     ).read_text(encoding="utf-8")
     assert "MailboxAuthorizationSession" not in execution
-    assert "REAUTH_REQUIRED" not in execution
+    assert "mark_reauth_required_owned" in execution
     assert "granted_capabilities" in execution
 
 
@@ -141,6 +149,13 @@ def test_gmail_and_microsoft_oauth_routes_exist() -> None:
     router = (_ROOT / "app" / "api" / "router.py").read_text(encoding="utf-8")
     assert "gmail_oauth" in router
     assert "microsoft_oauth" in router
+    assert "connector_accounts" in router
+    lifecycle = (_ROOT / "app" / "api" / "routes" / "connector_accounts.py").read_text(
+        encoding="utf-8"
+    )
+    assert "/connector-accounts/{connector_account_id}/disconnect" in lifecycle
+    assert "/connector-accounts/{connector_account_id}/reauthorize" in lifecycle
+    assert "require_authenticated_communications_connect" in lifecycle
 
 
 def test_future_oauth_contracts_reject_client_supplied_credential_ref() -> None:

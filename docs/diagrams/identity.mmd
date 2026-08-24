@@ -3,8 +3,11 @@ flowchart TD
     Entra["Microsoft Entra ID"]
     JWT["OIDC JWT"]
     ECI["ECI API"]
-    FoundryUAMI["Azure Foundry UAMI"]
-    BedrockRole["AWS Bedrock task role"]
+    Google["Google delegated OAuth"]
+    Microsoft["Microsoft delegated OAuth"]
+    Store["Mailbox credential store"]
+    FoundryUAMI["Azure Foundry UAMI / Key Vault MI"]
+    BedrockRole["AWS Bedrock / Secrets Manager task role"]
     Database["PostgreSQL identity<br/>managed DB not provisioned"]
     GitHub["GitHub Actions"]
     GHOidc["GitHub OIDC"]
@@ -14,6 +17,10 @@ flowchart TD
     Client --> Entra
     Entra --> JWT
     JWT --> ECI
+    ECI --> Google
+    ECI --> Microsoft
+    Google --> Store
+    Microsoft --> Store
     ECI --> FoundryUAMI
     ECI --> BedrockRole
     ECI -.-> Database

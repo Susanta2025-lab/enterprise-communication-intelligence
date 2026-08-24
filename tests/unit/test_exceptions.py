@@ -4,6 +4,7 @@ from app.application.exceptions import (
     AnalysisFailedError,
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    ConnectorAccountConflictError,
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
@@ -53,6 +54,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountInvalidRequestError, ECIPlatformError)
+    assert issubclass(ConnectorAccountConflictError, ECIPlatformError)
     assert issubclass(MailboxAuthorizationSessionInvalidError, ECIPlatformError)
     assert issubclass(MailboxOAuthAuthorizationDeniedError, ECIPlatformError)
     assert issubclass(MailboxOAuthAuthorizationFailedError, ECIPlatformError)
@@ -86,6 +88,7 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert ConnectorAccountInvalidRequestError().message == (
         "Connector account request is invalid."
     )
+    assert ConnectorAccountConflictError().message == "Connector account cannot be updated."
 
 
 def test_mailbox_authorization_errors_are_generic() -> None:

@@ -27,7 +27,8 @@ Do not conflate these identities:
 | Class | Path | Purpose |
 |---|---|---|
 | User identity | Client → OIDC → ECI | Authenticate the API caller |
-| Runtime AI identity | ECI → Foundry UAMI / Bedrock task role | Invoke the AI platform |
+| Mailbox delegated identity | ECI user → Google/Microsoft OAuth → credential store | Delegated mailbox access. Tokens are not stored in PostgreSQL. |
+| Runtime AI / secret-store identity | ECI → Foundry UAMI / Bedrock task role / Key Vault MI / Secrets Manager task role | Invoke AI platforms and durable mailbox secret backends |
 | Database identity | ECI → PostgreSQL when `DATABASE_URL` is set | Read and write application data. Managed cloud DB identity is future. |
 | Deployment identity | GitHub → Azure / AWS | Build and deploy the image |
 

@@ -85,10 +85,15 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `POST /api/v1/workflow-actions/{action_id}/reject`
 - `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
 - `POST /api/v1/connector-accounts/gmail/authorize` (`communications:connect`)
+- `GET /api/v1/oauth/callbacks/gmail` (no ECI bearer; ownership from the authorization session)
+- `POST /api/v1/connector-accounts/microsoft_graph/authorize` (`communications:connect`)
+- `GET /api/v1/oauth/callbacks/microsoft_graph` (no ECI bearer; ownership from the authorization session)
+- `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
+- `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
 
-`GET /api/v1/oauth/callbacks/gmail` is the Google redirect target and does not use the ECI bearer token.
+`GET /api/v1/oauth/callbacks/gmail` and `GET /api/v1/oauth/callbacks/microsoft_graph` are provider redirect targets and do not use the ECI bearer token. CONNECT versus REAUTHORIZE is taken from the consumed authorization session. Reauthorization requires the verified mailbox identity to match the bound account.
 
-Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Analyze, workflow, and send do not imply each other. Unknown and cross-user analysis or workflow resources return `404`, not `403`. History and workflow routes without `DATABASE_URL` return `503`.
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Analyze, workflow, send, and connect do not imply each other. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
 
 Permissions are read only from bounded claims `scp`, `scope`, or `roles`. Internal users store only `issuer` and `subject`; they are not a session store or login database.
 
@@ -114,7 +119,7 @@ FastAPI route (app/api/routes/*)
   ├── CommunicationAnalysisWorkflowService (analyze / history)
   ├── WorkflowActionService (workflow proposal and approval)
   ├── WorkflowActionExecutionService (execute)
-  └── GmailMailboxOAuthService (Gmail connect / Google callback)
+  └── mailbox OAuth services (Gmail/Microsoft connect/callback; disconnect; reauthorize)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow or execution service through FastAPI dependencies, and return the result. Phase 10 added no connector HTTP endpoints. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow, execution, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 10 added no connector message-ingestion HTTP endpoints. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

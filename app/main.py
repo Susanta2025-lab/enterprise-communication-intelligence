@@ -12,6 +12,8 @@ from app.api.routes import health
 from app.application.exceptions import (
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    ConnectorAccountConflictError,
+    ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
     MailboxOAuthAuthorizationDeniedError,
     WorkflowActionConflictError,
@@ -87,6 +89,24 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("workflow_action_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(ConnectorAccountNotFoundError)
+    async def connector_account_not_found_handler(
+        _request: Request,
+        exc: ConnectorAccountNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("connector_account_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(ConnectorAccountConflictError)
+    async def connector_account_conflict_handler(
+        _request: Request,
+        exc: ConnectorAccountConflictError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("connector_account_conflict", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
 
     @application.exception_handler(AnalysisHasNoDraftReplyError)
     async def analysis_has_no_draft_reply_handler(

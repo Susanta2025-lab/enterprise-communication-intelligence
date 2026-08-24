@@ -4,6 +4,23 @@ Operator runbook for deploying the already verified ECI Docker image to Amazon E
 
 **Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. ECR, cluster, service, both task-definition revisions, IAM roles, security group, and log group are retained. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
 
+## Current architecture vs this historical runbook (Phase 13)
+
+This file remains the Phase 6C/7 AWS hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13.
+
+Current ECI application architecture (code and documentation; not a claim that the retained ECS service was redeployed):
+
+- Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP).
+- Mailbox delegated OAuth is a separate identity domain from that login and from Bedrock.
+- AWS Secrets Manager is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=aws_secrets_manager`). Runtime production identity is the ECS task role through the boto3 default credential chain. Settings hold region and namespace only. No AWS access keys in Settings.
+- Least-privilege mailbox secret actions on `eci/mailbox-oauth/*`: `CreateSecret`, `GetSecretValue`, `PutSecretValue`, `UpdateSecretVersionStage`, `DescribeSecret`, `DeleteSecret`. `ListSecrets` is not required.
+- Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
+- Phase 13E live-validated Secrets Manager at the store/factory path using the existing ECI developer identity. That is store validation, not a claim that `eci-api-dev` now runs Phase 13 mailbox OAuth.
+- The operator IAM user (`eci-developer` / profile `eci-dev`) is **not** the production ECS application identity. The application uses `eci-bedrock-task-role-dev` (and would use that same task-role pattern for Secrets Manager in a production mailbox-OAuth deployment).
+- The retained ECS service may still be the historical Phase 6C/7/8 image and has **not** been certified as a complete Phase 13 mailbox-OAuth runtime.
+
+See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
+
 ## Current operational state (Phase 7)
 
 ```text
@@ -736,9 +753,11 @@ Confirm running task count is 0. The public task IP will no longer exist. Leave 
 
 ## Out of scope
 
+Historical Phase 6C scope for this runbook (not a current-architecture claim):
+
 - Terraform / CloudFormation / CDK / GitHub Actions
 - ALB, NAT, private subnets, VPC endpoints
-- Application-user authentication
+- Application-user authentication (added later in Phase 8; see the Phase 13 addendum above)
 - Azure changes
 - Rebuilding the Docker image
 - Changing ECI application code
