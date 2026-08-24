@@ -11,6 +11,7 @@ from app.application.exceptions import (
     MailboxAuthorizationSessionInvalidError,
     MailboxMessageNotFoundError,
     MailboxOAuthAuthorizationDeniedError,
+    MailboxPaginationCursorInvalidError,
     UnsupportedMailboxAuthorizationProviderError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
@@ -69,6 +70,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(WorkflowActionNotExecutableError, ECIPlatformError)
     assert issubclass(ConnectedMailboxNotAvailableError, ECIPlatformError)
     assert issubclass(MailboxMessageNotFoundError, ECIPlatformError)
+    assert issubclass(MailboxPaginationCursorInvalidError, ECIPlatformError)
     assert issubclass(ConnectorError, ECIPlatformError)
     assert issubclass(ConnectorAuthenticationError, ConnectorError)
     assert issubclass(ConnectorPermissionError, ConnectorError)
@@ -97,6 +99,9 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert ConnectorAccountConflictError().message == "Connector account cannot be updated."
     assert ConnectedMailboxNotAvailableError().message == "Connected mailbox is not available."
     assert MailboxMessageNotFoundError().message == "Mailbox message not found."
+    assert MailboxPaginationCursorInvalidError().message == (
+        "Mailbox pagination cursor is invalid."
+    )
     assert "disconnected" not in ConnectedMailboxNotAvailableError().message.lower()
     assert "credential_ref" not in repr(ConnectedMailboxNotAvailableError())
     assert "token" not in MailboxMessageNotFoundError().message.lower()

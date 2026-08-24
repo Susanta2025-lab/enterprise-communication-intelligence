@@ -15,6 +15,9 @@ from app.core.exceptions import (
 )
 from app.domain.interfaces import ConnectorMessageQuery
 from app.infrastructure.connectors.microsoft_graph import MicrosoftGraphCommunicationConnector
+from app.infrastructure.connectors.microsoft_graph.pagination import (
+    opaque_cursor_from_next_link,
+)
 from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
     GRAPH_TOKEN,
     GraphHttpStub,
@@ -23,6 +26,7 @@ from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
 _SAFE_NEXT_LINK = (
     "https://graph.microsoft.com/v1.0/me/messages?$select=id&$top=10&$skiptoken=stale"
 )
+_SAFE_CURSOR = opaque_cursor_from_next_link(_SAFE_NEXT_LINK)
 
 
 def _assert_generic(exc: ConnectorError) -> None:
@@ -146,7 +150,7 @@ def test_list_400_with_cursor_is_invalid_cursor(graph_connector: tuple) -> None:
     stub.error_json = {"error": {"code": "InvalidRequest", "message": "Invalid skiptoken"}}
 
     with pytest.raises(ConnectorInvalidCursorError) as exc_info:
-        connector.list_messages(ConnectorMessageQuery(limit=10, cursor=_SAFE_NEXT_LINK))
+        connector.list_messages(ConnectorMessageQuery(limit=10, cursor=_SAFE_CURSOR))
 
     _assert_generic(exc_info.value)
     assert "skiptoken" not in exc_info.value.message
@@ -238,7 +242,7 @@ def test_continuation_404_is_not_message_not_found(graph_connector: tuple) -> No
     stub.list_status = 404
 
     with pytest.raises(ConnectorUnavailableError) as exc_info:
-        connector.list_messages(ConnectorMessageQuery(limit=10, cursor=_SAFE_NEXT_LINK))
+        connector.list_messages(ConnectorMessageQuery(limit=10, cursor=_SAFE_CURSOR))
 
     assert not isinstance(exc_info.value, ConnectorMessageNotFoundError)
     assert not isinstance(exc_info.value, ConnectorInvalidCursorError)

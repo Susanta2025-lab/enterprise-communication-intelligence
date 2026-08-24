@@ -45,7 +45,7 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
     """Raised when an owned analysis has no usable draft reply to snapshot."""
 ```
 
-`ConnectedMailboxNotAvailableError` and `MailboxMessageNotFoundError` are also defined on `app/application/exceptions.py`. The former covers an owned connector account that cannot currently be used for mailbox read or mailbox-backed analyze without distinguishing DISCONNECTED, `REAUTH_REQUIRED`, missing `mail.read`, unsupported provider, or missing locator. The latter is the public not-found type for a provider message id. Cross-user connector existence remains `ConnectorAccountNotFoundError`. Phase 14C maps connector/credential failures onto these types plus existing `ServiceUnavailableError` (503) and sanitized 500s; it does not expose provider payloads in public error text.
+`ConnectedMailboxNotAvailableError`, `MailboxMessageNotFoundError`, and `MailboxPaginationCursorInvalidError` are also defined on `app/application/exceptions.py`. The first covers an owned connector account that cannot currently be used for mailbox read or mailbox-backed analyze without distinguishing DISCONNECTED, `REAUTH_REQUIRED`, missing `mail.read`, unsupported provider, or missing locator. The second is the public not-found type for a provider message id. The third is the public client error when a connector identifies an invalid or expired list cursor. Cross-user connector existence remains `ConnectorAccountNotFoundError`. Phase 14C/14D map connector/credential failures onto these types plus existing `ServiceUnavailableError` (503) and sanitized 500s; they do not expose provider payloads in public error text.
 
 `app/domain/exceptions.py` defines `InvalidWorkflowTransitionError` with message `"Invalid workflow state transition."`. It is not an `ECIPlatformError` subclass and has a dedicated HTTP handler.
 
@@ -70,6 +70,7 @@ Exception handlers are registered on the FastAPI app:
 | `ConnectorAccountConflictError` | `409` | `{"detail": "Connector account cannot be updated."}` | `connector_account_conflict` (info) |
 | `ConnectedMailboxNotAvailableError` | `409` | `{"detail": "Connected mailbox is not available."}` | `connected_mailbox_not_available` (info) |
 | `MailboxMessageNotFoundError` | `404` | `{"detail": "Mailbox message not found."}` | `mailbox_message_not_found` (info) |
+| `MailboxPaginationCursorInvalidError` | `400` | `{"detail": "Mailbox pagination cursor is invalid."}` | `mailbox_pagination_cursor_invalid` (info) |
 | `PersistenceError` | `503` | `{"detail": "Persistence is currently unavailable."}` | `persistence_unavailable` (warning) |
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
 | `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
@@ -93,7 +94,7 @@ When `AUTH_MODE=oidc`, analyze requires a bearer token. History and workflow rou
 | Provider message unknown for an owned mailbox | `404` | not set | `{"detail": "Mailbox message not found."}` |
 | Owned connector account not currently usable for mailbox read/analyze | `409` | not set | `{"detail": "Connected mailbox is not available."}` |
 
-Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox authorize, disconnect, and reauthorize require `communications:connect`. Future mailbox listing requires `communications:read`. Future mailbox-backed analyze requires `communications:read` and `communications:analyze`. Direct-text analyze does not require `communications:read`. The Google and Microsoft callbacks do not use the ECI bearer token. None of those permissions implies another. `communications:workflow` does not authorize external sending.
+Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox authorize, disconnect, and reauthorize require `communications:connect`. Bounded mailbox listing requires `communications:read`. Mailbox-backed analyze requires `communications:read` and `communications:analyze`. Direct-text analyze does not require `communications:read`. The Google and Microsoft callbacks do not use the ECI bearer token. None of those permissions implies another. `communications:workflow` does not authorize external sending.
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -143,9 +144,9 @@ Readiness returns the same generic `503` body when persistence is configured and
 | `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject/execute return the updated action. Execute 200 + `failed` is a recorded definite provider rejection. |
 | `201` | Workflow action created | `POST /api/v1/workflow-actions` |
 | `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
-| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, and Gmail/Microsoft authorize always (`AUTH_MODE=disabled` included). The Google and Microsoft callbacks are public. |
-| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize; `communications:read` for future mailbox listing; `communications:read` and `communications:analyze` for future mailbox-backed analyze |
-| `400` | Mailbox OAuth failure | Invalid/expired/consumed state, Google consent denial, or sanitized authorization failure |
+| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, mailbox listing, mailbox-backed analyze, and Gmail/Microsoft authorize always (`AUTH_MODE=disabled` included). The Google and Microsoft callbacks are public. |
+| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize; `communications:read` for mailbox listing; `communications:read` and `communications:analyze` for mailbox-backed analyze |
+| `400` | Mailbox OAuth or pagination failure | Invalid/expired/consumed state, Google consent denial, sanitized authorization failure, or invalid mailbox list cursor |
 | `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError`, `WorkflowActionNotFoundError`, `ConnectorAccountNotFoundError`, or `MailboxMessageNotFoundError` |
 | `409` | Workflow or mailbox conflict | No usable draft, invalid transition, concurrent update, not executable, re-execute of EXECUTING/EXECUTED/FAILED, connector account not reauthorizable, or owned mailbox not currently usable for read/analyze |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |

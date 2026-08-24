@@ -50,7 +50,7 @@ def normalize_graph_message(payload: object) -> CommunicationMessage:
 
 
 def parse_list_page(payload: object) -> tuple[list[str], str | None]:
-    """Return listed Graph ids and the opaque ``@odata.nextLink``, if any."""
+    """Return listed Graph ids and the raw ``@odata.nextLink``, if any."""
     if not isinstance(payload, dict):
         raise ConnectorUnavailableError()
     if "value" not in payload:

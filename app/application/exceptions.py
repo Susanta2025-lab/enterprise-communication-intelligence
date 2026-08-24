@@ -115,3 +115,10 @@ class MailboxMessageNotFoundError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Mailbox message not found.")
+
+
+class MailboxPaginationCursorInvalidError(ECIPlatformError):
+    """Raised when a mailbox list continuation token cannot be used."""
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox pagination cursor is invalid.")

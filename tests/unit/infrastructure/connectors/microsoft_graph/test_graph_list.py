@@ -5,6 +5,9 @@ import pytest
 from app.core.exceptions import ConnectorUnavailableError
 from app.domain.enums import SourceType
 from app.domain.interfaces import ConnectorMessageQuery, MessagePage
+from app.infrastructure.connectors.microsoft_graph.pagination import (
+    opaque_cursor_from_next_link,
+)
 from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
     GRAPH_API_PREFIX,
     GRAPH_LIST_URL,
@@ -153,7 +156,8 @@ def test_list_does_not_follow_next_link(graph_connector: tuple) -> None:
     ]
     assert len(list_calls) == 1
     assert [item.message_id for item in page.items] == ["msg-1"]
-    assert page.next_cursor == stub.next_link
+    assert page.next_cursor == opaque_cursor_from_next_link(stub.next_link)
+    assert "graph.microsoft.com" not in (page.next_cursor or "")
 
 
 def test_list_does_not_retry_failed_list_request(graph_connector: tuple) -> None:

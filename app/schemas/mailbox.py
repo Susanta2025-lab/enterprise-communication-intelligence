@@ -1,7 +1,7 @@
 """Provider-neutral public contract for connected mailbox read and analysis.
 
-These schemas freeze the Phase 14 HTTP shape. Routes that perform listing or
-mailbox-backed analysis are not served in Phase 14A.
+These schemas freeze the Phase 14 HTTP shape for bounded mailbox listing and
+mailbox-backed analysis.
 """
 
 from datetime import datetime

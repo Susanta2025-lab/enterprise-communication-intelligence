@@ -51,7 +51,26 @@ If save fails after a successful AI call, the workflow still returns HTTP 200 wi
 
 ## Connector ingestion → analysis
 
-Phase 10 added the below-HTTP ingestion path. Phase 14C mounts it for one owned mailbox message at `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`. `ConnectedMailboxAnalysisService` establishes ownership and mailbox usability, closes the persistence unit of work, then `CommunicationIngestionService` fetches one already-normalized message and reuses the existing workflow. Mailbox HTTP happens after that short ownership transaction and before workflow identity/history transactions. No database transaction is held open across the mailbox request or AI inference. When the workflow is constructed with an authenticated principal and persistence, it may persist a derived analysis (not raw mail) using the same short-transaction rules as HTTP analyze. Raw mailbox payloads are not persisted. Direct-text analyze remains a separate route and does not use connectors. Bounded listing is not mounted.
+Phase 10 added the below-HTTP ingestion path. Phase 14D mounts bounded listing at `GET /api/v1/connector-accounts/{connector_account_id}/messages`. Phase 14C mounts mailbox-backed analyze at `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`. `ConnectedMailboxMessageListingService` and `ConnectedMailboxAnalysisService` establish ownership and mailbox usability, close the persistence unit of work, then call the existing connector contract. Mailbox HTTP happens after that short ownership transaction. No database transaction is held open across the mailbox request or AI inference. Listing is a read-through of provider-neutral metadata only: it does not persist mailbox messages, invoke AI, or send mail. When analyze is constructed with an authenticated principal and persistence, it may persist a derived analysis (not raw mail) using the same short-transaction rules as HTTP analyze. Raw mailbox payloads are not persisted. Direct-text analyze remains a separate route and does not use connectors.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant List as ConnectedMailboxMessageListingService
+    participant Factory as CommunicationConnectorFactory
+    participant Connector as CommunicationConnector
+    participant Mailbox as External mailbox API
+
+    Client->>List: GET /connector-accounts/{id}/messages
+    List->>List: resolve user, owned account, usability (short TX)
+    List->>Factory: create_for_account
+    Factory-->>List: CommunicationConnector
+    List->>Connector: list_messages(limit, cursor)
+    Connector->>Mailbox: one bounded vendor list page
+    Mailbox-->>Connector: vendor payload
+    Connector-->>List: MessagePage
+    List-->>Client: items + opaque next_cursor
+```
 
 ```mermaid
 sequenceDiagram
@@ -380,5 +399,5 @@ communications:analyze     (existing analyze / history)
 communications:workflow    (workflow proposal/approval HTTP)
 communications:send        (execute HTTP)
 communications:connect     (mailbox OAuth lifecycle HTTP)
-communications:read        (mailbox-backed analyze also requires analyze; listing remains later)
+communications:read        (mailbox listing; mailbox-backed analyze also requires analyze)
 ```

@@ -15,6 +15,9 @@ from app.application.services.communication_analysis_workflow import (
 from app.application.services.connected_mailbox_analysis import (
     ConnectedMailboxAnalysisService,
 )
+from app.application.services.connected_mailbox_listing import (
+    ConnectedMailboxMessageListingService,
+)
 from app.application.services.connector_account_oauth import ConnectorAccountOAuthService
 from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
@@ -572,8 +575,9 @@ def get_communication_connector_factory(
 ) -> CommunicationConnectorFactory:
     """Build the account-driven production read factory after read authorization.
 
-    Mailbox-backed analyze depends on this without ``communications:send``.
-    Construction does not fetch tokens or call mailbox HTTP.
+    Mailbox-backed analyze and bounded listing depend on this without
+    ``communications:send``. Construction does not fetch tokens or call
+    mailbox HTTP.
     """
     from app.infrastructure.connectors.factory import ProviderCommunicationConnectorFactory
 
@@ -646,6 +650,31 @@ def get_connected_mailbox_analysis_service(
         uow_factory,
         connector_factory,
         workflow,
+    )
+
+
+def get_connected_mailbox_listing_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+    connector_factory: Annotated[
+        CommunicationConnectorFactory,
+        Depends(get_communication_connector_factory),
+    ],
+) -> ConnectedMailboxMessageListingService:
+    """Compose mailbox listing after communications:read authorization.
+
+    Persistence and connector-factory construction run in this function body
+    only after authorization. Construction does not fetch tokens, refresh
+    OAuth, or call mailbox HTTP. This dependency does not construct AI
+    analysis or write-executor services.
+    """
+    return ConnectedMailboxMessageListingService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        connector_factory,
     )
 
 

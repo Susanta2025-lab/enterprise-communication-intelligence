@@ -323,7 +323,7 @@ The response omits `state`, PKCE verifier, `credential_ref`, and tokens.
 
 ## `ConnectorAccountMessageListQuery` (`app/schemas/mailbox.py`)
 
-Frozen Phase 14 list query. Extra fields are forbidden. Not served over HTTP in 14A.
+Frozen Phase 14 list query. Extra fields are forbidden. Served by `GET /api/v1/connector-accounts/{connector_account_id}/messages`.
 
 | Field | Type | Required | Meaning | Validation |
 |---|---|---|---|---|
@@ -376,7 +376,7 @@ The mailbox-backed analyze response reuses `CommunicationAnalysisResponse`. It d
 - `GmailAuthorizationStartResponse` / `GmailAuthorizationCallbackResponse` — Gmail mailbox OAuth start and Google callback
 - `MicrosoftAuthorizationStartResponse` / `MicrosoftAuthorizationCallbackResponse` — Microsoft mailbox OAuth start and callback
 - `ConnectorAccountResponse` / `ConnectorAccountReauthorizeResponse` — disconnect metadata and reauthorize start
-- `ConnectorAccountMessageListQuery` / `ConnectorAccountMessageListItem` / `ConnectorAccountMessageListResponse` — Phase 14 mailbox list contract (not served; listing remains 14D)
+- `ConnectorAccountMessageListQuery` / `ConnectorAccountMessageListItem` / `ConnectorAccountMessageListResponse` — Phase 14D mailbox list HTTP contract
 - `ConnectorAccountMessageAnalyzeRequest` — Phase 14C connected-mailbox analyze body; response reuses `CommunicationAnalysisResponse`
 - `ErrorResponse` (`app/schemas/errors.py`) — `detail: str`; used only for OpenAPI documentation of error responses (see [Error Handling](error-handling.md))
 

@@ -108,6 +108,25 @@ The FastAPI route stays thin. Unknown and cross-user accounts share the same 404
 
 Direct-text `POST /api/v1/communications/analyze` does not use this service.
 
+## Connected mailbox listing
+
+`ConnectedMailboxMessageListingService` is the HTTP use-case orchestrator for bounded mailbox listing:
+
+```text
+authenticated principal
+→ find existing internal user
+→ load exact owned ConnectorAccount
+→ ACTIVE + routable provider + mail.read (+ locator)
+→ close persistence unit of work
+→ CommunicationConnectorFactory.create_for_account
+→ CommunicationConnector.list_messages(ConnectorMessageQuery)
+→ map CommunicationMessage onto ConnectorAccountMessageListResponse
+```
+
+Listing requires `communications:read` and does not require `communications:analyze`. The FastAPI route stays thin. Unknown and cross-user accounts share the same 404. Owned but unusable accounts raise `ConnectedMailboxNotAvailableError` (409) before credential I/O or mailbox HTTP. One list request corresponds to one bounded connector page (`page_size` becomes `ConnectorMessageQuery.limit`). Graph `@odata.nextLink` is normalized inside the Graph adapter; the application layer does not parse vendor cursors. Invalid/expired cursors identified by the connector become `MailboxPaginationCursorInvalidError` (400). Listing does not persist mailbox messages, invoke AI, create workflow actions, or send mail.
+
+Shared mailbox-read eligibility lives in `connected_mailbox_access.py` so listing and analyze keep the same pre-I/O policy.
+
 ## Connector accounts
 
 `ConnectorAccountService` (`app/application/services/connector_accounts.py`) manages the user-owned connector-account lifecycle:

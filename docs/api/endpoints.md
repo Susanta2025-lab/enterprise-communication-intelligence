@@ -406,20 +406,28 @@ Ownership is verified before secret-store operations. Repeated disconnect is ide
 
 `POST /api/v1/communications/analyze` remains the direct-text path. It requires only `communications:analyze`, does not use connector accounts, and does not call mailbox connectors.
 
-`POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` is the connected-mailbox path mounted in Phase 14C. It requires `communications:read` and `communications:analyze`. It fetches one owned mailbox message, then reuses the existing analysis workflow.
+The connected-mailbox product flow is:
 
-Bounded mailbox listing is **not** mounted.
+```text
+connected mailbox
+→ GET .../messages (bounded list)
+→ user selects one provider_message_id
+→ POST .../messages/analyze
+```
+
+Listing is a bounded request/response read-through. It is not mailbox synchronization, not a local mailbox mirror, not searchable, and does not return attachments, full bodies, or background ingestion.
 
 ### `GET /api/v1/connector-accounts/{connector_account_id}/messages`
 
-Not served. The public contract remains frozen for Phase 14D.
+Served in Phase 14D.
 
-- **Authorization:** authenticated principal + `communications:read`
+- **Authorization:** authenticated principal + `communications:read`. `AUTH_MODE=disabled` returns `401`. `communications:analyze` is not required.
 - **Query:** `ConnectorAccountMessageListQuery` — `page_size` (default 10, maximum 100) and opaque `cursor`
 - **Response:** `ConnectorAccountMessageListResponse` — `items` plus `next_cursor` (`null` on the last page)
 - **List item fields:** `provider_message_id`, `sender`, `subject`, `sent_at`, `received_at`
 - **Not returned:** full body, attachments, `thread_id`, `credential_ref`, tokens, OAuth data, raw provider JSON, Graph `nextLink` or other vendor pagination URLs
-- **Established status codes:** `401` unauthenticated; `403` missing `communications:read`; `404` unknown or not-owned connector account; `409` owned account not currently usable; `422` invalid query; `503` transient unavailability
+- **Status codes:** `401` unauthenticated; `403` missing `communications:read`; `404` unknown or not-owned connector account; `409` owned account not currently usable; `400` invalid/expired pagination cursor when the connector identifies that condition; `422` invalid query; `503` transient unavailability
+- **Behavior:** ownership and mailbox usability are established before credential I/O or mailbox HTTP. One list request corresponds to one bounded connector page. Messages are not persisted. AI is not invoked. No workflow action is created and no send/reply occurs.
 
 ### `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`
 

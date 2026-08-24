@@ -12,6 +12,9 @@ from app.core.exceptions import (
 from app.domain.interfaces import ConnectorMessageQuery
 from app.infrastructure.connectors.common.auth import AccessTokenProvider
 from app.infrastructure.connectors.microsoft_graph import MicrosoftGraphCommunicationConnector
+from app.infrastructure.connectors.microsoft_graph.pagination import (
+    opaque_cursor_from_next_link,
+)
 from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
     GRAPH_TOKEN,
     graph_resource,
@@ -129,10 +132,14 @@ def test_list_next_link_is_not_logged(
     )
     stub.next_link = _NEXT_LINK
 
-    page = connector.list_messages(ConnectorMessageQuery(limit=1, cursor=_NEXT_LINK))
+    page = connector.list_messages(
+        ConnectorMessageQuery(limit=1, cursor=opaque_cursor_from_next_link(_NEXT_LINK))
+    )
 
-    assert page.next_cursor == _NEXT_LINK
-    assert str(stub.requests[0].url) == _NEXT_LINK
+    assert page.next_cursor == opaque_cursor_from_next_link(_NEXT_LINK)
+    assert page.next_cursor != _NEXT_LINK
+    assert stub.requests[0].url.host == "graph.microsoft.com"
+    assert stub.requests[0].url.params.get("$skiptoken") == "uniqueSkipTokenZX91"
     _assert_secrets_absent(_serialized(log_events))
 
 

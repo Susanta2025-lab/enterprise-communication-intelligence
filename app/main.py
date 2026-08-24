@@ -18,6 +18,7 @@ from app.application.exceptions import (
     MailboxAuthorizationSessionInvalidError,
     MailboxMessageNotFoundError,
     MailboxOAuthAuthorizationDeniedError,
+    MailboxPaginationCursorInvalidError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
@@ -127,6 +128,15 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("mailbox_message_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxPaginationCursorInvalidError)
+    async def mailbox_pagination_cursor_invalid_handler(
+        _request: Request,
+        exc: MailboxPaginationCursorInvalidError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_pagination_cursor_invalid", error_class=error_class(exc))
+        return JSONResponse(status_code=400, content={"detail": exc.message})
 
     @application.exception_handler(AnalysisHasNoDraftReplyError)
     async def analysis_has_no_draft_reply_handler(

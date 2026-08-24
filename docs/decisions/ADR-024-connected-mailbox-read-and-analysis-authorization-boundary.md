@@ -4,7 +4,7 @@
 
 Accepted
 
-Implemented in Phase 14A. This records the public authorization and contract boundary for connected mailbox listing and mailbox-backed AI analysis. It does not replace ADR-009 (application-user OIDC), ADR-015 (`CommunicationConnector` remains read-only), ADR-017 (`CommunicationActionExecutor` remains the write port), or ADR-021/ADR-023 (mailbox OAuth lifecycle). Phase 14C mounts mailbox-backed analyze HTTP. Listing HTTP remains a later Phase 14 slice.
+Implemented in Phase 14A. This records the public authorization and contract boundary for connected mailbox listing and mailbox-backed AI analysis. It does not replace ADR-009 (application-user OIDC), ADR-015 (`CommunicationConnector` remains read-only), ADR-017 (`CommunicationActionExecutor` remains the write port), or ADR-021/ADR-023 (mailbox OAuth lifecycle). Phase 14C mounts mailbox-backed analyze HTTP. Phase 14D mounts bounded listing HTTP.
 
 ## Date
 
@@ -103,7 +103,8 @@ Unknown or cross-user connector accounts remain indistinguishable `404` (`Connec
 - Direct-text analyze clients keep working with analyze-only tokens.
 - Later slices can implement listing against this contract without redesigning authorization or public schemas.
 - Phase 14B implemented the provider-neutral read factory (`CommunicationConnectorFactory` / `ProviderCommunicationConnectorFactory`). Application and API code depend on that port rather than constructing Gmail or Graph connectors. Access-token acquisition stays lazy. Confirmed permanent refresh failure remains `CommunicationCredentialReauthorizationRequiredError` on the read token path. The factory does not encode ownership, ACTIVE status, or `mail.read`.
-- Phase 14C mounts `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` through `ConnectedMailboxAnalysisService`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Bounded listing HTTP remains a later slice. Durable `ACTIVE → REAUTH_REQUIRED` mutation on confirmed refresh failure remains Phase 14E.
+- Phase 14C mounts `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` through `ConnectedMailboxAnalysisService`. Ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Durable `ACTIVE → REAUTH_REQUIRED` mutation on confirmed refresh failure remains Phase 14E.
+- Phase 14D mounts `GET /api/v1/connector-accounts/{connector_account_id}/messages` through `ConnectedMailboxMessageListingService`. Listing requires `communications:read` and does not require `communications:analyze`. Graph `@odata.nextLink` is normalized inside the Graph adapter into an opaque continuation token; the public API never returns a Graph URL. Listing does not persist mailbox messages, invoke AI, or send mail.
 
 ## Benefits
 
@@ -123,7 +124,9 @@ Unknown or cross-user connector accounts remain indistinguishable `404` (`Connec
 - `app/domain/interfaces/communication_connector_factory.py`
 - `app/infrastructure/connectors/factory.py` (`ProviderCommunicationConnectorFactory`)
 - `app/schemas/mailbox.py`
-- `app/application/exceptions.py` (`ConnectedMailboxNotAvailableError`, `MailboxMessageNotFoundError`)
+- `app/application/exceptions.py` (`ConnectedMailboxNotAvailableError`, `MailboxMessageNotFoundError`, `MailboxPaginationCursorInvalidError`)
+- `app/application/services/connected_mailbox_listing.py`
+- `app/application/services/connected_mailbox_analysis.py`
 - `app/domain/models/capabilities.py` (`is_mail_read_allowed`)
 - [ADR-009](ADR-009-application-user-authentication.md)
 - [ADR-015](ADR-015-approval-gated-workflow-actions.md)

@@ -110,7 +110,29 @@ def test_openapi_schema_available(client: TestClient) -> None:
     serialized_lifecycle = repr(disconnect) + repr(reauthorize)
     assert "credential_ref" not in serialized_lifecycle
     assert "refresh_token" not in serialized_lifecycle
-    assert "/api/v1/connector-accounts/{connector_account_id}/messages" not in schema["paths"]
+    assert "/api/v1/connector-accounts/{connector_account_id}/messages" in schema["paths"]
+    mailbox_list = schema["paths"][
+        "/api/v1/connector-accounts/{connector_account_id}/messages"
+    ]
+    mailbox_list_get = mailbox_list["get"]
+    assert mailbox_list_get.get("security") == [{"HTTPBearer": []}]
+    assert "200" in mailbox_list_get["responses"]
+    assert "400" in mailbox_list_get["responses"]
+    assert "401" in mailbox_list_get["responses"]
+    assert "403" in mailbox_list_get["responses"]
+    assert "404" in mailbox_list_get["responses"]
+    assert "409" in mailbox_list_get["responses"]
+    assert "503" in mailbox_list_get["responses"]
+    list_text = repr(mailbox_list_get).lower()
+    assert "communications:read" in list_text
+    assert "communications:analyze is not required" in list_text
+    param_names = {item.get("name") for item in mailbox_list_get.get("parameters", [])}
+    assert "page_size" in param_names
+    assert "cursor" in param_names
+    serialized_list = repr(mailbox_list_get)
+    assert "credential_ref" not in serialized_list
+    assert "nextLink" not in serialized_list
+    assert "access_token" not in serialized_list
     mailbox_analyze = schema["paths"][
         "/api/v1/connector-accounts/{connector_account_id}/messages/analyze"
     ]
@@ -327,7 +349,7 @@ def test_adr_020_records_uncertain_execution_without_unknown_state() -> None:
 
 
 def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
-    """Phase 14A documents communications:read; 14C mounts analyze, not listing."""
+    """Phase 14A documents communications:read; 14C/14D mount analyze and listing."""
     root = Path(__file__).resolve().parents[2]
     adr = (
         root
@@ -357,6 +379,7 @@ def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
     assert "**14A is Completed.**" in phase14
     assert "**14B is Completed.**" in phase14
     assert "**14C is Completed.**" in phase14
+    assert "**14D is Completed.**" in phase14
     assert "Phase 14 is **Next**" in phase14
     assert "14D" in phase14
     assert "14E" in phase14

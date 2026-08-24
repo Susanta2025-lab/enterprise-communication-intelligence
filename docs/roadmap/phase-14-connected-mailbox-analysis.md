@@ -31,7 +31,7 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed.** Remaining slices are 14D–14F.
+Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed. 14D is Completed.** Remaining slices are 14E–14F.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -183,13 +183,15 @@ Exit: offline analyze path green; direct-text `POST /api/v1/communications/analy
 
 ### 14D — Bounded Mailbox Message Listing
 
+**14D is Completed.**
+
 Objective: list recent messages as provider-neutral metadata with an opaque cursor.
 
-Implementation surface: list route, bounded query, cursor wrapping so Graph `nextLink` never appears in the public API, metadata projection (no raw bodies).
+Implementation surface: `ConnectedMailboxMessageListingService`, mounted `GET /api/v1/connector-accounts/{connector_account_id}/messages`, reuse of Phase 14A list schemas and Phase 14B `CommunicationConnectorFactory`, reuse of existing `CommunicationConnector.list_messages`. Graph `@odata.nextLink` is normalized inside the Graph adapter into an opaque pagination token; the public `next_cursor` is never a Graph URL. Listing is a bounded request/response read-through: no sync, local mirror, search, attachments, AI, persistence of mailbox messages, workflow actions, or send/reply.
 
 Migration: none.
 
-Docs: OpenAPI text for the list route.
+Docs: OpenAPI and API docs for the list route. Connected-mailbox product flow is list → select → analyze.
 
 Live validation: no.
 

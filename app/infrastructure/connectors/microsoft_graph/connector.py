@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 import httpx
 
@@ -23,10 +23,12 @@ from app.infrastructure.connectors.microsoft_graph.normalization import (
     normalize_graph_message,
     parse_list_page,
 )
+from app.infrastructure.connectors.microsoft_graph.pagination import (
+    list_query_params,
+    opaque_cursor_from_next_link,
+)
 
 _GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
-_GRAPH_HOST = "graph.microsoft.com"
-_LIST_PATH = "/v1.0/me/messages"
 _LIST_URL = f"{_GRAPH_API_BASE}/me/messages"
 _FETCH_SELECT = (
     "id,conversationId,subject,body,from,sender,"
@@ -34,7 +36,6 @@ _FETCH_SELECT = (
     "sentDateTime,receivedDateTime,categories"
 )
 _PREFER_TEXT_BODY = 'outlook.body-content-type="text"'
-_ALLOWED_PORTS = frozenset({None, 443})
 _OPERATION_LIST = "list"
 _OPERATION_FETCH = "fetch"
 
@@ -61,23 +62,16 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
 
     def list_messages(self, query: ConnectorMessageQuery) -> MessagePage:
         """Return one Graph collection page, fetching each listed id sequentially."""
-        if query.cursor is not None:
-            url = _validated_graph_next_link(query.cursor)
-            params: dict[str, str | int] | None = None
-            has_cursor = True
-        else:
-            url = _LIST_URL
-            params = {"$top": query.limit, "$select": "id"}
-            has_cursor = False
+        params = list_query_params(query)
         payload = self._get_json(
-            url,
+            _LIST_URL,
             params=params,
             operation=_OPERATION_LIST,
-            has_cursor=has_cursor,
+            has_cursor=query.cursor is not None,
         )
-        message_ids, next_cursor = parse_list_page(payload)
+        message_ids, next_link = parse_list_page(payload)
         items = [self.fetch_message(message_id) for message_id in message_ids]
-        return MessagePage(items=items, next_cursor=next_cursor)
+        return MessagePage(items=items, next_cursor=opaque_cursor_from_next_link(next_link))
 
     def fetch_message(self, provider_message_id: str) -> CommunicationMessage:
         """Return one normalized message for a Graph message resource id."""
@@ -136,34 +130,6 @@ def _validated_message_id(provider_message_id: str) -> str:
 
 def _message_url(message_id: str) -> str:
     return f"{_LIST_URL}/{quote(message_id, safe='')}"
-
-
-def _validated_graph_next_link(cursor: str) -> str:
-    """Accept only an https Graph v1.0 ``/me/messages`` collection URL.
-
-    The original cursor string is returned unchanged so Graph continuation
-    query values are not rewritten. Validation happens before HTTP so a
-    malicious cursor cannot receive the bearer token.
-    """
-    try:
-        parsed = urlparse(cursor)
-    except ValueError:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.scheme.lower() != "https":
-        raise ConnectorInvalidCursorError() from None
-    if parsed.hostname is None or parsed.hostname.lower() != _GRAPH_HOST:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.username is not None or parsed.password is not None:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.port not in _ALLOWED_PORTS:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.fragment:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.params:
-        raise ConnectorInvalidCursorError() from None
-    if parsed.path.rstrip("/") != _LIST_PATH:
-        raise ConnectorInvalidCursorError() from None
-    return cursor
 
 
 def _raise_for_status(

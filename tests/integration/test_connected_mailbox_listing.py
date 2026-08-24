@@ -1,10 +1,10 @@
-"""HTTP tests for connected-mailbox analyze."""
+"""HTTP tests for connected-mailbox message listing."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from unittest.mock import MagicMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -37,6 +37,9 @@ from app.domain.interfaces.communication_action_executor_factory import (
     CommunicationActionExecutorFactory,
 )
 from app.infrastructure.connectors.fake import FakeCommunicationConnector
+from app.infrastructure.connectors.microsoft_graph.pagination import (
+    opaque_cursor_from_next_link,
+)
 from app.infrastructure.credentials.environment import (
     EnvironmentCommunicationCredentialResolver,
 )
@@ -70,10 +73,9 @@ from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
     graph_resource,
 )
 
-_ANALYZE_URL = "/api/v1/communications/analyze"
-_MAILBOX_ANALYZE = (
-    "/api/v1/connector-accounts/{connector_account_id}/messages/analyze"
-)
+_LIST_URL = "/api/v1/connector-accounts/{connector_account_id}/messages"
+_ANALYZE_URL = "/api/v1/connector-accounts/{connector_account_id}/messages/analyze"
+_DIRECT_ANALYZE = "/api/v1/communications/analyze"
 _SETTINGS_ENV_VARS = (
     "APP_NAME",
     "APP_VERSION",
@@ -97,12 +99,21 @@ _SETTINGS_ENV_VARS = (
 _READ_ANALYZE = f"{COMMUNICATIONS_READ_PERMISSION} {TEST_PERMISSION}"
 _GMAIL_LOCATOR = "mailbox-gmail-1"
 _GRAPH_LOCATOR = "mailbox-graph-1"
-_GMAIL_ENV = (
-    "ECI_COMMUNICATION_CREDENTIAL_GMAIL_MAILBOX_GMAIL_1_ACCESS_TOKEN"
-)
+_GMAIL_ENV = "ECI_COMMUNICATION_CREDENTIAL_GMAIL_MAILBOX_GMAIL_1_ACCESS_TOKEN"
 _GRAPH_ENV = (
     "ECI_COMMUNICATION_CREDENTIAL_MICROSOFT_GRAPH_MAILBOX_GRAPH_1_ACCESS_TOKEN"
 )
+_GRAPH_NEXT_LINK = (
+    "https://graph.microsoft.com/v1.0/me/messages"
+    "?$select=id&$top=1&$skiptoken=graph-page-2"
+)
+_LIST_ITEM_FIELDS = {
+    "provider_message_id",
+    "sender",
+    "subject",
+    "sent_at",
+    "received_at",
+}
 
 
 class _CountingResolver:
@@ -127,7 +138,7 @@ class _CountingResolver:
 
 class _ForbiddenExecutorFactory(CommunicationActionExecutorFactory):
     def create_for_account(self, account):  # noqa: ANN001
-        raise AssertionError("mailbox analyze must not construct a write executor")
+        raise AssertionError("mailbox listing must not construct a write executor")
 
 
 def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,35 +164,28 @@ def _token(private_key, scp: str, *, subject: str = TEST_SUBJECT) -> str:
     )
 
 
-def _direct_payload() -> dict:
-    return {
-        "message": {
-            "body": "Sharing the notes from today's standup for visibility.",
-            "message_id": "direct-msg-001",
-            "metadata": {
-                "source_type": "email",
-                "sender": "alice@example.com",
-                "recipients": ["bob@example.com"],
-                "subject": "Standup notes",
-            },
-        },
-        "include_draft_reply": True,
-        "include_action_items": True,
-    }
-
-
-def _mailbox_body(provider_message_id: str = "fake-msg-001") -> dict:
-    return {"provider_message_id": provider_message_id}
-
-
 def _seed_owner(unit: InMemoryUnitOfWork, *, subject: str = TEST_SUBJECT) -> object:
     principal = AuthenticatedPrincipal(
         issuer=TEST_ISSUER,
         subject=subject,
         permissions=frozenset({TEST_PERMISSION, COMMUNICATIONS_READ_PERMISSION}),
     )
-    user_id = IdentityResolver(UnitOfWorkFactory(unit)).resolve_or_create(principal)
-    return user_id
+    return IdentityResolver(UnitOfWorkFactory(unit)).resolve_or_create(principal)
+
+
+def _assert_public_item(item: dict) -> None:
+    assert set(item) == _LIST_ITEM_FIELDS
+    assert item["provider_message_id"]
+    assert item["sender"]
+    serialized = repr(item)
+    assert "body" not in item
+    assert "html" not in serialized.lower()
+    assert "recipients" not in item
+    assert "thread_id" not in item
+    assert "credential_ref" not in serialized
+    assert "access_token" not in serialized
+    assert "@odata.nextLink" not in serialized
+    assert "graph.microsoft.com" not in serialized
 
 
 @pytest.fixture
@@ -212,39 +216,46 @@ def mailbox_client(
         yield test_client, unit, factory
 
 
-def test_unauthenticated_mailbox_analyze_returns_401(
+def test_unauthenticated_mailbox_list_returns_401(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
 ) -> None:
     client, _unit, factory = mailbox_client
-    response = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=uuid4()),
-        json=_mailbox_body(),
-    )
+    response = client.get(_LIST_URL.format(connector_account_id=uuid4()))
     assert response.status_code == 401
     assert response.json() == {"detail": "Not authenticated"}
     assert factory.calls == 0
+
+
+def test_auth_disabled_mailbox_list_returns_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("AI_PROVIDER", "mock")
+    monkeypatch.setenv("AUTH_MODE", "disabled")
+    get_settings.cache_clear()
+    application = create_app()
+    with TestClient(application) as client:
+        response = client.get(_LIST_URL.format(connector_account_id=uuid4()))
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
 
 
 @pytest.mark.parametrize(
     "scp",
     [
         TEST_PERMISSION,
-        COMMUNICATIONS_READ_PERMISSION,
         COMMUNICATIONS_CONNECT_PERMISSION,
         COMMUNICATIONS_SEND_PERMISSION,
         COMMUNICATIONS_WORKFLOW_PERMISSION,
-        f"{COMMUNICATIONS_READ_PERMISSION} {COMMUNICATIONS_CONNECT_PERMISSION}",
+        f"{TEST_PERMISSION} {COMMUNICATIONS_CONNECT_PERMISSION}",
     ],
 )
-def test_partial_permissions_return_403(
+def test_missing_read_permission_returns_403(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
     private_key,
     scp: str,
 ) -> None:
     client, _unit, factory = mailbox_client
-    response = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=uuid4()),
-        json=_mailbox_body(),
+    response = client.get(
+        _LIST_URL.format(connector_account_id=uuid4()),
         headers=bearer_header(_token(private_key, scp)),
     )
     assert response.status_code == 403
@@ -252,28 +263,78 @@ def test_partial_permissions_return_403(
     assert factory.calls == 0
 
 
-def test_malformed_connector_id_and_blank_message_id_are_422(
+def test_read_only_and_read_plus_analyze_are_authorized(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
     private_key,
 ) -> None:
-    client, _unit, factory = mailbox_client
-    headers = bearer_header(_token(private_key, _READ_ANALYZE))
-    malformed = client.post(
-        "/api/v1/connector-accounts/not-a-uuid/messages/analyze",
-        json=_mailbox_body(),
-        headers=headers,
+    client, unit, factory = mailbox_client
+    owner_id = _seed_owner(unit)
+    account = sample_connector_account(
+        owner_id,
+        provider="gmail",
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
     )
-    blank = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=uuid4()),
-        json={"provider_message_id": "   "},
-        headers=headers,
+    unit.connector_account_store[account.id] = account
+    url = _LIST_URL.format(connector_account_id=account.id)
+
+    read_only = client.get(
+        url,
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
     )
-    assert malformed.status_code == 422
-    assert blank.status_code == 422
-    assert factory.calls == 0
+    both = client.get(
+        url,
+        headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+    )
+
+    assert read_only.status_code == 200
+    assert both.status_code == 200
+    assert factory.calls == 2
+    assert unit.analyses == {}
+    assert unit.workflow_action_store == {}
 
 
-def test_owned_account_analyzes_and_unknown_or_foreign_are_identical_404(
+@pytest.mark.parametrize(
+    ("params", "status"),
+    [
+        ({}, 200),
+        ({"page_size": 1}, 200),
+        ({"page_size": 100}, 200),
+        ({"page_size": 101}, 422),
+        ({"page_size": 0}, 422),
+        ({"page_size": -1}, 422),
+        ({"cursor": "n:1"}, 200),
+        ({"nextLink": "https://graph.microsoft.com/v1.0/me/messages"}, 422),
+        ({"credential_ref": "secret"}, 422),
+    ],
+)
+def test_list_query_validation(
+    mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
+    private_key,
+    params: dict,
+    status: int,
+) -> None:
+    client, unit, _factory = mailbox_client
+    owner_id = _seed_owner(unit)
+    account = sample_connector_account(
+        owner_id,
+        provider="gmail",
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    unit.connector_account_store[account.id] = account
+    response = client.get(
+        _LIST_URL.format(connector_account_id=account.id),
+        params=params,
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+    )
+    assert response.status_code == status
+    if status == 200 and not params:
+        assert len(response.json()["items"]) == 5
+    if status == 200 and params.get("page_size") == 1:
+        assert len(response.json()["items"]) == 1
+        assert response.json()["next_cursor"] == "n:1"
+
+
+def test_owned_account_lists_and_unknown_or_foreign_are_identical_404(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
     private_key,
 ) -> None:
@@ -292,40 +353,35 @@ def test_owned_account_analyzes_and_unknown_or_foreign_are_identical_404(
     )
     unit.connector_account_store[owned.id] = owned
     unit.connector_account_store[foreign.id] = foreign
-    headers = bearer_header(_token(private_key, _READ_ANALYZE))
+    headers = bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION))
 
-    success = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=owned.id),
-        json=_mailbox_body(),
+    success = client.get(
+        _LIST_URL.format(connector_account_id=owned.id),
+        params={"page_size": 2},
         headers=headers,
     )
-    unknown = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=uuid4()),
-        json=_mailbox_body(),
+    unknown = client.get(
+        _LIST_URL.format(connector_account_id=uuid4()),
         headers=headers,
     )
-    cross = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=foreign.id),
-        json=_mailbox_body(),
+    cross = client.get(
+        _LIST_URL.format(connector_account_id=foreign.id),
         headers=headers,
     )
 
     assert success.status_code == 200
     payload = success.json()
-    assert payload["provider"] == "mock"
-    assert payload["analysis"]["summary"]["text"]
-    assert "analysis_id" in payload
-    stored = unit.analyses[UUID(payload["analysis_id"])]
-    assert stored.connector_account_id == owned.id
-    assert stored.message_id == "fake-msg-001"
-    assert stored.user_id == owner_id
+    assert set(payload) == {"items", "next_cursor"}
+    assert payload["next_cursor"] == "n:2"
+    assert len(payload["items"]) == 2
+    _assert_public_item(payload["items"][0])
     assert unknown.status_code == 404
     assert cross.status_code == 404
     assert unknown.json() == cross.json() == {"detail": "Connector account not found."}
     assert factory.calls == 1
+    assert unit.analyses == {}
     assert unit.workflow_action_store == {}
     serialized = repr(payload)
-    assert "credential_ref" not in serialized
     assert "Please review the Q3 budget proposal before Friday." not in serialized
 
 
@@ -358,14 +414,12 @@ def test_unusable_owned_account_returns_409_before_factory(
         credential_ref=kwargs.get("credential_ref", "mailbox-locator-001"),
     )
     unit.connector_account_store[account.id] = account
-    response = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-        json=_mailbox_body(),
-        headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+    response = client.get(
+        _LIST_URL.format(connector_account_id=account.id),
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
     )
     assert response.status_code == 409
     assert response.json() == {"detail": "Connected mailbox is not available."}
-    assert "disconnected" not in response.json()["detail"].lower()
     assert factory.calls == 0
 
 
@@ -381,16 +435,15 @@ def test_legacy_null_capabilities_remain_eligible(
         granted_capabilities=None,
     )
     unit.connector_account_store[account.id] = account
-    response = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-        json=_mailbox_body(),
-        headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+    response = client.get(
+        _LIST_URL.format(connector_account_id=account.id),
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
     )
     assert response.status_code == 200
     assert factory.calls == 1
 
 
-def test_unknown_provider_message_returns_404(
+def test_invalid_cursor_returns_400(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
     private_key,
 ) -> None:
@@ -402,53 +455,76 @@ def test_unknown_provider_message_returns_404(
         granted_capabilities=(CommunicationCapability.MAIL_READ,),
     )
     unit.connector_account_store[account.id] = account
-    response = client.post(
-        _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-        json=_mailbox_body("missing-message"),
-        headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+    response = client.get(
+        _LIST_URL.format(connector_account_id=account.id),
+        params={"cursor": "gmail-page-token"},
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
     )
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Mailbox message not found."}
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Mailbox pagination cursor is invalid."}
     assert factory.calls == 1
 
 
-def test_direct_text_analyze_stays_analyze_only_and_skips_connectors(
+def test_analyze_still_requires_read_and_analyze(
+    mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
+    private_key,
+) -> None:
+    client, unit, _factory = mailbox_client
+    owner_id = _seed_owner(unit)
+    account = sample_connector_account(
+        owner_id,
+        provider="gmail",
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    unit.connector_account_store[account.id] = account
+    read_only = client.post(
+        _ANALYZE_URL.format(connector_account_id=account.id),
+        json={"provider_message_id": "fake-msg-001"},
+        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+    )
+    both = client.post(
+        _ANALYZE_URL.format(connector_account_id=account.id),
+        json={"provider_message_id": "fake-msg-001"},
+        headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+    )
+    assert read_only.status_code == 403
+    assert both.status_code == 200
+    assert both.json()["analysis"]["summary"]["text"]
+
+
+def test_direct_text_analyze_stays_analyze_only(
     mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
     private_key,
 ) -> None:
     client, _unit, factory = mailbox_client
+    payload = {
+        "message": {
+            "body": "Sharing the notes from today's standup for visibility.",
+            "message_id": "direct-msg-001",
+            "metadata": {
+                "source_type": "email",
+                "sender": "alice@example.com",
+                "recipients": ["bob@example.com"],
+                "subject": "Standup notes",
+            },
+        }
+    }
     analyze_only = client.post(
-        _ANALYZE_URL,
-        json=_direct_payload(),
+        _DIRECT_ANALYZE,
+        json=payload,
         headers=bearer_header(_token(private_key, TEST_PERMISSION)),
     )
     read_only = client.post(
-        _ANALYZE_URL,
-        json=_direct_payload(),
+        _DIRECT_ANALYZE,
+        json=payload,
         headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
     )
     assert analyze_only.status_code == 200
-    assert analyze_only.json()["provider"] == "mock"
-    assert "analysis_id" not in analyze_only.json() or True
     assert read_only.status_code == 403
     assert factory.calls == 0
 
 
-def test_listing_route_is_mounted_without_factory_io_for_unknown_account(
-    mailbox_client: tuple[TestClient, InMemoryUnitOfWork, StaticCommunicationConnectorFactory],
-    private_key,
-) -> None:
-    client, _unit, factory = mailbox_client
-    response = client.get(
-        f"/api/v1/connector-accounts/{uuid4()}/messages",
-        headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
-    )
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Connector account not found."}
-    assert factory.calls == 0
-
-
-def test_gmail_path_uses_real_factory_lazily(
+def test_gmail_path_lists_bounded_page(
     monkeypatch: pytest.MonkeyPatch,
     private_key,
 ) -> None:
@@ -458,6 +534,8 @@ def test_gmail_path_uses_real_factory_lazily(
         body="Please review the attached contract before Thursday.",
         subject="Contract review",
     )
+    stub.list_ids = ["gmail-msg-1"]
+    stub.next_page_token = "gmail-page-2"
     resolver = _CountingResolver(
         EnvironmentCommunicationCredentialResolver(environ={_GMAIL_ENV: GMAIL_TOKEN}),
     )
@@ -492,29 +570,45 @@ def test_gmail_path_uses_real_factory_lazily(
     try:
         with TestClient(application) as client:
             assert resolver.token_calls == 0
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("gmail-msg-1"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+            first = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                params={"page_size": 1},
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+            )
+            stub.list_ids = []
+            stub.next_page_token = None
+            second = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                params={"page_size": 1, "cursor": first.json()["next_cursor"]},
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
             )
     finally:
         http_client.close()
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["provider"] == "mock"
-    assert resolver.resolve_calls == 1
-    assert resolver.token_calls == 1
-    assert len(stub.requests) == 1
-    assert stub.requests[0].method == "GET"
-    assert provider.analyze.call_count == 1
-    stored = unit.analyses[UUID(body["analysis_id"])]
-    assert stored.connector_account_id == account.id
-    assert stored.message_id == "gmail-msg-1"
+    assert first.status_code == 200
+    body = first.json()
+    assert body["next_cursor"] == "gmail-page-2"
+    _assert_public_item(body["items"][0])
+    assert body["items"][0]["provider_message_id"] == "gmail-msg-1"
+    assert body["items"][0]["subject"] == "Contract review"
+    assert "Please review the attached contract before Thursday." not in repr(body)
+    assert second.status_code == 200
+    assert second.json()["next_cursor"] is None
+    assert stub.requests[0].url.params.get("maxResults") == "1"
+    assert stub.requests[0].url.params.get("pageToken") is None
+    continuation = next(
+        request
+        for request in stub.requests
+        if request.url.params.get("pageToken") == "gmail-page-2"
+    )
+    assert continuation.url.params.get("maxResults") == "1"
+    assert resolver.token_calls >= 1
+    assert provider.analyze.call_count == 0
+    assert unit.analyses == {}
     assert unit.workflow_action_store == {}
 
 
-def test_graph_path_uses_real_factory_lazily(
+def test_graph_path_hides_next_link(
     monkeypatch: pytest.MonkeyPatch,
     private_key,
 ) -> None:
@@ -524,6 +618,8 @@ def test_graph_path_uses_real_factory_lazily(
         body="Please confirm the invoice payment by Monday.",
         subject="Invoice confirmation",
     )
+    stub.list_ids = ["graph-msg-1"]
+    stub.next_link = _GRAPH_NEXT_LINK
     resolver = _CountingResolver(
         EnvironmentCommunicationCredentialResolver(environ={_GRAPH_ENV: GRAPH_TOKEN}),
     )
@@ -554,69 +650,42 @@ def test_graph_path_uses_real_factory_lazily(
     application.dependency_overrides[get_ai_provider] = lambda: provider
     try:
         with TestClient(application) as client:
-            assert resolver.token_calls == 0
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("graph-msg-1"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+            first = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                params={"page_size": 1},
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
+            )
+            stub.list_ids = []
+            stub.next_link = None
+            second = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                params={"page_size": 1, "cursor": first.json()["next_cursor"]},
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
             )
     finally:
         http_client.close()
 
-    assert response.status_code == 200
-    assert resolver.token_calls == 1
-    assert len(stub.requests) == 1
-    assert stub.requests[0].method == "GET"
-    assert provider.analyze.call_count == 1
-    stored = unit.analyses[UUID(response.json()["analysis_id"])]
-    assert stored.connector_account_id == account.id
-    assert stored.message_id == "graph-msg-1"
-
-
-def test_gmail_not_found_does_not_call_ai(
-    monkeypatch: pytest.MonkeyPatch,
-    private_key,
-) -> None:
-    stub = GmailHttpStub()
-    resolver = _CountingResolver(
-        EnvironmentCommunicationCredentialResolver(environ={_GMAIL_ENV: GMAIL_TOKEN}),
+    assert first.status_code == 200
+    payload = first.json()
+    expected_cursor = opaque_cursor_from_next_link(_GRAPH_NEXT_LINK)
+    assert payload["next_cursor"] == expected_cursor
+    assert "graph.microsoft.com" not in repr(payload)
+    assert "@odata.nextLink" not in repr(payload)
+    assert _GRAPH_NEXT_LINK not in repr(payload)
+    _assert_public_item(payload["items"][0])
+    assert payload["items"][0]["provider_message_id"] == "graph-msg-1"
+    assert "Please confirm the invoice payment by Monday." not in repr(payload)
+    assert second.status_code == 200
+    assert second.json()["next_cursor"] is None
+    assert stub.requests[0].url.params.get("$top") == "1"
+    continuation = next(
+        request
+        for request in stub.requests
+        if request.url.params.get("$skiptoken") == "graph-page-2"
     )
-    _clear_settings_env(monkeypatch)
-    _enable_oidc_env(monkeypatch)
-    get_settings.cache_clear()
-    unit = InMemoryUnitOfWork()
-    owner_id = _seed_owner(unit)
-    account = sample_connector_account(
-        owner_id,
-        provider="gmail",
-        credential_ref=_GMAIL_LOCATOR,
-        granted_capabilities=(CommunicationCapability.MAIL_READ,),
-    )
-    unit.connector_account_store[account.id] = account
-    validator = make_test_validator(private_key)
-    http_client = httpx.Client(transport=httpx.MockTransport(stub))
-    application = create_app()
-    application.dependency_overrides[get_token_validator] = lambda: validator
-    application.dependency_overrides[get_unit_of_work_factory] = lambda: UnitOfWorkFactory(unit)
-
-    def _http_client():
-        yield http_client
-
-    application.dependency_overrides[get_mailbox_read_http_client] = _http_client
-    application.dependency_overrides[get_mailbox_read_credential_resolver] = lambda: resolver
-    provider = MagicMock(wraps=MockAIProvider())
-    application.dependency_overrides[get_ai_provider] = lambda: provider
-    try:
-        with TestClient(application) as client:
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("missing-gmail"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
-            )
-    finally:
-        http_client.close()
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Mailbox message not found."}
+    assert continuation.url.host == "graph.microsoft.com"
+    assert continuation.url.params.get("$top") == "1"
+    assert continuation.url.params.get("$select") == "id"
     assert provider.analyze.call_count == 0
 
 
@@ -668,10 +737,9 @@ def test_permanent_refresh_failure_returns_409_without_mailbox_http(
     application.dependency_overrides[get_ai_provider] = lambda: provider
     try:
         with TestClient(application) as client:
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("gmail-msg-1"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+            response = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
             )
     finally:
         http_client.close()
@@ -683,7 +751,7 @@ def test_permanent_refresh_failure_returns_409_without_mailbox_http(
     assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
 
 
-def test_transient_token_failure_returns_503_without_ai(
+def test_transient_token_failure_returns_503(
     monkeypatch: pytest.MonkeyPatch,
     private_key,
 ) -> None:
@@ -725,10 +793,9 @@ def test_transient_token_failure_returns_503_without_ai(
     application.dependency_overrides[get_ai_provider] = lambda: provider
     try:
         with TestClient(application) as client:
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("gmail-msg-1"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+            response = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
             )
     finally:
         http_client.close()
@@ -773,10 +840,9 @@ def test_connector_timeout_returns_503(
     application.dependency_overrides[get_ai_provider] = lambda: provider
     try:
         with TestClient(application) as client:
-            response = client.post(
-                _MAILBOX_ANALYZE.format(connector_account_id=account.id),
-                json=_mailbox_body("gmail-msg-1"),
-                headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+            response = client.get(
+                _LIST_URL.format(connector_account_id=account.id),
+                headers=bearer_header(_token(private_key, COMMUNICATIONS_READ_PERMISSION)),
             )
     finally:
         http_client.close()
