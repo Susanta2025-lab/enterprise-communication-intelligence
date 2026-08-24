@@ -157,11 +157,18 @@ def test_domain_resolver_port_stays_provider_neutral() -> None:
 
 
 def test_read_connectors_do_not_resolve_credential_ref() -> None:
-    for path in _python_files(_CONNECTOR_ROOT):
-        source = path.read_text(encoding="utf-8")
-        assert "credential_ref" not in source
-        assert "CommunicationCredentialResolver" not in source
-        assert "EnvironmentCommunicationCredentialResolver" not in source
+    adapter_roots = (
+        _CONNECTOR_ROOT / "common",
+        _CONNECTOR_ROOT / "fake",
+        _CONNECTOR_ROOT / "gmail",
+        _CONNECTOR_ROOT / "microsoft_graph",
+    )
+    for root in adapter_roots:
+        for path in _python_files(root):
+            source = path.read_text(encoding="utf-8")
+            assert "credential_ref" not in source
+            assert "CommunicationCredentialResolver" not in source
+            assert "EnvironmentCommunicationCredentialResolver" not in source
 
 
 def test_fake_executor_does_not_invoke_credential_resolver() -> None:

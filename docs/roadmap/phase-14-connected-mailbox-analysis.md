@@ -31,7 +31,7 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. **14A is Completed.** Remaining slices have not started.
+Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed.** Remaining slices have not started.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -151,17 +151,19 @@ Exit: contract and authorization tests pass; no Gmail/Graph HTTP required.
 
 ### 14B — Provider-Neutral Read Connector Factory
 
+**14B is Completed.**
+
 Objective: route an already-owned `ConnectorAccountRecord` to `GmailCommunicationConnector` or `MicrosoftGraphCommunicationConnector`.
 
-Implementation surface: `CommunicationConnectorFactory` / `ProviderCommunicationConnectorFactory`; analyze/read-gated DI for credential resolver and HTTP client; preserve `CommunicationCredentialReauthorizationRequiredError` on the read token path.
+Implementation surface: `CommunicationConnectorFactory` / `ProviderCommunicationConnectorFactory`; read-gated DI for credential resolver and HTTP client; preserve `CommunicationCredentialReauthorizationRequiredError` on the read token path. Access-token acquisition remains lazy. The factory does not check ownership, ACTIVE status, or `mail.read`.
 
 Migration: none.
 
-Docs: none beyond code docstrings.
+Docs: phase roadmap plus architecture/dependency-flow updates for the read factory boundary.
 
 Live validation: no.
 
-Exit: factory tests pass; `CommunicationConnector` remains distinct from `CommunicationActionExecutor`.
+Exit: factory tests pass; `CommunicationConnector` remains distinct from `CommunicationActionExecutor`. No mailbox list/analyze routes mounted.
 
 ### 14C — Connected Message → AI Analysis
 

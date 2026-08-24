@@ -35,6 +35,7 @@ from app.core.security import (
 from app.domain.interfaces import (
     AIProvider,
     CommunicationActionExecutorFactory,
+    CommunicationConnectorFactory,
     CommunicationCredentialResolver,
     PersistenceUnitOfWork,
 )
@@ -452,6 +453,134 @@ def get_execution_unit_of_work_factory(
     return require_unit_of_work_factory(get_unit_of_work_factory())
 
 
+def _build_communication_http_client() -> Iterator[httpx.Client]:
+    """Yield a request-scoped HTTP client. Callers own authorization gating."""
+    client = httpx.Client(timeout=30.0, follow_redirects=False)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+def _build_communication_credential_resolver() -> CommunicationCredentialResolver:
+    """Compose the runtime credential resolver without encoding a permission."""
+    settings = get_settings()
+    from app.infrastructure.oauth.runtime import (
+        build_runtime_communication_credential_resolver,
+        mailbox_oauth_store_available,
+    )
+
+    if mailbox_oauth_store_available(settings):
+        return build_runtime_communication_credential_resolver(settings)
+    from app.infrastructure.credentials.environment import (
+        EnvironmentCommunicationCredentialResolver,
+    )
+
+    return EnvironmentCommunicationCredentialResolver()
+
+
+def get_communication_http_client(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+) -> Iterator[httpx.Client]:
+    """Yield a request-scoped HTTP client for production write adapters.
+
+    Tests may override this dependency with ``httpx.MockTransport``. The client
+    is closed after the request. Construction is gated by send authorization.
+    """
+    yield from _build_communication_http_client()
+
+
+def get_communication_credential_resolver(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+) -> CommunicationCredentialResolver:
+    """Return the execute credential resolver after send authorization.
+
+    Legacy locators use the environment resolver. When mailbox OAuth is enabled
+    in a non-production process, ``oauth-`` locators use the shared in-memory
+    store. Production does not use the memory store.
+    """
+    return _build_communication_credential_resolver()
+
+
+def get_mailbox_read_http_client(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+) -> Iterator[httpx.Client]:
+    """Yield a request-scoped HTTP client for production read adapters.
+
+    Construction is gated by ``communications:read``, not ``communications:send``.
+    The client is closed after the request. Tests may override this dependency.
+    """
+    yield from _build_communication_http_client()
+
+
+def get_mailbox_read_credential_resolver(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+) -> CommunicationCredentialResolver:
+    """Return the mailbox-read credential resolver after read authorization.
+
+    Composition matches the execute resolver. This dependency does not require
+    ``communications:send``.
+    """
+    return _build_communication_credential_resolver()
+
+
+def get_communication_action_executor_factory(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_send),
+    ],
+    http_client: Annotated[httpx.Client, Depends(get_communication_http_client)],
+    credential_resolver: Annotated[
+        CommunicationCredentialResolver,
+        Depends(get_communication_credential_resolver),
+    ],
+) -> CommunicationActionExecutorFactory:
+    """Build the account-driven production executor factory after send authorization."""
+    from app.infrastructure.executors.factory import ProviderCommunicationActionExecutorFactory
+
+    return ProviderCommunicationActionExecutorFactory(
+        credential_resolver=credential_resolver,
+        http_client=http_client,
+    )
+
+
+def get_communication_connector_factory(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+    http_client: Annotated[httpx.Client, Depends(get_mailbox_read_http_client)],
+    credential_resolver: Annotated[
+        CommunicationCredentialResolver,
+        Depends(get_mailbox_read_credential_resolver),
+    ],
+) -> CommunicationConnectorFactory:
+    """Build the account-driven production read factory after read authorization.
+
+    Future mailbox list/analyze routes can depend on this without
+    ``communications:send``. Construction does not fetch tokens or call
+    mailbox HTTP.
+    """
+    from app.infrastructure.connectors.factory import ProviderCommunicationConnectorFactory
+
+    return ProviderCommunicationConnectorFactory(
+        credential_resolver=credential_resolver,
+        http_client=http_client,
+    )
+
+
 def get_communication_analysis_service(
     provider: AIProvider = Depends(get_ai_provider),
 ) -> CommunicationAnalysisService:
@@ -501,71 +630,6 @@ def get_workflow_action_service(
 ) -> WorkflowActionService:
     """Build the workflow action service for authenticated workflow endpoints."""
     return WorkflowActionService(identity_resolver, uow_factory)
-
-
-def get_communication_http_client(
-    _principal: Annotated[
-        AuthenticatedPrincipal,
-        Depends(require_authenticated_communications_send),
-    ],
-) -> Iterator[httpx.Client]:
-    """Yield a request-scoped HTTP client for production write adapters.
-
-    Tests may override this dependency with ``httpx.MockTransport``. The client
-    is closed after the request. Construction is gated by send authorization.
-    """
-    client = httpx.Client(timeout=30.0, follow_redirects=False)
-    try:
-        yield client
-    finally:
-        client.close()
-
-
-def get_communication_credential_resolver(
-    _principal: Annotated[
-        AuthenticatedPrincipal,
-        Depends(require_authenticated_communications_send),
-    ],
-) -> CommunicationCredentialResolver:
-    """Return the execute credential resolver after send authorization.
-
-    Legacy locators use the environment resolver. When mailbox OAuth is enabled
-    in a non-production process, ``oauth-`` locators use the shared in-memory
-    store. Production does not use the memory store.
-    """
-    settings = get_settings()
-    from app.infrastructure.oauth.runtime import (
-        build_runtime_communication_credential_resolver,
-        mailbox_oauth_store_available,
-    )
-
-    if mailbox_oauth_store_available(settings):
-        return build_runtime_communication_credential_resolver(settings)
-    from app.infrastructure.credentials.environment import (
-        EnvironmentCommunicationCredentialResolver,
-    )
-
-    return EnvironmentCommunicationCredentialResolver()
-
-
-def get_communication_action_executor_factory(
-    _principal: Annotated[
-        AuthenticatedPrincipal,
-        Depends(require_authenticated_communications_send),
-    ],
-    http_client: Annotated[httpx.Client, Depends(get_communication_http_client)],
-    credential_resolver: Annotated[
-        CommunicationCredentialResolver,
-        Depends(get_communication_credential_resolver),
-    ],
-) -> CommunicationActionExecutorFactory:
-    """Build the account-driven production executor factory after send authorization."""
-    from app.infrastructure.executors.factory import ProviderCommunicationActionExecutorFactory
-
-    return ProviderCommunicationActionExecutorFactory(
-        credential_resolver=credential_resolver,
-        http_client=http_client,
-    )
 
 
 def get_workflow_action_execution_service(

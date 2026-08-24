@@ -169,7 +169,7 @@ def test_invalid_token_does_not_make_http_call(graph_connector: tuple) -> None:
         assert exc_info.value.message == "Connector authentication failed."
 
 
-def test_token_provider_exception_is_authentication_error(graph_connector: tuple) -> None:
+def test_token_provider_exception_is_unavailable_error(graph_connector: tuple) -> None:
     _connector, stub, client = graph_connector
 
     def boom() -> str:
@@ -180,14 +180,14 @@ def test_token_provider_exception_is_authentication_error(graph_connector: tuple
         access_token_provider=boom,
     )
 
-    with pytest.raises(ConnectorAuthenticationError) as exc_info:
+    with pytest.raises(ConnectorUnavailableError) as exc_info:
         connector.fetch_message("msg-1")
 
     assert stub.requests == []
     assert GRAPH_TOKEN not in exc_info.value.message
     assert "token store exploded" not in exc_info.value.message
     assert exc_info.value.__cause__ is None
-    assert exc_info.value.message == "Connector authentication failed."
+    assert exc_info.value.message == "Connector is currently unavailable."
 
 
 def _constant_token(token: object) -> AccessTokenProvider:

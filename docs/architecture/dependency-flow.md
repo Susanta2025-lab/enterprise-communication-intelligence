@@ -28,7 +28,7 @@ Domain defines `CommunicationConnector`. Application depends on that interface. 
                                  (fake / Gmail / Graph)
 ```
 
-API does not import concrete connectors today. There is no connector factory in the repository.
+API does not import concrete connectors. `ProviderCommunicationConnectorFactory` in `app/infrastructure/connectors/factory.py` is the production read-routing adapter. The API composition root constructs it after `communications:read` succeeds and does not import Gmail or Graph connector classes. Application code depends on `CommunicationConnectorFactory`, not those classes.
 
 Connectors do not depend on API, application services (including `ConnectorAccountService`), storage ORM, or `AIProvider`.
 
@@ -46,7 +46,7 @@ Domain defines `CommunicationActionExecutor`. Application depends on that interf
                                   Gmail metadata+send adapters
 ```
 
-API does not import executor implementations. The composition root in `app/api/dependencies.py` constructs `ProviderCommunicationActionExecutorFactory` after `communications:send` succeeds. Application code depends on `CommunicationActionExecutorFactory`, not Gmail or Graph classes.
+The composition root in `app/api/dependencies.py` constructs `ProviderCommunicationActionExecutorFactory` after `communications:send` succeeds and `ProviderCommunicationConnectorFactory` after `communications:read` succeeds. Application code depends on `CommunicationActionExecutorFactory` and `CommunicationConnectorFactory`, not Gmail or Graph classes.
 
 `CommunicationConnector` remains read-only. The write port is separate.
 
@@ -73,7 +73,7 @@ The environment resolver and refreshable resolver do not import Gmail/Graph adap
 
 - **Domain does not import API, providers, SQLAlchemy, or connector adapters.** `app/domain/*` imports only `pydantic`, the standard library, and other `app.domain` modules. Persistence and connector contracts are interfaces and dataclasses.
 - **Application does not import FastAPI, the provider factory, SQLAlchemy models, or vendor mailbox types.** Workflow, identity, history, ingestion, connector-account, workflow-action, and workflow-action-execution services depend on domain interfaces. `CommunicationIngestionService` takes `CommunicationConnector`; it does not import `GmailCommunicationConnector` or `MicrosoftGraphCommunicationConnector`. `WorkflowActionService` uses `WorkflowActionRepository`; it does not import connector adapters or an executor. `WorkflowActionExecutionService` depends on `CommunicationActionExecutorFactory`; it does not import the fake class, Gmail, Graph, `MicrosoftGraphCommunicationActionExecutor`, `GmailCommunicationActionExecutor`, `AIProvider`, or `CommunicationCredentialResolver`.
-- **API does not import concrete AI providers or concrete connectors.** `app/api/dependencies.py` imports `app.providers.factory.create_ai_provider` (the factory), not `MockAIProvider`, `MicrosoftFoundryProvider`, or `AmazonBedrockProvider`. Storage implementations are constructed in API dependencies, not in routes. Connector adapters are not wired in the API. Phase 11C adds workflow routes that depend on `WorkflowActionService` and `require_authenticated_communications_workflow`. Phase 12E adds execute, gated by `require_authenticated_communications_send`, and constructs the production executor factory without importing Gmail or Graph executor classes in the route module.
+- **API does not import concrete AI providers or concrete connectors.** `app/api/dependencies.py` imports `app.providers.factory.create_ai_provider` (the factory), not `MockAIProvider`, `MicrosoftFoundryProvider`, or `AmazonBedrockProvider`. Storage implementations are constructed in API dependencies, not in routes. Phase 14B constructs `ProviderCommunicationConnectorFactory` after `communications:read` without importing Gmail or Graph connector classes in the dependency or route modules. Mailbox list/analyze routes are not mounted. Phase 11C adds workflow routes that depend on `WorkflowActionService` and `require_authenticated_communications_workflow`. Phase 12E adds execute, gated by `require_authenticated_communications_send`, and constructs the production executor factory without importing Gmail or Graph executor classes in the route module.
 - **Provider implementations depend on domain interfaces.** `MockAIProvider`, `MicrosoftFoundryProvider`, and `AmazonBedrockProvider` implement `AIProvider`. The factory imports `AIProvider` as its return type and `app.core.config`/`app.core.exceptions` for settings and error translation. The two real LLM adapters also import `app/providers/common`.
 - **SQLAlchemy stays in infrastructure storage.** ORM models, engine, session, and repository implementations live under `app/infrastructure/storage/`.
 - **Mailbox HTTP stays in infrastructure connectors and write adapters.** Gmail and Microsoft Graph read adapters use `httpx` REST. The Graph reply writer and Gmail reply writer use the same `httpx` approach under `app/infrastructure/executors/`. They do not add a Gmail SDK, Microsoft Graph SDK, or MSAL dependency inside ECI.

@@ -18,6 +18,7 @@ from app.application.exceptions import (
 )
 from app.core.exceptions import (
     CommunicationActionExecutionError,
+    CommunicationConnectorNotAvailableError,
     CommunicationCredentialConflictError,
     CommunicationCredentialReauthorizationRequiredError,
     CommunicationCredentialUnavailableError,
@@ -45,6 +46,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ServiceUnavailableError, ECIPlatformError)
     assert issubclass(PersistenceError, ECIPlatformError)
     assert issubclass(CommunicationActionExecutionError, ECIPlatformError)
+    assert issubclass(CommunicationConnectorNotAvailableError, ECIPlatformError)
     assert issubclass(CommunicationCredentialUnavailableError, ECIPlatformError)
     assert issubclass(
         CommunicationCredentialReauthorizationRequiredError,
@@ -189,13 +191,22 @@ def test_communication_credential_errors_have_generic_messages() -> None:
     unsupported = UnsupportedCommunicationCredentialProviderError()
     reauthorization = CommunicationCredentialReauthorizationRequiredError()
     conflict = CommunicationCredentialConflictError()
+    connector_unavailable = CommunicationConnectorNotAvailableError()
     assert unavailable.message == "Communication credential is unavailable."
     assert str(unavailable) == "Communication credential is unavailable."
     assert reauthorization.message == "Communication credential is unavailable."
     assert unsupported.message == "Communication credential provider is not supported."
     assert str(unsupported) == "Communication credential provider is not supported."
     assert conflict.message == "Communication credential could not be stored."
-    for error in (unavailable, unsupported, reauthorization, conflict):
+    assert connector_unavailable.message == "Communication connector is not available."
+    assert str(connector_unavailable) == "Communication connector is not available."
+    for error in (
+        unavailable,
+        unsupported,
+        reauthorization,
+        conflict,
+        connector_unavailable,
+    ):
         lowered = error.message.lower()
         assert "gmail" not in lowered
         assert "graph" not in lowered

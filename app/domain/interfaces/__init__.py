@@ -18,6 +18,9 @@ from app.domain.interfaces.communication_connector import (
     ConnectorMessageQuery,
     MessagePage,
 )
+from app.domain.interfaces.communication_connector_factory import (
+    CommunicationConnectorFactory,
+)
 from app.domain.interfaces.communication_credential_resolver import (
     AccessTokenProvider,
     CommunicationCredentialResolver,
@@ -60,6 +63,7 @@ __all__ = [
     "CommunicationActionExecutor",
     "CommunicationActionExecutorFactory",
     "CommunicationConnector",
+    "CommunicationConnectorFactory",
     "CommunicationCredentialRecord",
     "CommunicationCredentialResolver",
     "CommunicationCredentialStore",

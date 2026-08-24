@@ -14,6 +14,7 @@ from app.domain.interfaces import (
     CommunicationActionExecutor,
     CommunicationActionExecutorFactory,
     CommunicationConnector,
+    CommunicationConnectorFactory,
     CommunicationCredentialRecord,
     CommunicationCredentialResolver,
     CommunicationCredentialStore,
@@ -122,6 +123,16 @@ def test_communication_action_executor_factory_interface_is_abstract() -> None:
     assert "create_for_account" in CommunicationActionExecutorFactory.__abstractmethods__
     with pytest.raises(TypeError):
         CommunicationActionExecutorFactory()  # type: ignore[abstract]
+
+
+def test_communication_connector_factory_interface_is_abstract() -> None:
+    """The read factory port must not be instantiable without create_for_account."""
+    assert issubclass(CommunicationConnectorFactory, ABC)
+    assert "create_for_account" in CommunicationConnectorFactory.__abstractmethods__
+    with pytest.raises(TypeError):
+        CommunicationConnectorFactory()  # type: ignore[abstract]
+    assert CommunicationConnectorFactory is not CommunicationActionExecutorFactory
+    assert CommunicationConnectorFactory is not CommunicationConnector
 
 
 def test_communication_credential_resolver_interface_is_abstract() -> None:
@@ -233,6 +244,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
     import app.domain.interfaces.communication_connector as communication_connector
+    import app.domain.interfaces.communication_connector_factory as connector_factory_port
     import app.domain.interfaces.communication_credential_resolver as credential_resolver
     import app.domain.interfaces.communication_credential_store as credential_store
     import app.domain.interfaces.connector_account_repository as connector_account_repository
@@ -252,6 +264,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         communication_action_executor,
         executor_factory_port,
         communication_connector,
+        connector_factory_port,
         credential_resolver,
         credential_store,
         connector_account_repository,

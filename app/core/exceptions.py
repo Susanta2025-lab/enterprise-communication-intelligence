@@ -75,6 +75,19 @@ class UnsupportedCommunicationCredentialProviderError(ECIPlatformError):
         super().__init__(message)
 
 
+class CommunicationConnectorNotAvailableError(ECIPlatformError):
+    """Raised when a read connector cannot be constructed from account routing data.
+
+    Covers unsupported providers and missing or unusable credential locators at
+    the factory boundary. Ownership, ACTIVE status, and ``mail.read`` remain
+    application policy. The public message does not distinguish those cases
+    and must not include locators or vendor adapter names.
+    """
+
+    def __init__(self, message: str = "Communication connector is not available.") -> None:
+        super().__init__(message)
+
+
 class ConnectorError(ECIPlatformError):
     """Raised when a communication connector operation fails."""
 

@@ -548,3 +548,16 @@ def test_communication_http_client_closes_after_generator_exit() -> None:
     with pytest.raises(StopIteration):
         next(generator)
     assert client.is_closed is True
+
+
+def test_mailbox_read_http_client_closes_after_generator_exit() -> None:
+    """The request-scoped read client is closed when the yield dependency finishes."""
+    from app.api.dependencies import get_mailbox_read_http_client
+
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION)
+    generator = get_mailbox_read_http_client(principal)
+    client = next(generator)
+    assert client.is_closed is False
+    with pytest.raises(StopIteration):
+        next(generator)
+    assert client.is_closed is True
