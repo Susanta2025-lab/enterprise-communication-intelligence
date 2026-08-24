@@ -160,6 +160,7 @@ Phase 12 does not include automatic replies, retry/reconciliation, or exactly-on
 * AWS Secrets Manager durable OAuth backend with boto3 default chain / ECS Task Role
 * PostgreSQL advisory-lock mutation coordination keyed by opaque `credential_ref` (PostgreSQL stores no OAuth tokens)
 * Locally live-validated Google consent and an explicitly approved Gmail reply
+* Locally live-validated Gmail disconnect → exact-account reauthorization (same connector row; `mail.read` and `mail.send` restored)
 * Locally live-validated Microsoft consent and an explicitly approved Graph reply
 * Live-validated Azure Key Vault and AWS Secrets Manager credential-store backends
 

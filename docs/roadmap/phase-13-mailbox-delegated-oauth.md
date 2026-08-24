@@ -37,7 +37,7 @@ Phase 13 is **Completed**.
 - **13C is Completed:** Google OAuth / Gmail credential lifecycle. Live Google consent and an explicitly approved Gmail reply were validated locally. That is not cloud-hosted ACA/ECS OAuth certification.
 - **13D is Completed:** Microsoft Entra OAuth / Graph credential lifecycle. Live Entra consent and an explicitly approved Graph reply were validated locally. That is not cloud-hosted ACA/ECS OAuth certification.
 - **13E is Completed:** Azure Key Vault and AWS Secrets Manager `CommunicationCredentialStore` backends, explicit `CREDENTIAL_STORE_BACKEND` selection, production fail-closed rules, PostgreSQL advisory-lock coordination, and live Azure/AWS store validation recorded below.
-- **13F is Completed:** owned disconnect HTTP, exact-account reauthorization, Google best-effort token revocation, Microsoft local-only disconnect, permanent refresh → `REAUTH_REQUIRED`, production hardening, documentation consolidation, and regression. No new live Google/Microsoft/Azure/AWS calls were made in 13F.
+- **13F is Completed:** owned disconnect HTTP, exact-account reauthorization, Google best-effort token revocation, Microsoft local-only disconnect, permanent refresh → `REAUTH_REQUIRED`, production hardening, documentation consolidation, and regression. 13F automated tests used fakes/mocks only. After 13F implementation, a controlled local live Gmail disconnect → exact-account reauthorization was validated (recorded below). That is not cloud-hosted ACA/ECS OAuth certification.
 
 Phase 12 remains **Completed**.
 
@@ -211,7 +211,7 @@ Implemented:
 - Expired authorization sessions remain TTL-bounded. `MailboxAuthorizationSessionService.delete_expired` exists for operator/opportunistic cleanup. Phase 13F does not add a background worker
 - Automatic replies, mailbox synchronization/webhooks, retry/reconciliation/exactly-once delivery, and user-facing connector ingestion HTTP remain out of scope
 
-Not in 13F: a new Alembic revision, managed Azure PostgreSQL / Amazon RDS, cloud-hosted Gmail/Graph OAuth certification of the retained ACA/ECS services, live disconnect/reauthorize against real Google or Microsoft mailboxes, or any new cloud resource. 13F automated implementation used fakes/mocks only.
+Not in 13F: a new Alembic revision, managed Azure PostgreSQL / Amazon RDS, cloud-hosted Gmail/Graph OAuth certification of the retained ACA/ECS services, live Microsoft mailbox disconnect/reauthorize, or any new cloud resource. 13F automated implementation used fakes/mocks only.
 
 Automated verification:
 
@@ -222,7 +222,29 @@ Automated verification:
 - full pytest with PostgreSQL enabled: 1753 passed
 - `git diff --check` passed
 
-No live Google, Microsoft, Azure, or AWS calls were made in 13F. Cached cloud/OAuth credentials were not consumed. No cloud resources were created or deleted.
+13F automated implementation used fakes/mocks only. It did not create or delete cloud resources.
+
+**Live Gmail disconnect → exact-account reauthorization (after 13F)**
+
+A controlled local live Gmail proof was executed after 13F implementation:
+
+```text
+ACTIVE
+→ disconnect
+→ DISCONNECTED
+→ credential_ref cleared
+→ granted_capabilities cleared
+→ reauthorize the same Gmail mailbox
+→ same ConnectorAccount row preserved
+→ same external_account_id preserved
+→ ACTIVE
+→ credential restored
+→ granted_capabilities restored to ["mail.read", "mail.send"]
+```
+
+Verified connector account id: `eaae1e04-89a9-4c90-a2c1-f9036438de25`.
+
+Mailbox addresses, OAuth secrets, tokens, and other sensitive values are not recorded here. This is not cloud-hosted ACA/ECS OAuth certification. Live Microsoft mailbox disconnect/reauthorize was not part of this proof.
 
 ## Deliverables
 

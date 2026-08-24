@@ -18,7 +18,7 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | GitHub Actions CI/CD | Implemented (automatic tests-only CI; manual `workflow_dispatch` CD) |
 | GitHub OIDC deploy federation | Implemented (Azure UAMI and AWS IAM role `eci-github-deploy-dev`) |
 | PostgreSQL persistence architecture | Implemented and CI-proven; no managed cloud database provisioned |
-| Gmail delegated OAuth | Implemented; locally live-validated |
+| Gmail delegated OAuth | Implemented; locally live-validated, including disconnect → exact-account reauthorize |
 | Microsoft Graph delegated OAuth | Implemented; locally live-validated |
 | Azure Key Vault mailbox credential store | Implemented; live store-validated |
 | AWS Secrets Manager mailbox credential store | Implemented; live store-validated |

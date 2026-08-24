@@ -132,6 +132,21 @@ Expired authorization sessions remain bounded by TTL. `MailboxAuthorizationSessi
 - Confirmed `invalid_grant` during execute yields HTTP 200 with workflow `FAILED` and account `REAUTH_REQUIRED`, not HTTP 503.
 - User-facing Gmail/Outlook → analyze HTTP ingestion is still not a Phase 13 capability.
 
+## Live validation
+
+After 13F implementation, a controlled local live Gmail proof confirmed this exact-account lifecycle:
+
+```text
+ACTIVE → disconnect → DISCONNECTED
+→ credential_ref and granted_capabilities cleared
+→ reauthorize the same Gmail mailbox
+→ same ConnectorAccount row (`eaae1e04-89a9-4c90-a2c1-f9036438de25`)
+→ same external_account_id
+→ ACTIVE with restored ["mail.read", "mail.send"]
+```
+
+That proof does not change the decisions above. It is not cloud-hosted ACA/ECS certification. Mailbox addresses, tokens, and secret material are not recorded here.
+
 ## Related Components
 
 - `app/application/services/connector_accounts.py`
