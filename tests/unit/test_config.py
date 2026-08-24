@@ -35,6 +35,10 @@ _SETTINGS_ENV_VARS = (
     "MICROSOFT_OAUTH_CLIENT_SECRET",
     "MICROSOFT_OAUTH_REDIRECT_URI",
     "MICROSOFT_OAUTH_TENANT",
+    "CREDENTIAL_STORE_BACKEND",
+    "AZURE_KEY_VAULT_URL",
+    "AWS_SECRETS_MANAGER_REGION",
+    "AWS_SECRETS_MANAGER_NAMESPACE",
 )
 
 
@@ -78,6 +82,11 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.microsoft_oauth_redirect_uri is None
     assert settings.microsoft_oauth_tenant is None
     assert settings.microsoft_oauth_is_configured is False
+    assert settings.credential_store_backend is None
+    assert settings.azure_key_vault_url is None
+    assert settings.aws_secrets_manager_region is None
+    assert settings.aws_secrets_manager_namespace == "eci/mailbox-oauth"
+    assert settings.durable_oauth_store_is_configured is False
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -810,3 +819,112 @@ def test_production_does_not_require_microsoft_oauth(
     settings = Settings(_env_file=None)
     assert settings.app_env == "production"
     assert settings.microsoft_oauth_is_configured is False
+    assert settings.durable_oauth_store_is_configured is False
+
+
+def test_foundry_ai_provider_does_not_select_key_vault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mailbox credential storage is independent of AI_PROVIDER."""
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://example.invalid/api/projects/eci",
+    )
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT", "eci-gpt")
+    settings = Settings(_env_file=None)
+    assert settings.credential_store_backend is None
+    assert settings.durable_oauth_store_is_configured is False
+
+
+def test_partial_azure_store_configuration_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "azure_key_vault")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv("AZURE_KEY_VAULT_URL", "https://eci-dev.vault.azure.net")
+    monkeypatch.delenv("CREDENTIAL_STORE_BACKEND", raising=False)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_complete_azure_store_configuration_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "azure_key_vault")
+    monkeypatch.setenv("AZURE_KEY_VAULT_URL", "https://eci-dev.vault.azure.net/")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    settings = Settings(_env_file=None)
+    assert settings.credential_store_backend == "azure_key_vault"
+    assert settings.azure_key_vault_url == "https://eci-dev.vault.azure.net"
+    assert settings.durable_oauth_store_is_configured is True
+
+
+def test_complete_aws_store_configuration_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "aws_secrets_manager")
+    monkeypatch.setenv("AWS_SECRETS_MANAGER_REGION", "eu-west-1")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    settings = Settings(_env_file=None)
+    assert settings.credential_store_backend == "aws_secrets_manager"
+    assert settings.aws_secrets_manager_region == "eu-west-1"
+    assert settings.aws_secrets_manager_namespace == "eci/mailbox-oauth"
+    assert settings.durable_oauth_store_is_configured is True
+
+
+def test_azure_store_with_sqlite_database_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "azure_key_vault")
+    monkeypatch.setenv("AZURE_KEY_VAULT_URL", "https://eci-dev.vault.azure.net")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./eci.db")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_oauth_requires_durable_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", "id.apps.googleusercontent.com")
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setenv(
+        "GMAIL_OAUTH_REDIRECT_URI",
+        "https://eci.example.invalid/api/v1/oauth/callbacks/gmail",
+    )
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_memory_backend_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "memory")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_production_oauth_with_azure_store_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_ID", "id.apps.googleusercontent.com")
+    monkeypatch.setenv("GMAIL_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setenv(
+        "GMAIL_OAUTH_REDIRECT_URI",
+        "https://eci.example.invalid/api/v1/oauth/callbacks/gmail",
+    )
+    monkeypatch.setenv("CREDENTIAL_STORE_BACKEND", "azure_key_vault")
+    monkeypatch.setenv("AZURE_KEY_VAULT_URL", "https://eci-dev.vault.azure.net")
+    settings = Settings(_env_file=None)
+    assert settings.durable_oauth_store_is_configured is True
+    assert settings.gmail_oauth_is_configured is True

@@ -269,7 +269,6 @@ See [GitHub Actions](#github-actions).
 ## Not implemented
 
 - Azure App Service / AWS App Runner (not used; hosting is Container Apps and ECS Fargate)
-- Azure Key Vault / AWS Secrets Manager mailbox secret backends (future credential-resolver implementations; not currently integrated)
 - Azure Monitor / Amazon CloudWatch tracing, dashboards, and custom metrics (native log retention and platform metrics are in Phase 7)
 - AWS persistent HTTPS / custom domain (domain and ACM deferred)
 - automatic (push/tag) cloud deployment

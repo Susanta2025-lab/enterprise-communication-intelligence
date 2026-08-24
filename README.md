@@ -423,7 +423,7 @@ deployment/
 
 **Later**
 
-* Azure Key Vault / AWS Secrets Manager mailbox secret backends (environment-backed local/dev credential lookup exists)
+* Live Azure Key Vault / AWS Secrets Manager certification (application backends exist in Phase 13E; mocked/offline tests only)
 * Managed Azure PostgreSQL / Amazon RDS
 * Distributed tracing / OpenTelemetry
 * Custom metrics, dashboards, and alerts
@@ -565,7 +565,7 @@ Not yet implemented:
 * Production Gmail/Microsoft OAuth lifecycle, token refresh, and connector HTTP APIs
 * Mailbox synchronization, webhooks, and attachments
 * Automatic replies, retry/reconciliation, exactly-once delivery, or live-provider send validation
-* Managed secret-store mailbox backends (Key Vault / Secrets Manager)
+* Live Key Vault / Secrets Manager certification of mailbox secrets (Phase 13E application backends exist; operator live validation is pending)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached

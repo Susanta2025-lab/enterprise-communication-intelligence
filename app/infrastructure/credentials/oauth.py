@@ -226,9 +226,7 @@ class OAuthCommunicationCredentialResolver(CommunicationCredentialResolver):
         if expires_at <= self._clock() + self._skew:
             raise CommunicationCredentialUnavailableError()
         replacement = result.replacement_secret_material
-        if replacement is not None and (
-            not isinstance(replacement, bytes) or not replacement
-        ):
+        if replacement is not None and (not isinstance(replacement, bytes) or not replacement):
             raise CommunicationCredentialUnavailableError()
         return token.strip(), expires_at, replacement
 

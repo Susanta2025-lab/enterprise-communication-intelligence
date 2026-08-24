@@ -301,7 +301,7 @@ Unauthorized and forbidden requests do not open an execution unit of work, resol
   - `200 OK` — Google authorization URL for the browser
   - `401` / `403` — authentication/authorization failure
   - `400` — mailbox authorization could not be started
-  - `503` — Gmail OAuth is unconfigured, persistence is unavailable, or `APP_ENV=production` (in-memory OAuth store is not durable production storage)
+  - `503` — Gmail OAuth is unconfigured, persistence is unavailable, production lacks a durable credential store, or the configured store is unavailable
 
 Authorization runs before unit-of-work, OAuth adapter, and credential-store construction. Raw state, PKCE verifier, and client secret are not returned.
 
@@ -338,7 +338,7 @@ Invalid state does not call Google. Consent denial consumes the session and does
   - `200 OK` — Microsoft authorization URL for the browser
   - `401` / `403` — authentication/authorization failure
   - `400` — mailbox authorization could not be started
-  - `503` — Microsoft OAuth is unconfigured, persistence is unavailable, or `APP_ENV=production` (in-memory OAuth store is not durable production storage)
+  - `503` — Microsoft OAuth is unconfigured, persistence is unavailable, production lacks a durable credential store, or the configured store is unavailable
 
 Authorization runs before unit-of-work, OAuth adapter, and credential-store construction. Raw state, PKCE verifier, and client secret are not returned.
 

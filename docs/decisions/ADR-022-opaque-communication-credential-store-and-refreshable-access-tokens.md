@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is implemented for Phase 13B. The provider-neutral credential store, server-generated locators, and refreshable `AccessTokenProvider` foundation exist. Real Google OAuth, Microsoft OAuth, Azure Key Vault, and AWS Secrets Manager are not implemented in 13B.
+The decision is implemented for Phase 13B. The provider-neutral credential store, server-generated locators, and refreshable `AccessTokenProvider` foundation exist. Phase 13C/13D added Google and Microsoft OAuth. Phase 13E added Azure Key Vault and AWS Secrets Manager backends. Phase 13E live Azure Key Vault and AWS Secrets Manager store validation is recorded below. Azure Key Vault itself does not supply atomic CAS.
 
 ## Date
 
@@ -62,6 +62,7 @@ Durable rules:
 - A bounded in-process access-token cache is keyed by `(provider, credential_ref)` and stores token plus expiration. A cached token is usable only when it remains valid beyond a 5-minute refresh skew. Cache entries are never persisted.
 - Concurrent callers for the same credential share a per-key in-process lock so one process does not duplicate refresh work. Unrelated credentials are not serialized behind one global lock. Locks are refcounted and removed when idle. In-process locks are not a multi-instance safety mechanism.
 - Multi-instance rotation safety is compare-and-set on the store version. If CAS loses, the caller re-reads the winner and retries acquisition once. Stale replacements are never written. Retry is bounded. There is no Redis, distributed lock, database lease, or queue worker in 13B.
+- Phase 13E correction: Azure Key Vault Set Secret is not a linearizable compare-and-swap. Durable cloud backends therefore serialize create / replace_if_version / delete with PostgreSQL transaction-scoped `pg_advisory_xact_lock`, keyed deterministically by a SHA-256 digest of a fixed ECI namespace plus the opaque `credential_ref`. Same-locator create / replace / delete serialize across ECI instances that share the same PostgreSQL database. The database is a coordination mechanism only; no OAuth secret or token material is stored in PostgreSQL. The mutation transaction holds one database connection during the infrequent cloud control-plane write. AWS retains native version/stage compare-and-set in addition to this coordination. The in-memory development store is unchanged and does not require PostgreSQL. Durable cloud backends fail closed if PostgreSQL coordination cannot be constructed. `get()` remains lock-free.
 - Same-process cache invalidation is wired through store mutation listeners: delete or replace of a locator drops cached tokens for that locator. Cross-instance cache invalidation is not provided; access tokens remain short-lived and CAS protects secret material.
 - `AccessTokenProvider` is unchanged. Phase 12 execution classes and Gmail/Graph executor semantics are unchanged. There is no automatic provider-send retry and no workflow reconciliation.
 - Token resolution does not mutate `ConnectorAccount`. `CommunicationCredentialReauthorizationRequiredError` is a typed subclass of `CommunicationCredentialUnavailableError` so existing executors still observe unavailable/uncertain behavior after TX1. Automatic `ACTIVE` → `REAUTH_REQUIRED` is later credential-lifecycle work.
@@ -74,7 +75,7 @@ Durable rules:
 - **Unique index on `credential_ref`** — rejected. Phase 12 environment-backed accounts may reuse locators. Collision checks belong to the credential store.
 - **Move secret/token I/O into `resolve()` / TX1** — rejected. That would hold the execution unit of work across secret-store and token-endpoint I/O.
 - **Integer-only secret versions** — rejected. Future Key Vault and Secrets Manager versions are opaque strings.
-- **Distributed cache or lock (Redis)** — rejected. Multi-instance safety is CAS on the secret version. In-process cache/locks are an optimization, not a correctness boundary across replicas.
+- **Distributed cache or lock (Redis)** — rejected in 13B as the primary CAS mechanism. Phase 13E does not introduce Redis. PostgreSQL advisory locks serialize cloud credential mutations because Azure Key Vault cannot implement the store CAS contract alone. PostgreSQL is already the application database and stores no OAuth secrets.
 - **Make the OAuth resolver the production default in 13B** — rejected. No real provider adapters or production secret backend exist yet. Environment-backed execute remains valid.
 - **Google or Microsoft fields on the store port** — rejected. The store must hold either provider's serialized material without redesign.
 
@@ -88,7 +89,7 @@ Durable rules:
 ## Benefits
 
 - Phase 12 TX1 stays free of secret and token I/O.
-- Rotation is safe across multiple application instances without distributed locking.
+- Rotation is safe across multiple application instances. Durable cloud backends obtain that safety from compare-and-set plus PostgreSQL advisory-lock serialization; Key Vault itself does not provide CAS.
 - Provider SDKs and cloud secret SDKs stay out of domain and application code.
 
 ## Trade-offs
@@ -96,6 +97,20 @@ Durable rules:
 - In-process token cache is not coherent across replicas. That is accepted because access tokens are short-lived and secret material uses CAS.
 - 13B cannot live-certify Google or Microsoft token refresh.
 - A permanently invalid refresh credential still surfaces as unavailable/uncertain execution until later lifecycle work maps it onto `REAUTH_REQUIRED`.
+
+## Validation
+
+Phase 13E PostgreSQL coordination tests (with `ECI_POSTGRES_TEST_DATABASE_URL` enabled):
+
+- `tests/postgres/test_credential_mutation_coordination.py`: 4 passed
+- complete `tests/postgres` suite: 70 passed
+- complete suite: 1720 passed, 0 skipped
+
+Azure live store validation used existing development Key Vault `eci-kv-oauth-dev-susanta` (Spain Central, RBAC authorization enabled) through factory → PostgreSQL advisory coordinator → `AzureKeyVaultCommunicationCredentialStore` → `DefaultAzureCredential` → Azure Key Vault. Create, get, normal version replacement, stale-version rejection, coordinated delete, and synthetic-probe cleanup passed. Two independently constructed stores racing the same expected version produced exactly one winner and one loser; winning material remained persisted. This does not mean Azure Key Vault itself provides linearizable CAS.
+
+AWS live store validation used the existing ECI developer identity in `eu-south-2` through factory → PostgreSQL advisory coordinator → `AwsSecretsManagerCommunicationCredentialStore` → boto3/default AWS authentication → AWS Secrets Manager. Create, get, normal version replacement, and delete (existing 7-day recovery window) passed. The same independent-store race produced exactly one winner and one loser; winning material remained persisted. Scheduled-for-deletion `GetSecretValue` maps to provider-neutral absence (`None`) after `DescribeSecret` confirms `DeletedDate`. Required IAM on `eci/mailbox-oauth/*` is `CreateSecret`, `GetSecretValue`, `PutSecretValue`, `UpdateSecretVersionStage`, `DeleteSecret`, and `DescribeSecret`. `ListSecrets` is not required. `SecretsManagerFullAccess` is not recommended.
+
+Final code verification: `python -m pip check` passed; `python -m ruff check .` passed; full pytest with PostgreSQL integration enabled: 1720 passed.
 
 ## Related Components
 
@@ -105,7 +120,10 @@ Durable rules:
 - `app/infrastructure/credentials/oauth.py`
 - `app/infrastructure/credentials/locators.py`
 - `app/infrastructure/credentials/refresh.py`
-- `app/infrastructure/credentials/environment.py`
+- `app/infrastructure/credentials/azure_key_vault.py`
+- `app/infrastructure/credentials/aws_secrets_manager.py`
+- `app/infrastructure/credentials/mutation.py`
+- `app/infrastructure/storage/credential_mutation.py`
 - [ADR-019](ADR-019-production-communication-write-architecture.md)
 - [ADR-020](ADR-020-uncertain-communication-execution-semantics.md)
 - [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md)

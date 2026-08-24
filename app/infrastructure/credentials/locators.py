@@ -70,9 +70,7 @@ def create_communication_credential(
         if not is_valid_credential_ref(locator):
             raise CommunicationCredentialUnavailableError()
         try:
-            return store.create(
-                NewCommunicationCredential(locator, provider_slug, material)
-            )
+            return store.create(NewCommunicationCredential(locator, provider_slug, material))
         except CommunicationCredentialConflictError:
             continue
         except (

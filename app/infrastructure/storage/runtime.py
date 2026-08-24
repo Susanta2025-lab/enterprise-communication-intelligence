@@ -55,6 +55,15 @@ def probe_database_readiness(database_url: str) -> bool:
         return False
 
 
+def get_persistence_session_factory(database_url: str) -> sessionmaker[Session]:
+    """Return the process-scoped SQLAlchemy session factory.
+
+    Reuses the same engine as ``get_unit_of_work_factory``. Importing this
+    module still does not open a connection; the engine is created on first use.
+    """
+    return _session_factory_for(database_url)
+
+
 def dispose_persistence_runtime() -> None:
     """Dispose the cached engine if one was created."""
     global _engine, _session_factory

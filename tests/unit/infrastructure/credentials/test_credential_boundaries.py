@@ -50,15 +50,41 @@ _DOMAIN_RESOLVER = (
 )
 
 
+_SDK_EXEMPT = frozenset({"azure_key_vault.py", "aws_secrets_manager.py"})
+
+
 def _python_files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*.py") if path.name != "__pycache__")
 
 
 def test_credentials_package_does_not_use_vendor_or_secret_sdks() -> None:
     for path in _python_files(_CREDENTIALS_ROOT):
+        if path.name in _SDK_EXEMPT:
+            continue
         source = path.read_text(encoding="utf-8")
         for marker in _FORBIDDEN_SDK:
             assert marker not in source, f"{path} must not reference {marker}"
+
+
+def test_cloud_store_sdks_stay_in_backend_modules() -> None:
+    azure = (_CREDENTIALS_ROOT / "azure_key_vault.py").read_text(encoding="utf-8")
+    assert "azure.identity" in azure
+    assert "azure.keyvault.secrets" in azure
+    assert "DefaultAzureCredential" in azure
+    assert "refresh_token" not in azure
+    assert "authorization_code" not in azure
+    aws = (_CREDENTIALS_ROOT / "aws_secrets_manager.py").read_text(encoding="utf-8")
+    assert "boto3" in aws
+    assert "secretsmanager" in aws
+    assert "refresh_token" not in aws
+    assert "authorization_code" not in aws
+    factory = (_CREDENTIALS_ROOT / "factory.py").read_text(encoding="utf-8")
+    assert "azure.identity" not in factory
+    assert "DefaultAzureCredential" not in factory
+    assert "boto3" not in factory
+    envelope = (_CREDENTIALS_ROOT / "envelope.py").read_text(encoding="utf-8")
+    assert "azure" not in envelope
+    assert "boto" not in envelope
 
 
 def test_credentials_package_does_not_couple_to_execution_or_api() -> None:
@@ -186,9 +212,9 @@ def test_api_composition_root_does_not_default_to_oauth_resolver() -> None:
 
 
 def test_domain_store_port_stays_provider_neutral() -> None:
-    source = (
-        _DOMAIN_ROOT / "interfaces" / "communication_credential_store.py"
-    ).read_text(encoding="utf-8")
+    source = (_DOMAIN_ROOT / "interfaces" / "communication_credential_store.py").read_text(
+        encoding="utf-8"
+    )
     assert "import os" not in source
     assert "fastapi" not in source
     assert "httpx" not in source

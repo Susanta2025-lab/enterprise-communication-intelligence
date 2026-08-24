@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 AppEnvironment = Literal["development", "staging", "production"]
 AuthMode = Literal["disabled", "oidc"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+CredentialStoreBackend = Literal["memory", "azure_key_vault", "aws_secrets_manager"]
 
 _PRODUCTION_DATABASE_SCHEME = "postgresql+psycopg"
 _ALLOWED_DATABASE_SCHEMES = frozenset(
@@ -22,6 +23,9 @@ _ALLOWED_DATABASE_SCHEMES = frozenset(
 )
 _MICROSOFT_OAUTH_TENANT_ALIASES = frozenset({"common", "organizations", "consumers"})
 _MICROSOFT_OAUTH_TENANT_GUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_AWS_SECRETS_NAMESPACE = re.compile(r"^[A-Za-z0-9/_+=.@-]{1,256}$")
+_AWS_SECRETS_REGION = re.compile(r"^[a-z0-9-]+$")
+_DEFAULT_AWS_SECRETS_NAMESPACE = "eci/mailbox-oauth"
 
 
 class Settings(BaseSettings):
@@ -65,6 +69,10 @@ class Settings(BaseSettings):
     microsoft_oauth_client_secret: SecretStr | None = None
     microsoft_oauth_redirect_uri: str | None = None
     microsoft_oauth_tenant: str | None = None
+    credential_store_backend: CredentialStoreBackend | None = None
+    azure_key_vault_url: str | None = None
+    aws_secrets_manager_region: str | None = None
+    aws_secrets_manager_namespace: str = _DEFAULT_AWS_SECRETS_NAMESPACE
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -318,6 +326,85 @@ class Settings(BaseSettings):
             )
         return value
 
+    @field_validator("credential_store_backend", mode="before")
+    @classmethod
+    def normalize_credential_store_backend(cls, value: object) -> object:
+        """Treat blank credential-store backends as unset and lowercase names."""
+        if isinstance(value, str):
+            stripped = value.strip().lower()
+            return stripped or None
+        return value
+
+    @field_validator("azure_key_vault_url", mode="before")
+    @classmethod
+    def normalize_azure_key_vault_url(cls, value: object) -> object:
+        """Treat blank Key Vault URLs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip().rstrip("/")
+            return stripped or None
+        return value
+
+    @field_validator("azure_key_vault_url")
+    @classmethod
+    def validate_azure_key_vault_url(cls, value: str | None) -> str | None:
+        """Require an https Azure Key Vault URL when one is provided."""
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").lower()
+        if (
+            parsed.scheme != "https"
+            or not host
+            or parsed.fragment
+            or parsed.query
+            or parsed.username
+            or parsed.password
+            or ".vault." not in host
+        ):
+            raise ValueError("AZURE_KEY_VAULT_URL must be an https Azure Key Vault URL.")
+        return value
+
+    @field_validator("aws_secrets_manager_region", mode="before")
+    @classmethod
+    def normalize_aws_secrets_manager_region(cls, value: object) -> object:
+        """Treat blank Secrets Manager regions as unset and lowercase."""
+        if isinstance(value, str):
+            stripped = value.strip().lower()
+            return stripped or None
+        return value
+
+    @field_validator("aws_secrets_manager_region")
+    @classmethod
+    def validate_aws_secrets_manager_region(cls, value: str | None) -> str | None:
+        """Accept a non-empty AWS region identifier when provided."""
+        if value is None:
+            return None
+        if _AWS_SECRETS_REGION.fullmatch(value) is None:
+            raise ValueError("AWS_SECRETS_MANAGER_REGION is invalid.")
+        return value
+
+    @field_validator("aws_secrets_manager_namespace", mode="before")
+    @classmethod
+    def normalize_aws_secrets_manager_namespace(cls, value: object) -> object:
+        """Trim namespace slashes. Blank values restore the ECI default."""
+        if isinstance(value, str):
+            stripped = value.strip().strip("/")
+            return stripped or _DEFAULT_AWS_SECRETS_NAMESPACE
+        return value
+
+    @field_validator("aws_secrets_manager_namespace")
+    @classmethod
+    def validate_aws_secrets_manager_namespace(cls, value: str) -> str:
+        """Reject unconstrained Secrets Manager namespaces."""
+        if (
+            not value
+            or ".." in value
+            or "//" in value
+            or _AWS_SECRETS_NAMESPACE.fullmatch(value) is None
+        ):
+            raise ValueError("AWS_SECRETS_MANAGER_NAMESPACE is invalid.")
+        return value
+
     @model_validator(mode="after")
     def validate_gmail_oauth_settings_together(self) -> Self:
         """Require Gmail OAuth fields together when any one is provided.
@@ -386,6 +473,68 @@ class Settings(BaseSettings):
             and self.microsoft_oauth_redirect_uri
             and self.microsoft_oauth_tenant
         )
+
+    @property
+    def durable_oauth_store_is_configured(self) -> bool:
+        """Return True when a cloud credential backend is fully configured."""
+        if self.credential_store_backend == "azure_key_vault":
+            return self.azure_key_vault_url is not None
+        if self.credential_store_backend == "aws_secrets_manager":
+            return self.aws_secrets_manager_region is not None
+        return False
+
+    @model_validator(mode="after")
+    def validate_credential_store_settings(self) -> Self:
+        """Fail closed on partial cloud-store config and production memory use.
+
+        Mailbox OAuth storage is independent of AI_PROVIDER. Azure is not
+        selected because Foundry is configured; AWS is not selected because
+        Bedrock is configured.
+        """
+        backend = self.credential_store_backend
+        if self.azure_key_vault_url is not None and backend != "azure_key_vault":
+            raise ValueError(
+                "AZURE_KEY_VAULT_URL requires CREDENTIAL_STORE_BACKEND=azure_key_vault."
+            )
+        if self.aws_secrets_manager_region is not None and backend != "aws_secrets_manager":
+            raise ValueError(
+                "AWS_SECRETS_MANAGER_REGION requires CREDENTIAL_STORE_BACKEND=aws_secrets_manager."
+            )
+        if backend == "azure_key_vault" and self.azure_key_vault_url is None:
+            raise ValueError(
+                "AZURE_KEY_VAULT_URL must be set when CREDENTIAL_STORE_BACKEND=azure_key_vault."
+            )
+        if backend == "aws_secrets_manager" and self.aws_secrets_manager_region is None:
+            raise ValueError(
+                "AWS_SECRETS_MANAGER_REGION must be set when "
+                "CREDENTIAL_STORE_BACKEND=aws_secrets_manager."
+            )
+        if backend in {"azure_key_vault", "aws_secrets_manager"}:
+            if not self.database_url:
+                raise ValueError(
+                    "DATABASE_URL must be set when CREDENTIAL_STORE_BACKEND is "
+                    "a durable cloud store."
+                )
+            scheme = urlparse(self.database_url).scheme.lower()
+            if scheme != _PRODUCTION_DATABASE_SCHEME:
+                raise ValueError(
+                    "DATABASE_URL must use postgresql+psycopg when a durable "
+                    "cloud credential store is selected."
+                )
+        if self.app_env != "production":
+            return self
+        if backend == "memory":
+            raise ValueError(
+                "CREDENTIAL_STORE_BACKEND=memory is not allowed when APP_ENV=production."
+            )
+        oauth_configured = self.gmail_oauth_is_configured or self.microsoft_oauth_is_configured
+        if oauth_configured and not self.durable_oauth_store_is_configured:
+            raise ValueError(
+                "CREDENTIAL_STORE_BACKEND must be azure_key_vault or "
+                "aws_secrets_manager when APP_ENV=production and mailbox OAuth "
+                "is configured."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_foundry_settings_when_selected(self) -> Self:

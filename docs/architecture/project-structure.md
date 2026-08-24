@@ -1,6 +1,6 @@
 # Project Structure
 
-This reflects the actual repository layout as of Phase 12 (completed; 12A–12F completed). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
+This reflects the actual repository layout as of Phase 13E (Phase 12 complete; 13A–13E complete; 13F not started). Directories with only an empty `__init__.py` or a `.gitkeep` are labeled as scaffolds, not implemented capabilities.
 
 ```text
 app/
@@ -92,11 +92,16 @@ app/
 │   │   ├── locators.py        # server-generated credential_ref issuance
 │   │   ├── refresh.py         # RefreshableCredentialAdapter boundary
 │   │   ├── oauth.py           # OAuthCommunicationCredentialResolver
-│   │   └── composite.py       # oauth- locator vs environment routing
+│   │   ├── composite.py       # oauth- locator vs environment routing
+│   │   ├── envelope.py        # versioned opaque secret envelope
+│   │   ├── secret_names.py    # locator → Key Vault / Secrets Manager names
+│   │   ├── azure_key_vault.py # AzureKeyVaultCommunicationCredentialStore
+│   │   ├── aws_secrets_manager.py
+│   │   └── factory.py         # backend selection; production rejects memory
 │   ├── oauth/
 │   │   ├── google.py          # Google authorization, ID-token verify, Gmail refresh adapter
 │   │   ├── microsoft.py       # Microsoft identity platform v2 authorize/exchange/refresh
-│   │   └── runtime.py         # shared in-memory store; production fail-closed connect
+│   │   └── runtime.py         # store selection; production requires durable backend
 │   ├── executors/
 │   │   ├── factory.py         # ProviderCommunicationActionExecutorFactory (account-driven routing)
 │   │   ├── fake.py            # FakeCommunicationActionExecutor (deterministic, I/O-free)

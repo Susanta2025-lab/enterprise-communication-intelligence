@@ -36,7 +36,7 @@ Phase 13 is **In Progress**.
 - **13B is Completed:** opaque credential store, server-generated locators, in-memory store, refreshable `AccessTokenProvider` foundation, in-process cache/locks, CAS rotation, ADR-022. No real Google or Microsoft OAuth. Environment-backed execute remains the runtime default.
 - **13C is Completed:** Google OAuth / Gmail credential lifecycle. Live Google Cloud project validation remains an external operator step.
 - **13D is Completed:** Microsoft Entra OAuth / Graph credential lifecycle. Live Entra consent and an explicitly approved Graph reply were validated locally.
-- **13E is Not Started:** Azure Key Vault + AWS Secrets Manager production backends.
+- **13E is Completed:** Azure Key Vault and AWS Secrets Manager `CommunicationCredentialStore` backends, explicit `CREDENTIAL_STORE_BACKEND` selection, production fail-closed rules, PostgreSQL advisory-lock coordination, and live Azure/AWS store validation recorded below.
 - **13F is Not Started:** disconnect/reauthorization, production hardening, documentation, and regression.
 
 Phase 12 remains **Completed**.
@@ -106,7 +106,58 @@ Not in 13D: Key Vault, Secrets Manager, disconnect/reauthorize HTTP, automatic r
 
 ### 13E — Azure Key Vault + AWS Secrets Manager Production Backends
 
-Production secret-store implementations of the credential store. Not application-layer OAuth.
+Durable `CommunicationCredentialStore` implementations. Not application-layer OAuth.
+
+Implemented:
+
+- `CREDENTIAL_STORE_BACKEND=memory | azure_key_vault | aws_secrets_manager`
+- Azure Key Vault store using `DefaultAzureCredential` (Container Apps managed identity). Configuration holds only `AZURE_KEY_VAULT_URL`.
+- AWS Secrets Manager store using the default boto3 chain (ECS task role). Configuration holds region and `eci/mailbox-oauth` namespace. No AWS access keys in Settings.
+- Locator `oauth-{hex}` maps to Key Vault secret `eci-oauth-{hex}` and Secrets Manager id `eci/mailbox-oauth/oauth-{hex}`. `ConnectorAccount` still stores only the opaque locator.
+- Compare-and-set uses a logical version in a minimal envelope. Azure Key Vault does not provide a linearizable CAS primitive. Credential cloud mutations use PostgreSQL transaction-scoped advisory locks (`pg_advisory_xact_lock`) keyed deterministically by the opaque `credential_ref`. PostgreSQL stores coordination only; no OAuth secret or token material. Same-locator create / replace / delete serialize across ECI instances that share the same PostgreSQL database. AWS retains native `AWSPENDING` / `AWSCURRENT` version-stage compare-and-set in addition to PostgreSQL serialization. Credential mutation transactions hold one database connection during the infrequent cloud control-plane write.
+- Production rejects `memory` and rejects mailbox OAuth unless a complete Azure or AWS backend is configured. `AI_PROVIDER` does not select the mailbox store.
+- Gmail and Microsoft Graph adapters remain store-unaware.
+- AWS `get()` treats a secret scheduled for deletion (`DeletedDate`) as absent. `InvalidRequestException` is not broadly mapped to None; `DescribeSecret` confirms that state. Idempotent `delete()` of an already-scheduled secret is a no-op after the same check.
+- AWS IAM on `eci/mailbox-oauth/*`: `secretsmanager:CreateSecret`, `GetSecretValue`, `PutSecretValue`, `UpdateSecretVersionStage`, `DescribeSecret`, `DeleteSecret`. Do not grant `ListSecrets` or `SecretsManagerFullAccess`.
+
+Not in 13E: disconnect HTTP, automatic replies, Terraform/Bicep, a new Alembic revision, or cloud-hosted Gmail/Graph OAuth certification. Live Key Vault and Secrets Manager store validation is recorded below.
+
+PostgreSQL validation (with `ECI_POSTGRES_TEST_DATABASE_URL` enabled):
+
+- `tests/postgres/test_credential_mutation_coordination.py`: 4 passed
+- complete `tests/postgres` suite: 70 passed
+- complete suite: 1720 passed, 0 skipped
+
+Azure live validation used the existing development Key Vault `eci-kv-oauth-dev-susanta` (Spain Central, RBAC authorization enabled). The path was factory → PostgreSQL advisory coordinator → `AzureKeyVaultCommunicationCredentialStore` → `DefaultAzureCredential` → Azure Key Vault.
+
+Live evidence:
+
+- create passed
+- get passed
+- normal version replacement passed
+- stale-version rejection passed
+- two independently constructed stores raced with the same expected version: exactly one winner and one loser
+- winning material remained persisted
+- coordinated delete passed
+- synthetic probe secret was removed
+
+This does not claim that Azure Key Vault itself supplies atomic CAS.
+
+AWS live validation used the existing ECI developer identity (profile/session) in `eu-south-2`. The path was factory → PostgreSQL advisory coordinator → `AwsSecretsManagerCommunicationCredentialStore` → boto3/default AWS authentication → AWS Secrets Manager.
+
+Live evidence:
+
+- create passed
+- get passed
+- normal version replacement passed
+- two independently constructed stores raced with the same expected version: exactly one winner and one loser
+- winning material remained persisted
+- delete succeeded using the existing 7-day recovery window
+- scheduled-for-deletion `GetSecretValue` behavior was corrected and live validated to map to provider-neutral absence (`None`) after confirming `DeletedDate` with `DescribeSecret`
+
+Required least-privilege AWS actions remain `CreateSecret`, `GetSecretValue`, `PutSecretValue`, `UpdateSecretVersionStage`, `DeleteSecret`, and `DescribeSecret`. `secretsmanager:ListSecrets` is not required. `SecretsManagerFullAccess` is not recommended.
+
+Final code verification for this slice: `python -m pip check` passed; `python -m ruff check .` passed; full pytest with PostgreSQL integration enabled: 1720 passed.
 
 ### 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression
 
@@ -118,7 +169,7 @@ Operational disconnect/reauthorize flows, documentation consolidation, and regre
 - [x] Phase 13B — Credential Store + Refreshable Access-Token Foundation (completed)
 - [x] Phase 13C — Google OAuth / Gmail Credential Lifecycle (completed)
 - [x] Phase 13D — Microsoft Entra OAuth / Graph Credential Lifecycle (completed)
-- [ ] Phase 13E — Azure Key Vault + AWS Secrets Manager Production Backends (not started)
+- [x] Phase 13E — Azure Key Vault + AWS Secrets Manager Production Backends (completed)
 - [ ] Phase 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression (not started)
 
 ## Identity boundary

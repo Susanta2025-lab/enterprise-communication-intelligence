@@ -42,6 +42,7 @@ dependencies = [
     "structlog>=25.4",
     "azure-ai-projects>=2.4.0",
     "azure-identity>=1.15.0",
+    "azure-keyvault-secrets>=4.9.0",
     "openai>=2.8.0",
     "boto3[crt]>=1.41.0",
     "PyJWT[crypto]>=2.10.0",

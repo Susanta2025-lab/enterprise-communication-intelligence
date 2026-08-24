@@ -206,9 +206,9 @@ def test_build_hook_constructs_resolver_without_making_it_runtime_default() -> N
         {"gmail": adapter},
     )
     assert isinstance(resolver, OAuthCommunicationCredentialResolver)
-    source = (
-        Path(__file__).resolve().parents[4] / "app" / "api" / "dependencies.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[4] / "app" / "api" / "dependencies.py").read_text(
+        encoding="utf-8"
+    )
     assert "EnvironmentCommunicationCredentialResolver" in source
     assert "OAuthCommunicationCredentialResolver" not in source
 
