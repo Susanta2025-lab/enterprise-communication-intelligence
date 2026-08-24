@@ -31,7 +31,7 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. Implementation has not started.
+Phase 14 is **Next**. Architecture is reconciled. **14A is Completed.** Remaining slices have not started.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -54,7 +54,7 @@ Recommended HTTP authorization:
 
 Neither permission implies the other. `communications:connect` does not authorize mailbox listing or analyze. Direct-text `POST /api/v1/communications/analyze` continues to require `communications:analyze` only.
 
-Phase 14A implements the code, test, and documentation foundation for `communications:read`. Live identity-provider scope provisioning is deferred until controlled Phase 14 live validation. Do not modify live Entra configuration in 14A–14E.
+Phase 14A implements the code, test, and documentation foundation for `communications:read`. Live identity-provider scope provisioning is deferred until controlled Phase 14 live validation. Do not modify live Entra configuration in 14A–14E. **14A is Completed.**
 
 ## Public API shape
 
@@ -134,6 +134,8 @@ Do not skip README updates. Historical Azure/AWS runbooks in `deployment/azure/`
 ## Planned slices
 
 ### 14A — Read Authorization + Public Contract
+
+**14A is Completed.**
 
 Objective: introduce `communications:read`, freeze the public list/analyze contract, and map ownership/lifecycle failures without provider HTTP.
 

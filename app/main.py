@@ -12,9 +12,11 @@ from app.api.routes import health
 from app.application.exceptions import (
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    ConnectedMailboxNotAvailableError,
     ConnectorAccountConflictError,
     ConnectorAccountNotFoundError,
     MailboxAuthorizationSessionInvalidError,
+    MailboxMessageNotFoundError,
     MailboxOAuthAuthorizationDeniedError,
     WorkflowActionConflictError,
     WorkflowActionNotExecutableError,
@@ -107,6 +109,24 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("connector_account_conflict", error_class=error_class(exc))
         return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(ConnectedMailboxNotAvailableError)
+    async def connected_mailbox_not_available_handler(
+        _request: Request,
+        exc: ConnectedMailboxNotAvailableError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("connected_mailbox_not_available", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxMessageNotFoundError)
+    async def mailbox_message_not_found_handler(
+        _request: Request,
+        exc: MailboxMessageNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_message_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
 
     @application.exception_handler(AnalysisHasNoDraftReplyError)
     async def analysis_has_no_draft_reply_handler(

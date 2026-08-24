@@ -399,3 +399,28 @@ Ownership is verified before secret-store operations. Repeated disconnect is ide
   - `503` — provider OAuth or persistence unavailable
 
 `DISCONNECTED` and `REAUTH_REQUIRED` are accepted. The callback remains unauthenticated. Successful reauthorization reactivates the exact bound account to `ACTIVE` with a new opaque locator and freshly granted capabilities. Selecting a different mailbox at consent is rejected.
+
+---
+
+## Phase 14 mailbox contract (not served in 14A)
+
+Phase 14A freezes the provider-neutral public contract. These routes are **not** mounted and must not appear in OpenAPI until a later slice can perform the documented operation.
+
+### `GET /api/v1/connector-accounts/{connector_account_id}/messages`
+
+- **Authorization:** authenticated principal + `communications:read`
+- **Query:** `ConnectorAccountMessageListQuery` — `page_size` (default 10, maximum 100) and opaque `cursor`
+- **Response:** `ConnectorAccountMessageListResponse` — `items` plus `next_cursor` (`null` on the last page)
+- **List item fields:** `provider_message_id`, `sender`, `subject`, `sent_at`, `received_at`
+- **Not returned:** full body, attachments, `thread_id`, `credential_ref`, tokens, OAuth data, raw provider JSON, Graph `nextLink` or other vendor pagination URLs
+- **Established status codes:** `401` unauthenticated; `403` missing `communications:read`; `404` unknown or not-owned connector account; `409` owned account not currently usable; `422` invalid query; `503` transient unavailability
+
+### `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze`
+
+- **Authorization:** authenticated principal + `communications:read` + `communications:analyze`
+- **Request body:** `ConnectorAccountMessageAnalyzeRequest` — `{ "provider_message_id": "<opaque>" }`
+- **Response:** existing `CommunicationAnalysisResponse` (`analysis`, `provider`, optional `analysis_id`)
+- **Not returned:** raw message body, `credential_ref`, tokens, or provider OAuth metadata
+- **Established status codes:** `401` unauthenticated; `403` missing read or analyze; `404` unknown/not-owned account or unknown provider message; `409` owned account not currently usable; `422` invalid body; `503` transient unavailability
+
+Direct-text `POST /api/v1/communications/analyze` is unchanged and still requires only `communications:analyze`.

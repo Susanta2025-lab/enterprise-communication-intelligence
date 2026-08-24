@@ -110,6 +110,11 @@ def test_openapi_schema_available(client: TestClient) -> None:
     serialized_lifecycle = repr(disconnect) + repr(reauthorize)
     assert "credential_ref" not in serialized_lifecycle
     assert "refresh_token" not in serialized_lifecycle
+    assert "/api/v1/connector-accounts/{connector_account_id}/messages" not in schema["paths"]
+    assert (
+        "/api/v1/connector-accounts/{connector_account_id}/messages/analyze"
+        not in schema["paths"]
+    )
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"
@@ -305,3 +310,36 @@ def test_adr_020_records_uncertain_execution_without_unknown_state() -> None:
     assert "Uncertain Communication Execution Semantics" in index
     assert "ADR-018" in index
     assert "ADR-019" in index
+
+
+def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
+    """Phase 14A documents communications:read without exposing mailbox HTTP."""
+    root = Path(__file__).resolve().parents[2]
+    adr = (
+        root
+        / "docs"
+        / "decisions"
+        / "ADR-024-connected-mailbox-read-and-analysis-authorization-boundary.md"
+    )
+    text = adr.read_text(encoding="utf-8")
+    lowered = text.lower()
+    assert "## Status" in text
+    assert "Accepted" in text
+    assert "communications:read" in text
+    assert "communications:analyze" in text
+    assert "communications:connect" in text
+    assert "provider_message_id" in text
+    assert "opaque" in lowered
+    assert "mail.read" in text
+    assert "CommunicationConnector" in text
+    assert "CommunicationActionExecutor" in text
+    assert "live" in lowered
+    index = (root / "docs" / "decisions" / "README.md").read_text(encoding="utf-8")
+    assert "ADR-024" in index
+    assert "Connected Mailbox Read and Analysis Authorization Boundary" in index
+    phase14 = (
+        root / "docs" / "roadmap" / "phase-14-connected-mailbox-analysis.md"
+    ).read_text(encoding="utf-8")
+    assert "**14A is Completed.**" in phase14
+    assert "Phase 14 is **Next**" in phase14
+    assert "Remaining slices have not started" in phase14

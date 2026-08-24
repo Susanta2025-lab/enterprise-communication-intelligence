@@ -39,6 +39,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md) | Mailbox Delegated OAuth Authorization Architecture | Accepted |
 | [ADR-022](ADR-022-opaque-communication-credential-store-and-refreshable-access-tokens.md) | Opaque Communication Credential Store and Refreshable Access Tokens | Accepted |
 | [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md) | Mailbox Credential Lifecycle, Disconnect and Reauthorization | Accepted |
+| [ADR-024](ADR-024-connected-mailbox-read-and-analysis-authorization-boundary.md) | Connected Mailbox Read and Analysis Authorization Boundary | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -73,6 +74,8 @@ ADR-021 records mailbox delegated OAuth as a server-side authorization transacti
 ADR-022 records the provider-neutral credential store and refreshable access-token foundation. `ConnectorAccount` stores only an opaque `credential_ref`. Secrets live outside PostgreSQL. `resolve()` performs no secret or token I/O. Compare-and-set replacement is the store contract. Phase 13C/13D added real Google and Microsoft refresh adapters. Phase 13E durable Azure/AWS backends serialize cloud mutations with PostgreSQL advisory locks keyed by that locator because Azure Key Vault does not provide linearizable CAS. AWS retains native version/stage compare-and-set in addition. PostgreSQL stores no OAuth secrets. The environment resolver remains the local/dev execute default for legacy locators. Production mailbox OAuth uses Key Vault or Secrets Manager.
 
 ADR-023 records mailbox credential lifecycle. Local disconnect is the authoritative removal of ECI delegated access. Google token revocation is best-effort after local success. Microsoft `revokeSignInSessions` is not used. Reauthorization is bound to the exact owned account and rejected unless the verified mailbox identity matches. Confirmed permanent refresh failure marks that account `REAUTH_REQUIRED` and records a definite no-send `FAILED` workflow outcome. Transient credential unavailability keeps Phase 12 `503`/`EXECUTING`. After 13F, a controlled local live Gmail disconnect → exact-account reauthorization was validated (same connector row; not cloud-hosted ACA/ECS certification).
+
+ADR-024 records that `communications:read` is distinct from connect, analyze, workflow, and send. Mailbox listing requires `communications:read`. Mailbox-backed AI analysis requires `communications:read` and `communications:analyze`. Direct-text analyze remains `communications:analyze` only. ECI `communications:read` is not provider `mail.read`. Connector ownership, lifecycle, and grant metadata remain resource-level gates. Public provider message ids and pagination cursors stay opaque. `CommunicationConnector` remains the read boundary and stays separate from `CommunicationActionExecutor`. Live IdP provisioning of `communications:read` is deferred to controlled Phase 14 live validation.
 
 ## Template
 

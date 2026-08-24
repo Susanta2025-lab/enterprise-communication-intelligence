@@ -379,4 +379,6 @@ authenticate JWT → AuthenticatedPrincipal → required permission
 communications:analyze     (existing analyze / history)
 communications:workflow    (workflow proposal/approval HTTP)
 communications:send        (execute HTTP)
+communications:connect     (mailbox OAuth lifecycle HTTP)
+communications:read        (future mailbox listing; mailbox-backed analyze also requires analyze)
 ```

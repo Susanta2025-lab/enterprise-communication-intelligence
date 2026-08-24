@@ -45,6 +45,8 @@ class AnalysisHasNoDraftReplyError(ECIPlatformError):
     """Raised when an owned analysis has no usable draft reply to snapshot."""
 ```
 
+`ConnectedMailboxNotAvailableError` and `MailboxMessageNotFoundError` are also defined on `app/application/exceptions.py`. The former covers an owned connector account that cannot currently be used for mailbox read or mailbox-backed analyze without distinguishing DISCONNECTED, `REAUTH_REQUIRED`, missing `mail.read`, unsupported provider, or missing locator. The latter is the public not-found type for a provider message id. Cross-user connector existence remains `ConnectorAccountNotFoundError`.
+
 `app/domain/exceptions.py` defines `InvalidWorkflowTransitionError` with message `"Invalid workflow state transition."`. It is not an `ECIPlatformError` subclass and has a dedicated HTTP handler.
 
 `PersistenceError` is also defined on `app/core/exceptions.py`. All of these carry a plain `.message: str` and no additional context, stack trace, or provider internals.
@@ -66,6 +68,8 @@ Exception handlers are registered on the FastAPI app:
 | `MailboxOAuthAuthorizationFailedError` | `400` | `{"detail": "Mailbox authorization failed."}` | `mailbox_oauth_authorization_failed` (info) |
 | `ConnectorAccountNotFoundError` | `404` | `{"detail": "Connector account not found."}` | `connector_account_not_found` (info) |
 | `ConnectorAccountConflictError` | `409` | `{"detail": "Connector account cannot be updated."}` | `connector_account_conflict` (info) |
+| `ConnectedMailboxNotAvailableError` | `409` | `{"detail": "Connected mailbox is not available."}` | `connected_mailbox_not_available` (info) |
+| `MailboxMessageNotFoundError` | `404` | `{"detail": "Mailbox message not found."}` | `mailbox_message_not_found` (info) |
 | `PersistenceError` | `503` | `{"detail": "Persistence is currently unavailable."}` | `persistence_unavailable` (warning) |
 | `ServiceUnavailableError` | `503` | `{"detail": exc.message}` | `service_unavailable` (warning) |
 | `ECIPlatformError` (and any subclass not more specifically registered) | `500` | `{"detail": exc.message}` | `application_error` (error) |
@@ -86,8 +90,10 @@ When `AUTH_MODE=oidc`, analyze requires a bearer token. History and workflow rou
 | Unknown or cross-user `analysis_id` | `404` | not set | `{"detail": "Analysis not found."}` |
 | Unknown or cross-user workflow action | `404` | not set | `{"detail": "Workflow action not found."}` |
 | Unknown or cross-user connector account | `404` | not set | `{"detail": "Connector account not found."}` |
+| Provider message unknown for an owned mailbox | `404` | not set | `{"detail": "Mailbox message not found."}` |
+| Owned connector account not currently usable for mailbox read/analyze | `409` | not set | `{"detail": "Connected mailbox is not available."}` |
 
-Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox authorize, disconnect, and reauthorize require `communications:connect`. The Google and Microsoft callbacks do not use the ECI bearer token. None of those permissions implies another. `communications:workflow` does not authorize external sending.
+Analyze and history require `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox authorize, disconnect, and reauthorize require `communications:connect`. Future mailbox listing requires `communications:read`. Future mailbox-backed analyze requires `communications:read` and `communications:analyze`. Direct-text analyze does not require `communications:read`. The Google and Microsoft callbacks do not use the ECI bearer token. None of those permissions implies another. `communications:workflow` does not authorize external sending.
 
 Bounded failure reasons are written to structured logs only (`missing_token`, `invalid_token`, `expired_token`, `invalid_issuer`, `invalid_audience`, `unknown_signing_key`, `insufficient_permission`). JWT library exception text is not returned or logged.
 
@@ -138,10 +144,10 @@ Readiness returns the same generic `503` body when persistence is configured and
 | `201` | Workflow action created | `POST /api/v1/workflow-actions` |
 | `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
 | `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, and Gmail/Microsoft authorize always (`AUTH_MODE=disabled` included). The Google and Microsoft callbacks are public. |
-| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize |
+| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize; `communications:read` for future mailbox listing; `communications:read` and `communications:analyze` for future mailbox-backed analyze |
 | `400` | Mailbox OAuth failure | Invalid/expired/consumed state, Google consent denial, or sanitized authorization failure |
-| `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError` or `WorkflowActionNotFoundError` |
-| `409` | Workflow conflict | No usable draft, invalid transition, concurrent update, not executable, or re-execute of EXECUTING/EXECUTED/FAILED |
+| `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError`, `WorkflowActionNotFoundError`, `ConnectorAccountNotFoundError`, or `MailboxMessageNotFoundError` |
+| `409` | Workflow or mailbox conflict | No usable draft, invalid transition, concurrent update, not executable, re-execute of EXECUTING/EXECUTED/FAILED, connector account not reauthorizable, or owned mailbox not currently usable for read/analyze |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
 | `503` | Persistence unavailable, missing mailbox secret after `EXECUTING` (provider request did not occur), uncertain provider outcome, or readiness probe failure (`ServiceUnavailableError` / `PersistenceError`). Execute 503 after TX1 leaves the row `EXECUTING`; do not retry automatically. Persistence failure before TX1 leaves the prior status unchanged and does not reach the provider. Not every 503 means a send may have occurred. | `app/main.py` exception handlers |

@@ -74,3 +74,17 @@ def is_mail_send_executable(
     if granted_capabilities is None:
         return True
     return CommunicationCapability.MAIL_SEND in granted_capabilities
+
+
+def is_mail_read_allowed(
+    granted_capabilities: tuple[CommunicationCapability, ...] | None,
+) -> bool:
+    """Return whether mailbox read may proceed given stored grant metadata.
+
+    ``None`` preserves legacy eligibility for accounts whose provider grant
+    metadata is unknown. An explicit tuple requires ``mail.read``. This helper
+    does not resolve credentials or call providers.
+    """
+    if granted_capabilities is None:
+        return True
+    return CommunicationCapability.MAIL_READ in granted_capabilities

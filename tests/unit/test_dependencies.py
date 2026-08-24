@@ -8,13 +8,18 @@ from app.api.dependencies import (
     get_communication_analysis_service,
     get_workflow_action_service,
     require_authenticated_communications_connect,
+    require_authenticated_communications_read,
+    require_authenticated_communications_read_and_analyze,
     require_authenticated_communications_send,
     require_authenticated_communications_workflow,
     require_communications_analyze,
     require_communications_connect,
+    require_communications_read,
+    require_communications_read_and_analyze,
     require_communications_send,
     require_communications_workflow,
     require_permission,
+    require_permissions,
 )
 from app.application.services.communication_analysis import CommunicationAnalysisService
 from app.application.services.identity import IdentityResolver
@@ -22,6 +27,7 @@ from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
+    COMMUNICATIONS_READ_PERMISSION,
     COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticatedPrincipal,
@@ -361,6 +367,174 @@ def test_require_permission_rejects_blank_permission() -> None:
         require_permission("")
     with pytest.raises(ValueError, match="required_permission must not be empty"):
         require_permission("   ")
+    with pytest.raises(ValueError, match="required_permissions must not be empty"):
+        require_permissions()
+    with pytest.raises(ValueError, match="required_permission must not be empty"):
+        require_permissions(COMMUNICATIONS_READ_PERMISSION, "   ")
+
+
+def test_read_only_principal_is_authorized_for_mailbox_listing(
+    permission_validator,
+) -> None:
+    """communications:read alone authorizes the mailbox-list dependency."""
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION)
+    authorized = require_communications_read(principal, permission_validator)
+    assert require_authenticated_communications_read(authorized) is principal
+
+
+@pytest.mark.parametrize(
+    "permission",
+    [
+        TEST_PERMISSION,
+        COMMUNICATIONS_CONNECT_PERMISSION,
+        COMMUNICATIONS_WORKFLOW_PERMISSION,
+        COMMUNICATIONS_SEND_PERMISSION,
+    ],
+)
+def test_mailbox_listing_denies_principals_without_read(
+    permission_validator,
+    permission: str,
+) -> None:
+    """analyze, connect, workflow, and send do not satisfy communications:read."""
+    principal = _principal(permission)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not authorized"
+
+
+def test_mailbox_analyze_requires_read_and_analyze(
+    permission_validator,
+) -> None:
+    """Mailbox-backed analyze is authorized only when both permissions are present."""
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION)
+    authorized = require_communications_read_and_analyze(principal, permission_validator)
+    assert require_authenticated_communications_read_and_analyze(authorized) is principal
+
+
+def test_mailbox_analyze_denies_read_only(
+    permission_validator,
+) -> None:
+    """communications:read does not imply communications:analyze."""
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION)
+    require_communications_read(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read_and_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+
+
+def test_mailbox_analyze_denies_analyze_only(
+    permission_validator,
+) -> None:
+    """communications:analyze does not imply communications:read."""
+    principal = _principal(TEST_PERMISSION)
+    require_communications_analyze(principal, permission_validator)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read_and_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+
+
+def test_mailbox_analyze_denies_read_and_connect_without_analyze(
+    permission_validator,
+) -> None:
+    """Connect plus read still cannot invoke mailbox-backed AI analysis."""
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION, COMMUNICATIONS_CONNECT_PERMISSION)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read_and_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+
+
+def test_mailbox_analyze_denies_analyze_and_connect_without_read(
+    permission_validator,
+) -> None:
+    """Connect plus analyze still cannot retrieve mailbox content."""
+    principal = _principal(TEST_PERMISSION, COMMUNICATIONS_CONNECT_PERMISSION)
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read_and_analyze(principal, permission_validator)
+    assert exc_info.value.status_code == 403
+
+
+def test_mailbox_analyze_accepts_read_analyze_and_unrelated_permissions(
+    permission_validator,
+) -> None:
+    """Unrelated extra permissions do not disturb read+analyze authorization."""
+    principal = _principal(
+        COMMUNICATIONS_READ_PERMISSION,
+        TEST_PERMISSION,
+        COMMUNICATIONS_CONNECT_PERMISSION,
+        COMMUNICATIONS_WORKFLOW_PERMISSION,
+        COMMUNICATIONS_SEND_PERMISSION,
+    )
+    authorized = require_communications_read_and_analyze(principal, permission_validator)
+    assert authorized is principal
+    assert require_communications_analyze(principal, permission_validator) is principal
+    assert require_communications_connect(principal, permission_validator) is principal
+    assert require_communications_workflow(principal, permission_validator) is principal
+    assert require_communications_send(principal, permission_validator) is principal
+
+
+def test_direct_text_analyze_still_requires_only_analyze(
+    permission_validator,
+) -> None:
+    """Direct-text analyze does not start requiring communications:read."""
+    analyze_only = _principal(TEST_PERMISSION)
+    assert require_communications_analyze(analyze_only, permission_validator) is analyze_only
+    with pytest.raises(HTTPException) as exc_info:
+        require_communications_read(analyze_only, permission_validator)
+    assert exc_info.value.status_code == 403
+    read_only = _principal(COMMUNICATIONS_READ_PERMISSION)
+    with pytest.raises(HTTPException):
+        require_communications_analyze(read_only, permission_validator)
+
+
+def test_connect_send_and_workflow_remain_independent_of_read(
+    permission_validator,
+) -> None:
+    """Connect, workflow, and send authorization is unchanged by communications:read."""
+    connect_only = _principal(COMMUNICATIONS_CONNECT_PERMISSION)
+    assert require_communications_connect(connect_only, permission_validator) is connect_only
+    with pytest.raises(HTTPException):
+        require_communications_read(connect_only, permission_validator)
+    workflow_only = _principal(COMMUNICATIONS_WORKFLOW_PERMISSION)
+    assert require_communications_workflow(workflow_only, permission_validator) is workflow_only
+    with pytest.raises(HTTPException):
+        require_communications_read(workflow_only, permission_validator)
+    send_only = _principal(COMMUNICATIONS_SEND_PERMISSION)
+    assert require_communications_send(send_only, permission_validator) is send_only
+    with pytest.raises(HTTPException):
+        require_communications_read(send_only, permission_validator)
+    read_only = _principal(COMMUNICATIONS_READ_PERMISSION)
+    with pytest.raises(HTTPException):
+        require_communications_connect(read_only, permission_validator)
+    with pytest.raises(HTTPException):
+        require_communications_workflow(read_only, permission_validator)
+    with pytest.raises(HTTPException):
+        require_communications_send(read_only, permission_validator)
+
+
+def test_mailbox_read_dependencies_reject_missing_principal() -> None:
+    """Mailbox operations always require an authenticated ECI principal."""
+    for dependency in (
+        require_authenticated_communications_read,
+        require_authenticated_communications_read_and_analyze,
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            dependency(None)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Not authenticated"
+        assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_require_permissions_accepts_all_listed_permissions(
+    permission_validator,
+) -> None:
+    """The generic multi-permission dependency requires every listed permission."""
+    dependency = require_permissions(COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION)
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION)
+    assert dependency(principal, permission_validator) is principal
+    with pytest.raises(HTTPException) as exc_info:
+        dependency(_principal(COMMUNICATIONS_READ_PERMISSION), permission_validator)
+    assert exc_info.value.status_code == 403
 
 
 def test_communication_http_client_closes_after_generator_exit() -> None:

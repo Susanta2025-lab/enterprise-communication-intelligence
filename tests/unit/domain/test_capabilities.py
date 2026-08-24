@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.enums import CommunicationCapability
 from app.domain.models.capabilities import (
+    is_mail_read_allowed,
     is_mail_send_executable,
     normalize_communication_capabilities,
     parse_stored_communication_capabilities,
@@ -87,6 +88,20 @@ def test_mail_send_executable_preserves_legacy_null() -> None:
     assert is_mail_send_executable((CommunicationCapability.MAIL_READ,)) is False
     assert (
         is_mail_send_executable(
+            (CommunicationCapability.MAIL_READ, CommunicationCapability.MAIL_SEND)
+        )
+        is True
+    )
+
+
+def test_mail_read_allowed_preserves_legacy_null() -> None:
+    """NULL grant metadata remains readable; explicit grants require mail.read."""
+    assert is_mail_read_allowed(None) is True
+    assert is_mail_read_allowed(()) is False
+    assert is_mail_read_allowed((CommunicationCapability.MAIL_SEND,)) is False
+    assert is_mail_read_allowed((CommunicationCapability.MAIL_READ,)) is True
+    assert (
+        is_mail_read_allowed(
             (CommunicationCapability.MAIL_READ, CommunicationCapability.MAIL_SEND)
         )
         is True

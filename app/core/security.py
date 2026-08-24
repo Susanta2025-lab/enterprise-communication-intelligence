@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -22,6 +23,7 @@ ALLOWED_JWT_ALGORITHMS = ("RS256",)
 COMMUNICATIONS_WORKFLOW_PERMISSION = "communications:workflow"
 COMMUNICATIONS_SEND_PERMISSION = "communications:send"
 COMMUNICATIONS_CONNECT_PERMISSION = "communications:connect"
+COMMUNICATIONS_READ_PERMISSION = "communications:read"
 _PERMISSION_CLAIMS = ("scp", "scope", "roles")
 
 
@@ -210,6 +212,21 @@ class TokenValidator:
         )
         if not permission.strip() or permission not in principal.permissions:
             raise AuthorizationFailedError("insufficient_permission")
+
+    def authorize_all(
+        self,
+        principal: AuthenticatedPrincipal,
+        required_permissions: Sequence[str],
+    ) -> None:
+        """Require every listed permission.
+
+        Missing any one permission is ``insufficient_permission``. Permissions
+        do not imply each other.
+        """
+        if not required_permissions:
+            raise ValueError("required_permissions must not be empty")
+        for permission in required_permissions:
+            self.authorize(principal, permission)
 
 
 def _extract_permissions(payload: dict[str, Any]) -> frozenset[str]:

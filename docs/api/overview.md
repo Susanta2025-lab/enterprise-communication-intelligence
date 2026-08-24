@@ -53,6 +53,8 @@ Client
   → GET/DELETE /api/v1/analyses (communications:analyze)
   → POST/GET /api/v1/workflow-actions (communications:workflow)
   → POST /api/v1/workflow-actions/{id}/execute (communications:send)
+  → GET /api/v1/connector-accounts/{id}/messages (communications:read; not served in 14A)
+  → POST /api/v1/connector-accounts/{id}/messages/analyze (communications:read + communications:analyze; not served in 14A)
 ```
 
 Configuration (`app/core/config.py`):
@@ -91,9 +93,11 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
 - `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
 
+The Phase 14 mailbox list and mailbox-backed analyze routes are specified but not served in 14A. When implemented they will always require an authenticated principal (`AUTH_MODE=disabled` returns `401`) and `communications:read` (list) or `communications:read` plus `communications:analyze` (mailbox-backed analyze).
+
 `GET /api/v1/oauth/callbacks/gmail` and `GET /api/v1/oauth/callbacks/microsoft_graph` are provider redirect targets and do not use the ECI bearer token. CONNECT versus REAUTHORIZE is taken from the consumed authorization session. Reauthorization requires the verified mailbox identity to match the bound account.
 
-Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Analyze, workflow, send, and connect do not imply each other. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
+Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Future mailbox listing requires `communications:read`. Future mailbox-backed analyze requires `communications:read` and `communications:analyze`. Analyze, workflow, send, connect, and read do not imply each other. Direct-text analyze does not require `communications:read`. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
 
 Permissions are read only from bounded claims `scp`, `scope`, or `roles`. Internal users store only `issuer` and `subject`; they are not a session store or login database.
 

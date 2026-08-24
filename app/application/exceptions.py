@@ -95,3 +95,23 @@ class WorkflowActionNotExecutableError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Workflow action is not executable.")
+
+
+class ConnectedMailboxNotAvailableError(ECIPlatformError):
+    """Raised when an owned connector account cannot currently be used for mailbox read.
+
+    Covers DISCONNECTED, REAUTH_REQUIRED, explicit missing ``mail.read``,
+    unsupported or unroutable provider, and missing usable credential locator.
+    The public message does not distinguish those cases. Unknown and
+    cross-user accounts remain ``ConnectorAccountNotFoundError``.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Connected mailbox is not available.")
+
+
+class MailboxMessageNotFoundError(ECIPlatformError):
+    """Raised when a provider message is unknown for an owned mailbox."""
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox message not found.")

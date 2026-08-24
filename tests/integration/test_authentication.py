@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_ai_provider, get_token_validator
 from app.core.config import get_settings
-from app.core.security import COMMUNICATIONS_WORKFLOW_PERMISSION
+from app.core.security import COMMUNICATIONS_READ_PERMISSION, COMMUNICATIONS_WORKFLOW_PERMISSION
 from app.domain.interfaces import AIProvider
 from app.main import create_app
 from tests.support.jwt_tokens import (
@@ -227,6 +227,36 @@ def test_analyze_with_analyze_and_workflow_permissions_returns_200(
     )
     assert response.status_code == 200
     assert response.json()["provider"] == "mock"
+
+
+def test_analyze_does_not_require_communications_read(
+    oidc_client: TestClient,
+    private_key,
+) -> None:
+    """Direct-text analyze stays communications:analyze and does not require read."""
+    analyze_only = encode_test_token(
+        private_key,
+        extra_claims={"scp": TEST_PERMISSION},
+    )
+    allowed = oidc_client.post(
+        _ANALYZE_URL,
+        json=_valid_payload(),
+        headers=bearer_header(analyze_only),
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["provider"] == "mock"
+
+    read_only = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+    )
+    denied = oidc_client.post(
+        _ANALYZE_URL,
+        json=_valid_payload(),
+        headers=bearer_header(read_only),
+    )
+    assert denied.status_code == 403
+    assert denied.json() == {"detail": "Not authorized"}
 
 
 def test_unauthorized_requests_do_not_invoke_provider(

@@ -8,6 +8,7 @@ from jwt.exceptions import PyJWKClientConnectionError
 
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
+    COMMUNICATIONS_READ_PERMISSION,
     COMMUNICATIONS_SEND_PERMISSION,
     COMMUNICATIONS_WORKFLOW_PERMISSION,
     AuthenticationFailedError,
@@ -315,6 +316,108 @@ def test_connect_permission_accepted_from_scp_scope_and_roles(
         token = encode_test_token(private_key, extra_claims=extra_claims)
         principal = validator.authenticate(token)
         validator.authorize(principal, COMMUNICATIONS_CONNECT_PERMISSION)
+
+
+def test_read_permission_does_not_satisfy_analyze_connect_workflow_or_send(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:read is independent of connect, analyze, workflow, and send."""
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+    )
+    principal = validator.authenticate(token)
+    assert COMMUNICATIONS_READ_PERMISSION in principal.permissions
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, TEST_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_CONNECT_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_WORKFLOW_PERMISSION)
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize(principal, COMMUNICATIONS_SEND_PERMISSION)
+    validator.authorize(principal, COMMUNICATIONS_READ_PERMISSION)
+
+
+def test_existing_permissions_do_not_satisfy_read(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """analyze, connect, workflow, and send do not imply communications:read."""
+    for permission in (
+        TEST_PERMISSION,
+        COMMUNICATIONS_CONNECT_PERMISSION,
+        COMMUNICATIONS_WORKFLOW_PERMISSION,
+        COMMUNICATIONS_SEND_PERMISSION,
+    ):
+        token = encode_test_token(private_key, extra_claims={"scp": permission})
+        principal = validator.authenticate(token)
+        with pytest.raises(AuthorizationFailedError):
+            validator.authorize(principal, COMMUNICATIONS_READ_PERMISSION)
+
+
+def test_read_permission_accepted_from_scp_scope_and_roles(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """communications:read may arrive through scp, scope, or roles."""
+    for extra_claims in (
+        {"scp": COMMUNICATIONS_READ_PERMISSION},
+        {"scope": COMMUNICATIONS_READ_PERMISSION},
+        {"roles": [COMMUNICATIONS_READ_PERMISSION]},
+    ):
+        token = encode_test_token(private_key, extra_claims=extra_claims)
+        principal = validator.authenticate(token)
+        validator.authorize(principal, COMMUNICATIONS_READ_PERMISSION)
+
+
+def test_authorize_all_requires_every_listed_permission(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """Mailbox-backed analyze needs both read and analyze; neither implies the other."""
+    both = encode_test_token(
+        private_key,
+        extra_claims={"scp": f"{COMMUNICATIONS_READ_PERMISSION} {TEST_PERMISSION}"},
+    )
+    principal = validator.authenticate(both)
+    validator.authorize_all(principal, (COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION))
+
+    read_only = validator.authenticate(
+        encode_test_token(
+            private_key,
+            extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+        )
+    )
+    with pytest.raises(AuthorizationFailedError) as exc_info:
+        validator.authorize_all(
+            read_only,
+            (COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION),
+        )
+    assert exc_info.value.reason == "insufficient_permission"
+
+    analyze_only = validator.authenticate(
+        encode_test_token(private_key, extra_claims={"scp": TEST_PERMISSION})
+    )
+    with pytest.raises(AuthorizationFailedError):
+        validator.authorize_all(
+            analyze_only,
+            (COMMUNICATIONS_READ_PERMISSION, TEST_PERMISSION),
+        )
+
+
+def test_authorize_all_rejects_empty_permission_list(
+    private_key,
+    validator: TokenValidator,
+) -> None:
+    """An empty required-permission list is a programming error."""
+    token = encode_test_token(private_key, extra_claims={"scp": TEST_PERMISSION})
+    principal = validator.authenticate(token)
+    with pytest.raises(ValueError, match="required_permissions must not be empty"):
+        validator.authorize_all(principal, ())
 
 
 def test_workflow_permission_does_not_satisfy_send(
