@@ -338,3 +338,130 @@ describe("mailbox analyze API client", () => {
     }
   });
 });
+
+const WORKFLOW_ACTION_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const WORKFLOW_ANALYSIS_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+describe("workflow action API client", () => {
+  function workflowClient(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
+    return new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+      createRequestId: () => REQUEST_ID,
+    });
+  }
+
+  const actionBody = {
+    id: WORKFLOW_ACTION_ID,
+    action_type: "reply",
+    analysis_id: WORKFLOW_ANALYSIS_ID,
+    status: "pending",
+    proposed_reply_body: "Thank you. I will follow up shortly.",
+    approved_reply_body: null,
+    created_at: "2026-08-25T16:00:00Z",
+    approved_at: null,
+    rejected_at: null,
+    executed_at: null,
+    failed_at: null,
+    has_execution_target: true,
+  };
+
+  it("creates a workflow action from analysis_id without logging sensitive fields", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(201, actionBody));
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const client = workflowClient(fetchImpl);
+
+    await expect(client.createWorkflowAction({ analysisId: WORKFLOW_ANALYSIS_ID })).resolves.toEqual(
+      actionBody,
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.pathname).toBe("/api/v1/workflow-actions");
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          "X-Request-ID": REQUEST_ID,
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ analysis_id: WORKFLOW_ANALYSIS_ID }),
+      }),
+    );
+    const serialized = JSON.stringify(log.mock.calls);
+    expect(serialized).not.toContain(WORKFLOW_ANALYSIS_ID);
+    expect(serialized).not.toContain(WORKFLOW_ACTION_ID);
+    expect(serialized).not.toContain(actionBody.proposed_reply_body);
+    log.mockRestore();
+  });
+
+  it("gets, approves, rejects, and executes using the owned action routes", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/approve")) {
+        return jsonResponse(200, {
+          ...actionBody,
+          status: "approved",
+          approved_reply_body: actionBody.proposed_reply_body,
+        });
+      }
+      if (url.endsWith("/reject")) {
+        return jsonResponse(200, { ...actionBody, status: "rejected" });
+      }
+      if (url.endsWith("/execute")) {
+        return jsonResponse(200, { ...actionBody, status: "executed" });
+      }
+      return jsonResponse(200, actionBody);
+    });
+    const client = workflowClient(fetchImpl);
+
+    await client.getWorkflowAction(WORKFLOW_ACTION_ID);
+    await client.approveWorkflowAction(WORKFLOW_ACTION_ID);
+    await client.rejectWorkflowAction(WORKFLOW_ACTION_ID);
+    await client.executeWorkflowAction(WORKFLOW_ACTION_ID);
+
+    expect(new URL(String(fetchImpl.mock.calls[0]?.[0])).pathname).toBe(
+      `/api/v1/workflow-actions/${WORKFLOW_ACTION_ID}`,
+    );
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: "GET" }));
+    expect(new URL(String(fetchImpl.mock.calls[1]?.[0])).pathname).toBe(
+      `/api/v1/workflow-actions/${WORKFLOW_ACTION_ID}/approve`,
+    );
+    expect(fetchImpl.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    expect((fetchImpl.mock.calls[1]?.[1] as RequestInit).body).toBeUndefined();
+    expect(new URL(String(fetchImpl.mock.calls[2]?.[0])).pathname).toBe(
+      `/api/v1/workflow-actions/${WORKFLOW_ACTION_ID}/reject`,
+    );
+    expect(new URL(String(fetchImpl.mock.calls[3]?.[0])).pathname).toBe(
+      `/api/v1/workflow-actions/${WORKFLOW_ACTION_ID}/execute`,
+    );
+    expect((fetchImpl.mock.calls[3]?.[1] as RequestInit).body).toBeUndefined();
+  });
+
+  it.each([
+    [401, "unauthorized"],
+    [403, "forbidden"],
+    [404, "not_found"],
+    [409, "conflict"],
+    [422, "validation"],
+    [503, "unavailable"],
+    [500, "http_error"],
+  ] as const)("normalizes workflow HTTP %s", async (status, kind) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(status, { detail: WORKFLOW_ACTION_ID }),
+    );
+    const client = workflowClient(fetchImpl);
+    try {
+      await client.executeWorkflowAction(WORKFLOW_ACTION_ID);
+      throw new Error("expected EciApiError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EciApiError);
+      const apiError = error as EciApiError;
+      expect(apiError.status).toBe(status);
+      expect(apiError.kind).toBe(kind);
+      expect(apiError.message).not.toContain(WORKFLOW_ACTION_ID);
+    }
+  });
+});

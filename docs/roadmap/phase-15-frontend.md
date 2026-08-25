@@ -16,13 +16,14 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A, 15B, 15C, and 15D are Completed.** Phase 15E is next.
+Phase 15 is **In progress**. **15A, 15B, 15C, 15D, and 15E are Completed.** Phase 15F is next.
 
 - **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
 - **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
 - **15C is Completed:** connected-mailbox workspace for ACTIVE Gmail and Microsoft Outlook connectors, bounded first-page load (`page_size=10`), opaque cursor Load more, in-memory message selection, lifecycle/error recovery UX. No AI analysis, raw body/detail, or workflow/send. Live mailbox provider calls were not performed.
 - **15D is Completed:** explicit selected-message analyze in the mailbox workspace, `communications:analyze` permission-aware UX, in-memory analysis display (summary, priority, category, action items, read-only AI draft suggestion), re-analyze, and safe error/retry handling. No WorkflowAction, send, raw body/detail, or analysis history page. Live Foundry/Bedrock inference was not performed.
-- Later slices remain deferred: workflow review and explicit send UX, and final documentation/live validation.
+- **15E is Completed:** explicit WorkflowAction proposal from the current `analysis_id`, immutable snapshot review, explicit Approve/Reject, explicit Send with a mandatory confirmation dialog, EXECUTING uncertainty without retry, and terminal EXECUTED/FAILED UX. Live send was not performed. Backend workflow/execute application code was not changed.
+- Later slices remain deferred: error/accessibility/responsive hardening, and final documentation/live validation.
 
 Phase 14 remains **Completed**.
 
@@ -187,9 +188,55 @@ Frontend `scp` checks remain UX only. A signed-in user with `communications:read
 - Live Foundry/Bedrock inference or Entra SPA provisioning
 - Database migration
 
+## 15E — Workflow Review + Explicit Send UX
+
+Explicit proposal, review, approval, and confirmed send on top of the existing Phase 12 workflow contract and the Phase 15D analysis result.
+
+```text
+ECI browser principal
+→ ACTIVE mailbox workspace
+→ explicit Analyze (communications:analyze)
+→ analysis_id + read-only AI draft suggestion
+→ explicit Propose reply (communications:workflow)
+→ PENDING immutable snapshot
+→ explicit Approve or Reject
+→ if APPROVED: explicit Send approved reply (communications:send)
+→ confirmation dialog
+→ POST /api/v1/workflow-actions/{action_id}/execute
+```
+
+The UI keeps these states distinct:
+
+```text
+AI draft suggestion
+≠ WorkflowAction proposal
+≠ approved communication
+≠ executed/sent communication
+```
+
+Proposal uses the in-memory `analysis_id` from Phase 15D. The create body is only `{ "analysis_id": "<uuid>" }`. The SPA does not supply reply text, recipients, or status. If `analysis_id` is missing, proposal is unavailable; the SPA does not invent an id, reconstruct an action, or re-analyze automatically.
+
+Workflow mutations use TanStack `useMutation` with `retry: false`. One Propose, Approve, Reject, or confirmed Send produces one matching request. Analysis success, mount, selection, re-analysis, and route changes do not create, approve, or execute a `WorkflowAction`. Approve does not call execute. Opening or canceling the send confirmation does not execute.
+
+Backend status is authoritative. The SPA uses the mutation response, or `GET /api/v1/workflow-actions/{action_id}` after execute 409/500/503 and for manual Refresh status. It does not fabricate PENDING→APPROVED or APPROVED→EXECUTED locally.
+
+Send is shown only for `approved` plus `communications:send`. PENDING has Approve/Reject only. REJECTED, EXECUTING, EXECUTED, and FAILED do not expose Send. EXECUTING after HTTP 503 is uncertainty, not failure: the UI tells the user not to send again and does not offer Retry send. FAILED is terminal. EXECUTED means backend execution completed according to existing executor semantics, not recipient delivery.
+
+Frontend `scp` checks remain UX only. FastAPI remains authoritative. Changing the selected message, mailbox refresh, or a successful re-analysis clears the current in-memory workflow view without deleting the backend action. Live Gmail/Graph send was not performed.
+
+No new ADR is required. ADR-015, ADR-017, ADR-019, ADR-020, and ADR-025 already cover the workflow/send boundary and the browser client.
+
+### Out of scope for 15E
+
+- Automatic proposal, approval, or send
+- Live provider send, execute retry, outbox, reconciliation, workers, or webhooks
+- Editable workflow/approved snapshots, workflow history, or analysis-history retrieval
+- Broad accessibility/responsive hardening (15F) or final docs/live validation (15G)
+- Entra SPA provisioning or database migration
+
 ## Planned later slices
 
-Phase 15E adds workflow review and explicit send UX on this analysis result. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
+Phase 15F hardens error, accessibility, and responsive behavior of this mailbox/analysis/workflow path. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
 
 ## Cloud implications
 

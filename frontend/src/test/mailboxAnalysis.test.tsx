@@ -253,7 +253,12 @@ describe("analysis result", () => {
     expect(within(panel).getByRole("heading", { name: "AI draft suggestion" })).toBeInTheDocument();
     expect(within(panel).getByText(DRAFT_BODY)).toBeInTheDocument();
     expect(within(panel).getByText(/Not approved or sent/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /send|approve|propose|reject|execute/i })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Workflow review" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Propose reply" })).toBeDisabled();
+    expect(screen.getByText(/communications:workflow permission/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve reply" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject reply" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send approved reply" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain(MESSAGE_ID_ONE);
     expect(document.body.textContent).not.toContain(ANALYSIS_ID);
     expect(screen.queryByText("mock")).not.toBeInTheDocument();

@@ -1,6 +1,6 @@
 # ECI frontend
 
-React + TypeScript + Vite SPA for ECI application login, connector dashboard, mailbox browsing, and selected-message analysis.
+React + TypeScript + Vite SPA for ECI application login, connector dashboard, mailbox browsing, selected-message analysis, and explicit workflow review/send.
 
 Mailbox OAuth stays on the FastAPI server. The SPA obtains only ECI bearer access tokens through MSAL.
 
@@ -24,7 +24,11 @@ Signed-in routes:
 - `/` — connected-mailbox dashboard
 - `/mailbox/:connectorAccountId` — mailbox workspace for one owned connector
 
-Selected-message analysis is explicit. Opening a mailbox, selecting a row, loading more, or refreshing does not analyze. Analyze requires `communications:read` and `communications:analyze`. Results stay in browser memory. The AI draft is a read-only suggestion and is not approved or sent. Raw message bodies are not displayed.
+Selected-message analysis is explicit. Opening a mailbox, selecting a row, loading more, or refreshing does not analyze. Analyze requires `communications:read` and `communications:analyze`. Results stay in browser memory. The AI draft is a read-only suggestion and is not approved or sent.
+
+Workflow review is also explicit. Propose reply requires `communications:workflow` and the current `analysis_id`. The server snapshots the draft; the SPA does not edit the proposal. Approve and Reject are separate from Send. Send requires `communications:send`, an `approved` action, and a confirmation dialog. There is no automatic proposal, approval, or send. An uncertain `executing` outcome must not be retried. Live provider send is not performed from this SPA slice.
+
+Raw message bodies are not displayed.
 
 Live browser sign-in requires an operator-provisioned Entra SPA/public-client registration. That step is not performed by the application.
 

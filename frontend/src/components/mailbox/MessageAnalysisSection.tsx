@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { EciApiError } from "../../api/errors";
 import type { CommunicationAnalysisResponse } from "../../api/mailbox";
@@ -15,6 +15,7 @@ type MessageAnalysisSectionProps = {
   error: unknown;
   onAnalyze: () => void;
   onRetry: () => void;
+  workflow?: ReactNode;
 };
 
 export function MessageAnalysisSection({
@@ -24,6 +25,7 @@ export function MessageAnalysisSection({
   error,
   onAnalyze,
   onRetry,
+  workflow,
 }: MessageAnalysisSectionProps) {
   const errorRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLElement>(null);
@@ -68,6 +70,7 @@ export function MessageAnalysisSection({
         />
       ) : null}
       {result ? <AnalysisPanel ref={resultRef} result={result} /> : null}
+      {result ? workflow : null}
     </div>
   );
 }

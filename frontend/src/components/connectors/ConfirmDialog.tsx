@@ -9,6 +9,8 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmDisabled?: boolean;
+  confirmBusy?: boolean;
 };
 
 export function ConfirmDialog({
@@ -18,6 +20,8 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   onCancel,
+  confirmDisabled = false,
+  confirmBusy = false,
 }: ConfirmDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -65,7 +69,13 @@ export function ConfirmDialog({
           <Button ref={cancelRef} className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onConfirm}>{confirmLabel}</Button>
+          <Button
+            onClick={onConfirm}
+            disabled={confirmDisabled || confirmBusy}
+            aria-busy={confirmBusy}
+          >
+            {confirmLabel}
+          </Button>
         </div>
       </div>
     </div>

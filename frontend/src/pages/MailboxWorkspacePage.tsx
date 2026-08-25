@@ -14,6 +14,7 @@ import { MailboxLoadingSkeleton } from "../components/mailbox/MailboxLoadingSkel
 import { MailboxUnavailableState } from "../components/mailbox/MailboxUnavailableState";
 import { LoadMoreButton } from "../components/mailbox/LoadMoreButton";
 import { MessageAnalysisSection } from "../components/mailbox/MessageAnalysisSection";
+import { WorkflowReviewPanel } from "../components/mailbox/WorkflowReviewPanel";
 import { MessageList } from "../components/mailbox/MessageList";
 import { SelectedMessagePanel } from "../components/mailbox/SelectedMessagePanel";
 import { mailboxListErrorMessage, mailboxRetryLabel } from "../components/mailbox/copy";
@@ -22,6 +23,7 @@ import { ErrorState } from "../components/connectors/ErrorState";
 import { providerLabel } from "../components/connectors/copy";
 import { CONNECTOR_ACCOUNT_QUERY_KEY, useConnectorAccounts } from "../hooks/useConnectorAccounts";
 import { useAnalyzeMailboxMessage } from "../hooks/useAnalyzeMailboxMessage";
+import { useWorkflowAction } from "../hooks/useWorkflowAction";
 import {
   flattenMailboxItems,
   refreshMailboxMessages,
@@ -38,6 +40,8 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   const queryClient = useQueryClient();
   const canRead = hasPermission(permissions, "communications:read");
   const canAnalyze = hasPermission(permissions, "communications:analyze");
+  const canWorkflow = hasPermission(permissions, "communications:workflow");
+  const canSend = hasPermission(permissions, "communications:send");
   const connectorsQuery = useConnectorAccounts(apiClient, Boolean(connectorAccountId) && canRead);
   const account = connectorsQuery.data?.items.find((item) => item.id === connectorAccountId);
   const mailboxEnabled = Boolean(connectorAccountId) && canRead && account?.status === "active";
@@ -49,6 +53,7 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     connectorAccountId ?? "",
     selected?.provider_message_id ?? null,
   );
+  const workflow = useWorkflowAction(apiClient, analysis.result?.analysis_id ?? null);
 
   const items = useMemo(
     () => flattenMailboxItems(mailboxQuery.data?.pages),
@@ -260,6 +265,17 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
                   error={analysis.error}
                   onAnalyze={handleAnalyze}
                   onRetry={handleAnalysisRetry}
+                  workflow={
+                    analysis.result ? (
+                      <WorkflowReviewPanel
+                        analysisId={analysis.result.analysis_id ?? null}
+                        hasDraft={Boolean(analysis.result.analysis.draft_reply?.body?.trim())}
+                        canWorkflow={canWorkflow}
+                        canSend={canSend}
+                        workflow={workflow}
+                      />
+                    ) : null
+                  }
                 />
               ) : null}
             </SelectedMessagePanel>

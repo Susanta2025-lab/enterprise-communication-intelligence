@@ -17,6 +17,15 @@ import {
   type MailboxMessageListResponse,
 } from "./mailbox";
 import {
+  WORKFLOW_ACTIONS_PATH,
+  workflowActionApprovePath,
+  workflowActionExecutePath,
+  workflowActionPath,
+  workflowActionRejectPath,
+  type CreateWorkflowActionQuery,
+  type WorkflowActionResponse,
+} from "./workflowActions";
+import {
   CONNECTOR_ACCOUNTS_PATH,
   EciApiError,
   GMAIL_AUTHORIZE_PATH,
@@ -104,6 +113,28 @@ export class EciApiClient {
       connectorAccountMessageAnalyzePath(query.connectorAccountId),
       { provider_message_id: query.providerMessageId },
     );
+  }
+
+  async createWorkflowAction(query: CreateWorkflowActionQuery): Promise<WorkflowActionResponse> {
+    return this.requestJson<WorkflowActionResponse>("POST", WORKFLOW_ACTIONS_PATH, {
+      analysis_id: query.analysisId,
+    });
+  }
+
+  async getWorkflowAction(actionId: string): Promise<WorkflowActionResponse> {
+    return this.requestJson<WorkflowActionResponse>("GET", workflowActionPath(actionId));
+  }
+
+  async approveWorkflowAction(actionId: string): Promise<WorkflowActionResponse> {
+    return this.requestJson<WorkflowActionResponse>("POST", workflowActionApprovePath(actionId));
+  }
+
+  async rejectWorkflowAction(actionId: string): Promise<WorkflowActionResponse> {
+    return this.requestJson<WorkflowActionResponse>("POST", workflowActionRejectPath(actionId));
+  }
+
+  async executeWorkflowAction(actionId: string): Promise<WorkflowActionResponse> {
+    return this.requestJson<WorkflowActionResponse>("POST", workflowActionExecutePath(actionId));
   }
 
   private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
