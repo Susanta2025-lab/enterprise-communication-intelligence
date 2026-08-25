@@ -1,4 +1,7 @@
+import { useNavigate } from "react-router-dom";
+
 import type { ConnectorAccount } from "../../api/connectorAccounts";
+import { mailboxWorkspacePath } from "../../navigation/paths";
 import { Button } from "../ui/button";
 import { CapabilityBadge } from "./CapabilityBadge";
 import { ConnectorStatus } from "./ConnectorStatus";
@@ -18,8 +21,10 @@ export function ConnectorCard({
   onReconnect,
   onDisconnect,
 }: ConnectorCardProps) {
+  const navigate = useNavigate();
   const label = providerLabel(account.provider);
   const capabilities = account.granted_capabilities ?? [];
+  const canOpenMailbox = account.status === "active";
   const canReconnect = account.status === "reauth_required" || account.status === "disconnected";
   const canDisconnect = account.status === "active" || account.status === "reauth_required";
 
@@ -40,31 +45,36 @@ export function ConnectorCard({
       ) : (
         <p className="text-sm text-slate-500">No mailbox capabilities currently granted.</p>
       )}
-      <PermissionGate
-        permission="communications:connect"
-        fallback={
-          <p className="text-sm text-slate-600">
-            Connecting or disconnecting a mailbox requires the communications:connect permission.
-          </p>
-        }
-      >
-        <div className="mt-auto flex flex-wrap gap-2">
-          {canReconnect ? (
-            <Button onClick={() => onReconnect(account)} disabled={connectBusy}>
-              Reconnect
-            </Button>
-          ) : null}
-          {canDisconnect ? (
-            <Button
-              className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
-              onClick={() => onDisconnect(account)}
-              disabled={connectBusy}
-            >
-              Disconnect
-            </Button>
-          ) : null}
-        </div>
-      </PermissionGate>
+      <div className="mt-auto flex flex-wrap gap-2">
+        {canOpenMailbox ? (
+          <Button onClick={() => navigate(mailboxWorkspacePath(account.id))}>Open mailbox</Button>
+        ) : null}
+        <PermissionGate
+          permission="communications:connect"
+          fallback={
+            <p className="text-sm text-slate-600">
+              Connecting or disconnecting a mailbox requires the communications:connect permission.
+            </p>
+          }
+        >
+          <>
+            {canReconnect ? (
+              <Button onClick={() => onReconnect(account)} disabled={connectBusy}>
+                Reconnect
+              </Button>
+            ) : null}
+            {canDisconnect ? (
+              <Button
+                className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
+                onClick={() => onDisconnect(account)}
+                disabled={connectBusy}
+              >
+                Disconnect
+              </Button>
+            ) : null}
+          </>
+        </PermissionGate>
+      </div>
     </article>
   );
 }

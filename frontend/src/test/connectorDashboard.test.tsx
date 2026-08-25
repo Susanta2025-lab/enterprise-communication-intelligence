@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EciApiClient } from "../api/client";
@@ -95,9 +96,11 @@ function renderDashboard(options: {
         permissions: options.permissions ?? ["communications:read", "communications:connect"],
       })}
     >
-      <QueryClientProvider client={queryClient}>
-        <ConnectorDashboardPage apiClient={apiClient} />
-      </QueryClientProvider>
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <ConnectorDashboardPage apiClient={apiClient} />
+        </QueryClientProvider>
+      </MemoryRouter>
     </AuthStub>,
   );
   return { apiClient, queryClient };
@@ -132,6 +135,7 @@ describe("connector dashboard", () => {
     expect(screen.getByTestId("connector-status")).toHaveTextContent("Active — mailbox available");
     expect(screen.getByText("mail.read")).toBeInTheDocument();
     expect(screen.getByText("mail.send")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open mailbox" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Gmail" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Microsoft Outlook" })).toBeInTheDocument();
@@ -153,6 +157,7 @@ describe("connector dashboard", () => {
     expect(screen.getByText(/was not deleted/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open mailbox" })).not.toBeInTheDocument();
   });
 
   it("renders DISCONNECTED with reconnect", async () => {
@@ -173,6 +178,7 @@ describe("connector dashboard", () => {
     expect(await screen.findByText("Disconnected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Gmail" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open mailbox" })).not.toBeInTheDocument();
   });
 
   it("hides lifecycle actions without communications:connect", async () => {
@@ -181,6 +187,7 @@ describe("connector dashboard", () => {
     );
     renderDashboard({ fetchImpl, permissions: ["communications:read"] });
     expect(await screen.findByRole("heading", { name: "Gmail" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open mailbox" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Microsoft Outlook" })).not.toBeInTheDocument();
     expect(screen.getAllByText(/communications:connect permission/i).length).toBeGreaterThan(0);
@@ -196,19 +203,21 @@ describe("connector dashboard", () => {
       const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(status, { detail: "raw provider boom" }));
       const { unmount } = render(
         <AuthStub session={createAuthSession({ isAuthenticated: true })}>
-          <QueryClientProvider
-            client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-          >
-            <ConnectorDashboardPage
-              apiClient={
-                new EciApiClient({
-                  baseUrl: "http://localhost:8000",
-                  tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
-                  fetchImpl,
-                })
-              }
-            />
-          </QueryClientProvider>
+          <MemoryRouter>
+            <QueryClientProvider
+              client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+            >
+              <ConnectorDashboardPage
+                apiClient={
+                  new EciApiClient({
+                    baseUrl: "http://localhost:8000",
+                    tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+                    fetchImpl,
+                  })
+                }
+              />
+            </QueryClientProvider>
+          </MemoryRouter>
         </AuthStub>,
       );
       expect(await screen.findByRole("alert")).toHaveTextContent(copy);

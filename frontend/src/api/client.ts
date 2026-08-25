@@ -8,6 +8,12 @@ import {
   type ListConnectorAccountsQuery,
 } from "./connectorAccounts";
 import {
+  connectorAccountMessagesPath,
+  MAILBOX_UI_PAGE_SIZE,
+  type ListMailboxMessagesQuery,
+  type MailboxMessageListResponse,
+} from "./mailbox";
+import {
   CONNECTOR_ACCOUNTS_PATH,
   EciApiError,
   GMAIL_AUTHORIZE_PATH,
@@ -73,6 +79,18 @@ export class EciApiClient {
 
   async disconnectConnectorAccount(connectorAccountId: string): Promise<void> {
     await this.requestJson<unknown>("POST", connectorAccountDisconnectPath(connectorAccountId));
+  }
+
+  async listMailboxMessages(query: ListMailboxMessagesQuery): Promise<MailboxMessageListResponse> {
+    const params = new URLSearchParams();
+    params.set("page_size", String(query.pageSize ?? MAILBOX_UI_PAGE_SIZE));
+    if (query.cursor) {
+      params.set("cursor", query.cursor);
+    }
+    return this.requestJson<MailboxMessageListResponse>(
+      "GET",
+      `${connectorAccountMessagesPath(query.connectorAccountId)}?${params.toString()}`,
+    );
   }
 
   private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {

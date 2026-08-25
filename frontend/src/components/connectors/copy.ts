@@ -23,7 +23,7 @@ export function statusLabel(status: string): string {
 
 export function statusDescription(status: string): string {
   if (status === "active") {
-    return "This mailbox is connected. Mailbox message access will be available in a later release.";
+    return "This mailbox is connected. Open it to browse recent messages.";
   }
   if (status === "reauth_required") {
     return "Mailbox authorization must be renewed. The mailbox was not deleted.";

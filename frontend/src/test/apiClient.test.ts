@@ -8,6 +8,7 @@ import {
   MICROSOFT_GRAPH_AUTHORIZE_PATH,
   PROTECTED_ANALYSES_SMOKE_PATH,
 } from "../api/errors";
+import { connectorAccountMessagesPath, MAILBOX_UI_PAGE_SIZE } from "../api/mailbox";
 import { InteractionRequiredError } from "../auth/tokenProvider";
 import { TEST_TOKEN } from "./fixtures";
 
@@ -107,6 +108,7 @@ describe("ECI API client", () => {
   });
 
   it.each([
+    [400, "bad_request"],
     [401, "unauthorized"],
     [403, "forbidden"],
     [404, "not_found"],
@@ -149,5 +151,100 @@ describe("ECI API client", () => {
       kind: "interaction_required",
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+const MAILBOX_ACCOUNT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const OPAQUE_CURSOR = "opaque/cursor+token=";
+const PROVIDER_MESSAGE_ID = "provider-msg-secret-id";
+
+describe("mailbox list API client", () => {
+  function mailboxClient(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
+    return new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+      createRequestId: () => REQUEST_ID,
+    });
+  }
+
+  it("requests the first page with the UI page size and no cursor", async () => {
+    const body = {
+      items: [
+        {
+          provider_message_id: PROVIDER_MESSAGE_ID,
+          sender: "Ada Lovelace",
+          subject: "Quarterly review",
+          sent_at: "2026-08-25T15:30:00Z",
+          received_at: "2026-08-25T15:31:00Z",
+        },
+      ],
+      next_cursor: OPAQUE_CURSOR,
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(200, body));
+    const client = mailboxClient(fetchImpl);
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    await expect(
+      client.listMailboxMessages({ connectorAccountId: MAILBOX_ACCOUNT_ID }),
+    ).resolves.toEqual(body);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.pathname).toBe(connectorAccountMessagesPath(MAILBOX_ACCOUNT_ID));
+    expect(requested.searchParams.get("page_size")).toBe(String(MAILBOX_UI_PAGE_SIZE));
+    expect(requested.searchParams.has("cursor")).toBe(false);
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          "X-Request-ID": REQUEST_ID,
+        }),
+      }),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(TEST_TOKEN);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(OPAQUE_CURSOR);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(PROVIDER_MESSAGE_ID);
+    log.mockRestore();
+  });
+
+  it("sends an opaque cursor unchanged and does not decode it", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { items: [], next_cursor: null }),
+    );
+    const client = mailboxClient(fetchImpl);
+    await client.listMailboxMessages({
+      connectorAccountId: MAILBOX_ACCOUNT_ID,
+      pageSize: MAILBOX_UI_PAGE_SIZE,
+      cursor: OPAQUE_CURSOR,
+    });
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.searchParams.get("cursor")).toBe(OPAQUE_CURSOR);
+    expect(requested.searchParams.get("page_size")).toBe("10");
+  });
+
+  it.each([
+    [400, "bad_request"],
+    [401, "unauthorized"],
+    [403, "forbidden"],
+    [404, "not_found"],
+    [409, "conflict"],
+    [503, "unavailable"],
+  ] as const)("normalizes mailbox HTTP %s", async (status, kind) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(status, { detail: OPAQUE_CURSOR }),
+    );
+    const client = mailboxClient(fetchImpl);
+    try {
+      await client.listMailboxMessages({ connectorAccountId: MAILBOX_ACCOUNT_ID });
+      throw new Error("expected EciApiError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EciApiError);
+      const apiError = error as EciApiError;
+      expect(apiError.status).toBe(status);
+      expect(apiError.kind).toBe(kind);
+      expect(apiError.message).not.toContain(OPAQUE_CURSOR);
+      expect(apiError.message).not.toContain(PROVIDER_MESSAGE_ID);
+    }
   });
 });

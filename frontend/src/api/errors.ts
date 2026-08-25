@@ -16,6 +16,7 @@ export type ApiErrorKind =
   | "not_found"
   | "conflict"
   | "validation"
+  | "bad_request"
   | "unavailable"
   | "http_error"
   | "interaction_required";
@@ -33,6 +34,9 @@ export class EciApiError extends Error {
 }
 
 export function kindForStatus(status: number): ApiErrorKind {
+  if (status === 400) {
+    return "bad_request";
+  }
   if (status === 401) {
     return "unauthorized";
   }
@@ -66,6 +70,8 @@ export function messageForKind(kind: ApiErrorKind): string {
       return "This mailbox connection cannot be updated right now. Refresh and try again.";
     case "validation":
       return "The request could not be validated.";
+    case "bad_request":
+      return "The request could not be completed.";
     case "unavailable":
       return "The API is temporarily unavailable.";
     case "interaction_required":

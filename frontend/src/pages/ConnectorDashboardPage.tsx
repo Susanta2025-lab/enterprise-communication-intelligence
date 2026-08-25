@@ -63,7 +63,7 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
             Connected mailboxes
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Connect Gmail or Microsoft Outlook. Mailbox messages are not listed here yet.
+            Connect Gmail or Microsoft Outlook. Open an active mailbox to browse recent messages.
           </p>
         </div>
         <Button onClick={() => void query.refetch()} disabled={query.isFetching}>

@@ -16,11 +16,12 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A and 15B are Completed.** Phase 15C is next.
+Phase 15 is **In progress**. **15A, 15B, and 15C are Completed.** Phase 15D is next.
 
 - **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
 - **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
-- Later slices remain deferred: mailbox listing UI, analysis/workflow/send UI, and final documentation/live validation.
+- **15C is Completed:** connected-mailbox workspace for ACTIVE Gmail and Microsoft Outlook connectors, bounded first-page load (`page_size=10`), opaque cursor Load more, in-memory message selection, lifecycle/error recovery UX. No AI analysis, raw body/detail, or workflow/send. Live mailbox provider calls were not performed.
+- Later slices remain deferred: analysis/workflow/send UI, and final documentation/live validation.
 
 Phase 14 remains **Completed**.
 
@@ -112,6 +113,44 @@ Disconnect requires an explicit confirmation dialog. Frontend `scp` checks are U
 
 - Mailbox message listing, pagination, selection, or analysis UI
 - Workflow, approve/reject, or send UI
+- Live provider OAuth or Entra SPA provisioning
+- Database migration
+
+## 15C — Mailbox Workspace + Pagination
+
+Authenticated SPA mailbox workspace on the existing Phase 14 list contract.
+
+```text
+ECI browser principal
+→ Connector Dashboard
+→ Open mailbox (ACTIVE only)
+→ GET /api/v1/connector-accounts/{id}/messages?page_size=10
+→ provider-neutral metadata list
+→ select one message (memory only)
+→ Load more with opaque next_cursor
+```
+
+Routes:
+
+- `/` — connector dashboard
+- `/mailbox/:connectorAccountId` — mailbox workspace
+
+React Router was added for this slice because the workspace is a distinct product surface with back-navigation. There is no analysis, workflow, or settings route tree.
+
+The SPA consumes `GET /api/v1/connector-accounts/{connector_account_id}/messages` unchanged. Authorization remains `communications:read`. The UI page size is `10`, matching the frozen backend default. `next_cursor` is stored only in TanStack Query page state, passed back unchanged, never decoded, never rendered, and never placed in the URL.
+
+Selection is React state only. The selected-message panel shows sender, subject, timestamps, and provider label. It does not call analyze, fetch raw message detail, or show `provider_message_id`.
+
+Mailbox queries use `useInfiniteQuery` with `pageParam` as the opaque cursor. Pagination is user-triggered Load more. There is no prefetch, polling, or automatic extra page fetch. Retry is disabled (`retry: false`); 503 recovery is a manual Try again. Invalid cursor (400) offers Refresh mailbox, which discards the cursor chain and requests a fresh first page. 409 invalidates the connector-account query and returns the user toward reconnect UX without retrying mailbox read.
+
+Frontend `scp` checks remain UX only. FastAPI remains authoritative.
+
+### Out of scope for 15C
+
+- Selected-message AI analysis or analysis history
+- Raw message body/detail, search, attachments, or snippet/preview expansion
+- Workflow, approve/reject, send, or execute
+- Mailbox synchronization, workers, webhooks, or notifications
 - Live provider OAuth or Entra SPA provisioning
 - Database migration
 

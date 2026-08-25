@@ -13,7 +13,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Enterprise Communication Intelligence
@@ -34,7 +34,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-6 py-8">
         {error ? (
           <p role="alert" className="mb-4 text-sm text-red-700">
             {error}

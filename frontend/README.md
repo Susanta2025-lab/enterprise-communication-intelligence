@@ -1,8 +1,6 @@
 # ECI frontend
 
-React + TypeScript + Vite SPA for ECI application login.
-
-This is the Phase 15A foundation. It does not include connector, mailbox, analysis, workflow, or send product UI.
+React + TypeScript + Vite SPA for ECI application login, connector dashboard, and mailbox browsing.
 
 Mailbox OAuth stays on the FastAPI server. The SPA obtains only ECI bearer access tokens through MSAL.
 
@@ -20,6 +18,11 @@ npm run dev
 ```
 
 The SPA listens on `http://localhost:5173` by default.
+
+Signed-in routes:
+
+- `/` — connected-mailbox dashboard
+- `/mailbox/:connectorAccountId` — mailbox workspace for one owned connector
 
 Live browser sign-in requires an operator-provisioned Entra SPA/public-client registration. That step is not performed by the application.
 
