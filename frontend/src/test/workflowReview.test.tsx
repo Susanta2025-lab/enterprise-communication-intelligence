@@ -371,7 +371,7 @@ describe("send confirmation", () => {
     expect(await screen.findByRole("button", { name: "Send approved reply" })).toBeEnabled();
   }
 
-  it("opens confirmation without executing, and cancel sends nothing", async () => {
+  it("opens confirmation without executing, and cancel or Escape sends nothing", async () => {
     const user = userEvent.setup();
     const fetchImpl = mailboxFetch();
     renderWorkspace({ fetchImpl });
@@ -380,7 +380,11 @@ describe("send confirmation", () => {
     const dialog = screen.getByRole("dialog", { name: "Send approved reply?" });
     expect(dialog).toHaveTextContent("connected mailbox");
     expect(executeCalls(fetchImpl)).toHaveLength(0);
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(executeCalls(fetchImpl)).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Send approved reply" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(executeCalls(fetchImpl)).toHaveLength(0);
   });

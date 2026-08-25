@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 
 import type { EciApiClient } from "../api/client";
 import type { ConnectorAccount } from "../api/connectorAccounts";
-import { EciApiError, messageForKind } from "../api/errors";
 import { useAuth } from "../auth/AuthContext";
 import { hasPermission } from "../auth/permissions";
 import { ConfirmDialog } from "../components/connectors/ConfirmDialog";
 import { ConnectorCard } from "../components/connectors/ConnectorCard";
-import { ErrorState } from "../components/connectors/ErrorState";
 import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
 import { OAuthReturnNotice } from "../components/connectors/OAuthReturnNotice";
 import { PermissionGate } from "../components/connectors/PermissionGate";
 import { providerLabel } from "../components/connectors/copy";
+import { ProductErrorState } from "../components/feedback/ProductErrorState";
 import { Button } from "../components/ui/button";
+import { REFRESH_LABEL } from "../errors/copy";
+import { presentProductError } from "../errors/presentProductError";
 import { useConnectorAccountMutations, useConnectorAccounts } from "../hooks/useConnectorAccounts";
 import { useOAuthReturn } from "../hooks/useOAuthReturn";
 
@@ -26,7 +27,7 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
   const query = useConnectorAccounts(apiClient, true);
   const mutations = useConnectorAccountMutations(apiClient);
   const [pendingDisconnect, setPendingDisconnect] = useState<ConnectorAccount | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
 
   const refetch = query.refetch;
   useEffect(() => {
@@ -45,20 +46,22 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
   const hasGmail = items.some((item) => item.provider === "gmail");
   const hasGraph = items.some((item) => item.provider === "microsoft_graph");
   const canConnect = hasPermission(permissions, "communications:connect");
+  const listError = query.isError ? presentProductError("connector_list", query.error) : null;
+  const lifecycleError = actionError ? presentProductError("connector_lifecycle", actionError) : null;
 
   async function runLifecycle(action: () => Promise<unknown>): Promise<void> {
     setActionError(null);
     try {
       await action();
     } catch (error) {
-      setActionError(errorMessage(error, "Mailbox connection could not be started. Try again."));
+      setActionError(error);
     }
   }
 
   return (
     <section className="space-y-6" aria-labelledby="connector-dashboard-heading">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 id="connector-dashboard-heading" className="text-lg font-semibold text-slate-900">
             Connected mailboxes
           </h2>
@@ -66,20 +69,29 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
             Connect Gmail or Microsoft Outlook. Open an active mailbox to browse recent messages.
           </p>
         </div>
-        <Button onClick={() => void query.refetch()} disabled={query.isFetching}>
-          Refresh
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => void query.refetch()}
+          disabled={query.isFetching}
+          aria-busy={query.isFetching && !query.isPending}
+        >
+          {REFRESH_LABEL}
         </Button>
       </div>
 
       {notice ? <OAuthReturnNotice tone={notice.tone} text={notice.text} /> : null}
-      {actionError ? <ErrorState message={actionError} /> : null}
+      {lifecycleError ? (
+        <ProductErrorState
+          {...lifecycleError}
+          onRetry={
+            lifecycleError.retryLabel === REFRESH_LABEL ? () => void query.refetch() : undefined
+          }
+        />
+      ) : null}
 
       {query.isPending ? <LoadingSkeleton /> : null}
-      {query.isError ? (
-        <ErrorState
-          message={errorMessage(query.error, "Connector accounts could not be loaded.")}
-          onRetry={() => void query.refetch()}
-        />
+      {listError ? (
+        <ProductErrorState {...listError} onRetry={() => void query.refetch()} />
       ) : null}
 
       {query.isSuccess ? (
@@ -151,9 +163,9 @@ function MissingProviderCard({
   const label = providerLabel(provider);
   const actionLabel = provider === "gmail" ? "Connect Gmail" : "Connect Microsoft Outlook";
   return (
-    <article className="flex flex-col gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-5">
-      <div>
-        <h3 className="text-base font-semibold text-slate-900">{label}</h3>
+    <article className="flex min-w-0 flex-col gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-5">
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
         <p className="mt-1 text-sm text-slate-600">No mailbox is connected for this provider.</p>
       </div>
       <PermissionGate
@@ -164,23 +176,10 @@ function MissingProviderCard({
           </p>
         }
       >
-        <Button onClick={onConnect} disabled={busy || !canConnect}>
+        <Button className="w-full sm:w-auto" onClick={onConnect} disabled={busy || !canConnect}>
           {actionLabel}
         </Button>
       </PermissionGate>
     </article>
   );
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof EciApiError) {
-    return error.message;
-  }
-  if (error instanceof Error && error.message === "authorization_url_invalid") {
-    return "Mailbox authorization could not be started safely.";
-  }
-  if (error instanceof Error && error.message) {
-    return fallback;
-  }
-  return messageForKind("http_error");
 }

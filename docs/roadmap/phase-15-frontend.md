@@ -16,14 +16,15 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A, 15B, 15C, 15D, and 15E are Completed.** Phase 15F is next.
+Phase 15 is **In progress**. **15A, 15B, 15C, 15D, 15E, and 15F are Completed.** Phase 15G is next.
 
 - **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
 - **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
 - **15C is Completed:** connected-mailbox workspace for ACTIVE Gmail and Microsoft Outlook connectors, bounded first-page load (`page_size=10`), opaque cursor Load more, in-memory message selection, lifecycle/error recovery UX. No AI analysis, raw body/detail, or workflow/send. Live mailbox provider calls were not performed.
 - **15D is Completed:** explicit selected-message analyze in the mailbox workspace, `communications:analyze` permission-aware UX, in-memory analysis display (summary, priority, category, action items, read-only AI draft suggestion), re-analyze, and safe error/retry handling. No WorkflowAction, send, raw body/detail, or analysis history page. Live Foundry/Bedrock inference was not performed.
 - **15E is Completed:** explicit WorkflowAction proposal from the current `analysis_id`, immutable snapshot review, explicit Approve/Reject, explicit Send with a mandatory confirmation dialog, EXECUTING uncertainty without retry, and terminal EXECUTED/FAILED UX. Live send was not performed. Backend workflow/execute application code was not changed.
-- Later slices remain deferred: error/accessibility/responsive hardening, and final documentation/live validation.
+- **15F is Completed:** context-safe error mapping, 401 Sign in recovery without redirect loops, application ErrorBoundary, confirmation-dialog focus trap/return, semantic landmarks, keyboard and focus-visible hardening, non-color status text, responsive/narrow layouts, and axe-backed component tests. Explicit send/execute safety from 15E is unchanged. Live browser validation remains 15G.
+- Later slices remain deferred: live browser validation and final documentation/phase closure.
 
 Phase 14 remains **Completed**.
 
@@ -234,9 +235,41 @@ No new ADR is required. ADR-015, ADR-017, ADR-019, ADR-020, and ADR-025 already 
 - Broad accessibility/responsive hardening (15F) or final docs/live validation (15G)
 - Entra SPA provisioning or database migration
 
+## 15F — Error / Accessibility / Responsive Hardening
+
+Hardened the Phase 15A–15E SPA without adding product features or changing backend contracts.
+
+```text
+raw HTTP status / EciApiError
+→ operation-specific presentProductError
+→ ProductErrorState (stable copy + Sign in / Try again / Refresh / Back to dashboard)
+```
+
+401 is session-unusable, with an explicit Sign in action and no automatic redirect loop. 403 remains permission-specific. Mailbox 400 still discards the cursor chain. Mailbox/analyze 409 still refreshes connector lifecycle. Transient 503 never invents `REAUTH_REQUIRED`. Execute 503 remains uncertain and never offers Try again or Retry send.
+
+Accessibility baseline:
+
+- `header` / `main` landmarks, mailbox `nav`, and heading order under the selected-message panel
+- keyboard operation for connectors, message rows, Analyze/Propose/Approve/Reject/Send, and dialogs
+- `:focus-visible` on buttons and links
+- confirmation dialogs: `role="dialog"`, labelled title/description, focus entry, Tab trap, Escape/Cancel, focus return
+- `role="status"` / `role="alert"` for loading, errors, and EXECUTING uncertainty
+- readable (not color-only) connector, priority, and workflow status text
+- nearby permission explanations for disabled Analyze/Propose/Send
+
+Responsive web (not a native app or PWA): stacked dashboard/mailbox/workflow actions at narrow widths, `min-w-0` / `break-words` for long subjects, senders, and AI/workflow text, and `min-h-11` touch targets. An application ErrorBoundary shows a generic safe fallback with Reload and Back to dashboard. No new ADR. ADR-025 remains the browser architecture.
+
+`eslint-plugin-jsx-a11y` was not added: it does not declare ESLint 10 peer support, and forcing it would break peer-autoinstall of `@testing-library/dom`. Automated coverage uses `jest-axe` plus focused RTL tests.
+
+### Out of scope for 15F
+
+- Live Entra SPA sign-in, live Gmail/Graph OAuth, live mailbox list, live analysis, or live send
+- New backend endpoints, schema, or Phase 12–14 semantic changes
+- Native mobile, PWA, bundle-splitting, or repository-wide README reconciliation (15G)
+
 ## Planned later slices
 
-Phase 15F hardens error, accessibility, and responsive behavior of this mailbox/analysis/workflow path. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
+Phase 15G performs live browser validation, documentation closure, and Phase 15 completion. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
 
 ## Cloud implications
 

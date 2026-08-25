@@ -24,6 +24,7 @@ export function AnalyzeButton({
   return (
     <div>
       <Button
+        className="w-full sm:w-auto"
         onClick={onAnalyze}
         disabled={!canAnalyze || pending}
         aria-busy={pending}

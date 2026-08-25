@@ -6,26 +6,26 @@ import {
   isExecutingWorkflow,
   isPendingWorkflow,
 } from "../../api/workflowActions";
+import { REFRESH_STATUS_LABEL } from "../../errors/copy";
+import {
+  presentProductError,
+  workflowOperationFromError,
+} from "../../errors/presentProductError";
 import type { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { ProductErrorState } from "../feedback/ProductErrorState";
 import { ExecutionUncertainState } from "./ExecutionUncertainState";
 import { SendConfirmationDialog } from "./SendConfirmationDialog";
 import { WorkflowActions } from "./WorkflowActions";
-import { WorkflowErrorState } from "./WorkflowErrorState";
 import { WorkflowSnapshot } from "./WorkflowSnapshot";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import {
   ANALYSIS_NO_DRAFT_COPY,
   ANALYSIS_NOT_PROPOSABLE_COPY,
-  executeErrorMessage,
-  executeRetryLabel,
+  APPROVE_IN_PROGRESS_COPY,
   FAILED_TERMINAL_COPY,
-  proposeErrorMessage,
-  proposeRetryLabel,
-  REFRESH_WORKFLOW_STATUS_LABEL,
-  refreshWorkflowErrorMessage,
+  PROPOSE_IN_PROGRESS_COPY,
+  REJECT_IN_PROGRESS_COPY,
   REJECTED_TERMINAL_COPY,
-  reviewErrorMessage,
-  reviewRetryLabel,
   SEND_IN_PROGRESS_COPY,
   SEND_PERMISSION_HINT,
   WORKFLOW_PROPOSAL_HEADING,
@@ -72,18 +72,21 @@ export function WorkflowReviewPanel({
     }
   }, [workflow.error]);
 
-  const errorMessage = workflowErrorCopy(workflow);
-  const retry = workflowRetry(workflow);
+  const operation = workflowOperationFromError(workflow.errorOperation);
+  const errorView =
+    workflow.error && operation ? presentProductError(operation, workflow.error) : null;
+  const retry = workflowRetry(workflow, errorView?.retryLabel ?? null);
   const showDashboardLink =
-    workflow.error instanceof EciApiError &&
-    workflow.errorOperation === "execute" &&
-    workflow.error.status === 409;
+    (errorView?.showDashboardLink ?? false) ||
+    (workflow.error instanceof EciApiError &&
+      workflow.errorOperation === "execute" &&
+      workflow.error.status === 409);
 
   return (
-    <section className="space-y-4 border-t border-slate-200 pt-5" aria-labelledby="workflow-review-heading">
-      <h3 id="workflow-review-heading" className="text-base font-semibold text-slate-900">
+    <section className="min-w-0 space-y-4 border-t border-slate-200 pt-5" aria-labelledby="workflow-review-heading">
+      <h4 id="workflow-review-heading" className="text-base font-semibold text-slate-900">
         {WORKFLOW_REVIEW_HEADING}
-      </h3>
+      </h4>
 
       {!analysisId ? <p className="text-sm text-slate-600">{ANALYSIS_NOT_PROPOSABLE_COPY}</p> : null}
       {analysisId && !hasDraft && action === null ? (
@@ -91,9 +94,9 @@ export function WorkflowReviewPanel({
       ) : null}
 
       {action ? (
-        <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+        <div className="min-w-0 space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4">
           <div>
-            <h4 className="text-sm font-semibold text-slate-900">{WORKFLOW_PROPOSAL_HEADING}</h4>
+            <h5 className="text-sm font-semibold text-slate-900">{WORKFLOW_PROPOSAL_HEADING}</h5>
             <div className="mt-2">
               <WorkflowStatusBadge status={uncertain && !executing ? "executing" : action.status} />
             </div>
@@ -119,6 +122,21 @@ export function WorkflowReviewPanel({
         </div>
       ) : null}
 
+      {workflow.proposePending ? (
+        <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-slate-600">
+          {PROPOSE_IN_PROGRESS_COPY}
+        </p>
+      ) : null}
+      {workflow.approvePending ? (
+        <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-slate-600">
+          {APPROVE_IN_PROGRESS_COPY}
+        </p>
+      ) : null}
+      {workflow.rejectPending ? (
+        <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-slate-600">
+          {REJECT_IN_PROGRESS_COPY}
+        </p>
+      ) : null}
       {workflow.executePending ? (
         <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-slate-600">
           {SEND_IN_PROGRESS_COPY}
@@ -129,13 +147,12 @@ export function WorkflowReviewPanel({
         <ExecutionUncertainState onRefresh={workflow.refresh} refreshPending={workflow.refreshPending} />
       ) : null}
 
-      {errorMessage && !uncertain ? (
-        <WorkflowErrorState
+      {errorView && !uncertain ? (
+        <ProductErrorState
           ref={errorRef}
-          message={errorMessage}
-          onRetry={retry ? () => retry.action() : undefined}
-          retryLabel={retry?.label}
+          {...errorView}
           showDashboardLink={showDashboardLink}
+          onRetry={retry ? () => retry() : undefined}
         />
       ) : null}
 
@@ -176,56 +193,27 @@ export function WorkflowReviewPanel({
   );
 }
 
-function workflowErrorCopy(workflow: WorkflowSession): string | null {
-  if (!workflow.error) {
+function workflowRetry(
+  workflow: WorkflowSession,
+  retryLabel: string | null,
+): (() => void) | null {
+  if (!retryLabel) {
     return null;
   }
-  if (workflow.errorOperation === "propose") {
-    return proposeErrorMessage(workflow.error);
-  }
-  if (workflow.errorOperation === "approve" || workflow.errorOperation === "reject") {
-    return reviewErrorMessage(workflow.error);
-  }
-  if (workflow.errorOperation === "execute") {
-    return executeErrorMessage(workflow.error);
-  }
-  if (workflow.errorOperation === "refresh") {
-    return refreshWorkflowErrorMessage(workflow.error);
-  }
-  return null;
-}
-
-function workflowRetry(workflow: WorkflowSession): { label: string; action: () => void } | null {
-  if (!workflow.error) {
-    return null;
+  if (retryLabel === REFRESH_STATUS_LABEL) {
+    return workflow.refresh;
   }
   if (workflow.errorOperation === "propose") {
-    const label = proposeRetryLabel(workflow.error);
-    return label ? { label, action: workflow.propose } : null;
+    return workflow.propose;
   }
   if (workflow.errorOperation === "approve") {
-    const label = reviewRetryLabel(workflow.error);
-    if (!label) {
-      return null;
-    }
-    return {
-      label,
-      action: label === REFRESH_WORKFLOW_STATUS_LABEL ? workflow.refresh : workflow.approve,
-    };
+    return workflow.approve;
   }
   if (workflow.errorOperation === "reject") {
-    const label = reviewRetryLabel(workflow.error);
-    if (!label) {
-      return null;
-    }
-    return {
-      label,
-      action: label === REFRESH_WORKFLOW_STATUS_LABEL ? workflow.refresh : workflow.reject,
-    };
+    return workflow.reject;
   }
-  if (workflow.errorOperation === "execute") {
-    const label = executeRetryLabel(workflow.error);
-    return label ? { label, action: workflow.refresh } : null;
+  if (workflow.errorOperation === "refresh") {
+    return workflow.refresh;
   }
   return null;
 }

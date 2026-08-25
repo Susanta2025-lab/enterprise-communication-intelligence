@@ -21,25 +21,25 @@ export const AnalysisPanel = forwardRef<HTMLElement, AnalysisPanelProps>(functio
     <article
       ref={ref}
       tabIndex={-1}
-      className="space-y-5 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-slate-900"
+      className="min-w-0 space-y-5 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-slate-900"
       aria-labelledby="ai-analysis-heading"
     >
-      <h3 id="ai-analysis-heading" className="text-base font-semibold text-slate-900">
+      <h4 id="ai-analysis-heading" className="text-base font-semibold text-slate-900">
         AI Analysis
-      </h3>
+      </h4>
       <SummarySection text={analysis.summary?.text} />
       <section aria-labelledby="analysis-priority-heading">
-        <h4 id="analysis-priority-heading" className="text-sm font-semibold text-slate-900">
+        <h5 id="analysis-priority-heading" className="text-sm font-semibold text-slate-900">
           Priority
-        </h4>
+        </h5>
         <div className="mt-2">
           <PriorityBadge level={analysis.priority?.level} rationale={analysis.priority?.rationale} />
         </div>
       </section>
       <section aria-labelledby="analysis-category-heading">
-        <h4 id="analysis-category-heading" className="text-sm font-semibold text-slate-900">
+        <h5 id="analysis-category-heading" className="text-sm font-semibold text-slate-900">
           Category
-        </h4>
+        </h5>
         <div className="mt-2">
           <CategoryBadge category={analysis.category} />
         </div>

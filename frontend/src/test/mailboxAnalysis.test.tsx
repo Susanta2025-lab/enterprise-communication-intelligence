@@ -443,7 +443,7 @@ describe("re-analysis", () => {
     });
     renderWorkspace({ fetchImpl });
     await selectAndAnalyze(user);
-    expect(await screen.findByRole("alert")).toHaveTextContent("temporarily unavailable");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Analysis could not be completed.");
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(analyzeCalls(fetchImpl)).toHaveLength(1);
   });
@@ -533,11 +533,11 @@ describe("analyze errors", () => {
     });
     renderWorkspace({ fetchImpl });
     await selectAndAnalyze(user);
-    expect(await screen.findByRole("alert")).toHaveTextContent("temporarily unavailable");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Analysis could not be completed.");
     expect(screen.queryByText("provider timeout")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mailbox-unavailable")).not.toBeInTheDocument();
     expect(connectorCalls(fetchImpl)).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(SUMMARY_TEXT)).toBeInTheDocument();
     expect(analyzeCalls(fetchImpl)).toHaveLength(2);
     expect(screen.queryByText("Reauthorization required")).not.toBeInTheDocument();
@@ -643,7 +643,7 @@ describe("analysis privacy and accessibility", () => {
     );
     await user.click(screen.getByRole("button", { name: "Analyze message" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("heading", { name: "AI Analysis" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Re-analyze message" })).toHaveAccessibleName(
       "Re-analyze message",

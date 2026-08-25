@@ -13,13 +13,13 @@ export function ExecutionUncertainState({
   return (
     <div
       role="alert"
-      className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+      className="min-w-0 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
     >
       <p className="font-semibold">{EXECUTION_UNCERTAIN_TITLE}</p>
       <p className="mt-1">{EXECUTION_UNCERTAIN_COPY}</p>
       {onRefresh ? (
         <Button
-          className="mt-3 bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
+          className="mt-3 w-full bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50 sm:w-auto"
           onClick={onRefresh}
           disabled={refreshPending}
           aria-busy={refreshPending}

@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import type { EciApiClient } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { AppErrorBoundary } from "./components/feedback/AppErrorBoundary";
 import { SignInPanel } from "./components/SignInPanel";
 import { HomePage } from "./pages/HomePage";
 import { MailboxWorkspacePage } from "./pages/MailboxWorkspacePage";
@@ -19,9 +20,11 @@ export function App({ apiClient }: AppProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppRoutes apiClient={apiClient} />
-      </BrowserRouter>
+      <AppErrorBoundary>
+        <BrowserRouter>
+          <AppRoutes apiClient={apiClient} />
+        </BrowserRouter>
+      </AppErrorBoundary>
     </QueryClientProvider>
   );
 }

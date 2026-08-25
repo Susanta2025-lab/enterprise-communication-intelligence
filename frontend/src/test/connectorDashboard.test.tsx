@@ -222,6 +222,10 @@ describe("connector dashboard", () => {
       );
       expect(await screen.findByRole("alert")).toHaveTextContent(copy);
       expect(screen.queryByText("raw provider boom")).not.toBeInTheDocument();
+      if (status === 401) {
+        expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+      }
       unmount();
     }
   });

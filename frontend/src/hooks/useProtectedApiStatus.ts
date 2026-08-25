@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { EciApiClient } from "../api/client";
-import { EciApiError } from "../api/errors";
+import { presentProductError } from "../errors/presentProductError";
 
 export type ApiStatus = "idle" | "checking" | "ok" | "error";
 
@@ -21,11 +21,7 @@ export function useProtectedApiStatus(apiClient: EciApiClient, enabled: boolean)
       setMessage("Protected API responded successfully.");
     } catch (error) {
       setStatus("error");
-      if (error instanceof EciApiError) {
-        setMessage(error.message);
-        return;
-      }
-      setMessage("Protected API connectivity could not be verified.");
+      setMessage(presentProductError("api_smoke", error).message);
     }
   }
 

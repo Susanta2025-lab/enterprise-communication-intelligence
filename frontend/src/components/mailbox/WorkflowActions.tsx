@@ -57,6 +57,7 @@ export function WorkflowActions({
       {showPropose ? (
         <div>
           <Button
+            className="w-full sm:w-auto"
             onClick={onPropose}
             disabled={!canWorkflow || proposePending}
             aria-busy={proposePending}
@@ -73,8 +74,9 @@ export function WorkflowActions({
       ) : null}
 
       {showApproveReject ? (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Button
+            className="w-full sm:w-auto"
             onClick={onApprove}
             disabled={!canWorkflow || reviewBusy}
             aria-busy={approvePending}
@@ -83,7 +85,7 @@ export function WorkflowActions({
             {APPROVE_REPLY_LABEL}
           </Button>
           <Button
-            className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
+            className="w-full bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50 sm:w-auto"
             onClick={onReject}
             disabled={!canWorkflow || reviewBusy}
             aria-busy={rejectPending}
@@ -92,7 +94,7 @@ export function WorkflowActions({
             {REJECT_REPLY_LABEL}
           </Button>
           {canWorkflow ? null : (
-            <p id="workflow-review-permission-hint" className="basis-full text-sm text-slate-600">
+            <p id="workflow-review-permission-hint" className="text-sm text-slate-600 sm:basis-full">
               {WORKFLOW_PERMISSION_HINT}
             </p>
           )}
@@ -102,6 +104,7 @@ export function WorkflowActions({
       {showSend ? (
         <div>
           <Button
+            className="w-full sm:w-auto"
             onClick={onSend}
             disabled={!canSend || sendBusy || sendDisabledReason === "not_executable"}
             aria-busy={sendBusy}
@@ -130,7 +133,7 @@ export function WorkflowActions({
 
       {showRefresh ? (
         <Button
-          className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
+          className="w-full bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50 sm:w-auto"
           onClick={onRefresh}
           disabled={refreshPending || sendBusy}
           aria-busy={refreshPending}

@@ -8,7 +8,6 @@ import { EciApiError } from "../api/errors";
 import { useAuth } from "../auth/AuthContext";
 import { hasPermission } from "../auth/permissions";
 import { MailboxEmptyState } from "../components/mailbox/MailboxEmptyState";
-import { MailboxErrorState } from "../components/mailbox/MailboxErrorState";
 import { MailboxHeader } from "../components/mailbox/MailboxHeader";
 import { MailboxLoadingSkeleton } from "../components/mailbox/MailboxLoadingSkeleton";
 import { MailboxUnavailableState } from "../components/mailbox/MailboxUnavailableState";
@@ -17,10 +16,10 @@ import { MessageAnalysisSection } from "../components/mailbox/MessageAnalysisSec
 import { WorkflowReviewPanel } from "../components/mailbox/WorkflowReviewPanel";
 import { MessageList } from "../components/mailbox/MessageList";
 import { SelectedMessagePanel } from "../components/mailbox/SelectedMessagePanel";
-import { mailboxListErrorMessage, mailboxRetryLabel } from "../components/mailbox/copy";
 import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
-import { ErrorState } from "../components/connectors/ErrorState";
+import { ProductErrorState } from "../components/feedback/ProductErrorState";
 import { providerLabel } from "../components/connectors/copy";
+import { presentProductError } from "../errors/presentProductError";
 import { CONNECTOR_ACCOUNT_QUERY_KEY, useConnectorAccounts } from "../hooks/useConnectorAccounts";
 import { useAnalyzeMailboxMessage } from "../hooks/useAnalyzeMailboxMessage";
 import { useWorkflowAction } from "../hooks/useWorkflowAction";
@@ -124,7 +123,12 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
         <MailboxHeader title="Mailbox" />
-        <MailboxErrorState message="That mailbox connection is unavailable." />
+        <ProductErrorState
+          message="That mailbox connection is unavailable."
+          retryLabel={null}
+          showSignIn={false}
+          showDashboardLink
+        />
       </section>
     );
   }
@@ -133,7 +137,12 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
         <MailboxHeader title="Mailbox" />
-        <MailboxErrorState message="Viewing this mailbox requires the communications:read permission." />
+        <ProductErrorState
+          message="Viewing this mailbox requires the communications:read permission."
+          retryLabel={null}
+          showSignIn={false}
+          showDashboardLink
+        />
       </section>
     );
   }
@@ -148,13 +157,11 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   }
 
   if (connectorsQuery.isError) {
+    const connectorError = presentProductError("connector_list", connectorsQuery.error);
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
         <MailboxHeader title="Mailbox" />
-        <ErrorState
-          message="Connector accounts could not be loaded."
-          onRetry={() => void connectorsQuery.refetch()}
-        />
+        <ProductErrorState {...connectorError} onRetry={() => void connectorsQuery.refetch()} />
       </section>
     );
   }
@@ -163,7 +170,12 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
         <MailboxHeader title="Mailbox" />
-        <MailboxErrorState message="That mailbox connection is unavailable." />
+        <ProductErrorState
+          message="That mailbox connection is unavailable."
+          retryLabel={null}
+          showSignIn={false}
+          showDashboardLink
+        />
       </section>
     );
   }
@@ -192,7 +204,9 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     );
   }
 
-  const retryLabel = mailboxRetryLabel(mailboxQuery.error);
+  const mailboxErrorView = mailboxQuery.isError
+    ? presentProductError("mailbox_list", mailboxQuery.error)
+    : null;
   const showList = items.length > 0;
   const showEmpty = mailboxQuery.isSuccess && items.length === 0 && !mailboxQuery.isFetchingNextPage;
 
@@ -209,12 +223,11 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
 
       {mailboxQuery.isPending ? <MailboxLoadingSkeleton /> : null}
 
-      {mailboxQuery.isError ? (
-        <MailboxErrorState
+      {mailboxErrorView ? (
+        <ProductErrorState
           ref={errorRef}
-          message={mailboxListErrorMessage(mailboxQuery.error)}
-          onRetry={retryLabel ? () => handleMailboxRecovery() : undefined}
-          retryLabel={retryLabel ?? undefined}
+          {...mailboxErrorView}
+          onRetry={mailboxErrorView.retryLabel ? () => handleMailboxRecovery() : undefined}
         />
       ) : null}
 

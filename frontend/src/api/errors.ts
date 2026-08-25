@@ -1,3 +1,5 @@
+import { SESSION_UNUSABLE_COPY } from "../errors/copy";
+
 export const PROTECTED_ANALYSES_SMOKE_PATH = "/api/v1/analyses?limit=1";
 export const CONNECTOR_ACCOUNTS_PATH = "/api/v1/connector-accounts";
 export const GMAIL_AUTHORIZE_PATH = "/api/v1/connector-accounts/gmail/authorize";
@@ -61,7 +63,7 @@ export function kindForStatus(status: number): ApiErrorKind {
 export function messageForKind(kind: ApiErrorKind): string {
   switch (kind) {
     case "unauthorized":
-      return "The API rejected the request. Sign in again.";
+      return SESSION_UNUSABLE_COPY;
     case "forbidden":
       return "The signed-in account is missing a required permission.";
     case "not_found":

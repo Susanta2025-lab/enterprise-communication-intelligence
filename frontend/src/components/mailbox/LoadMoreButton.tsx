@@ -7,7 +7,7 @@ type LoadMoreButtonProps = {
 
 export function LoadMoreButton({ onClick, busy }: LoadMoreButtonProps) {
   return (
-    <Button onClick={onClick} disabled={busy} aria-busy={busy}>
+    <Button className="w-full sm:w-auto" onClick={onClick} disabled={busy} aria-busy={busy}>
       {busy ? "Loading more" : "Load more"}
     </Button>
   );

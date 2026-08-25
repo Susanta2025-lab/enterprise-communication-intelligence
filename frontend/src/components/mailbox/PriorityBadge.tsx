@@ -25,7 +25,7 @@ export function PriorityBadge({ level, rationale }: PriorityBadgeProps) {
           {label}
         </span>
       </p>
-      {rationale ? <p className="mt-1 text-sm text-slate-600">{rationale}</p> : null}
+      {rationale ? <p className="mt-1 min-w-0 break-words text-sm text-slate-600">{rationale}</p> : null}
     </div>
   );
 }

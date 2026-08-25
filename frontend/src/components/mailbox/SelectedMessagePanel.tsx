@@ -20,7 +20,7 @@ export function SelectedMessagePanel({
 }: SelectedMessagePanelProps) {
   if (!item) {
     return (
-      <aside className="rounded-lg border border-slate-200 bg-white p-5" aria-label="Selected message">
+      <aside className="min-w-0 rounded-lg border border-slate-200 bg-white p-5" aria-label="Selected message">
         <p className="text-sm text-slate-600">Select a message to view its details.</p>
       </aside>
     );
@@ -30,11 +30,11 @@ export function SelectedMessagePanel({
   const received = formatMailboxTimestamp(item.received_at);
 
   return (
-    <aside className="rounded-lg border border-slate-200 bg-white p-5" aria-label="Selected message">
+    <aside className="min-w-0 rounded-lg border border-slate-200 bg-white p-5" aria-label="Selected message">
       {onBackToList ? (
         <button
           type="button"
-          className="mb-3 text-sm font-medium text-slate-700 underline lg:hidden"
+          className="mb-3 min-h-11 text-sm font-medium text-slate-700 underline lg:hidden"
           onClick={onBackToList}
         >
           Back to message list
@@ -45,13 +45,19 @@ export function SelectedMessagePanel({
         {providerLabel(provider)}
       </p>
       <dl className="mt-4 space-y-3 text-sm">
-        <div>
+        <div className="min-w-0">
           <dt className="text-slate-500">Sender</dt>
-          <dd className="font-medium text-slate-900">{item.sender}</dd>
+          <dd className="min-w-0 break-words font-medium text-slate-900">{item.sender}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-slate-500">Subject</dt>
-          <dd className={item.subject ? "text-slate-900" : "italic text-slate-500"}>
+          <dd
+            className={
+              item.subject
+                ? "min-w-0 break-words text-slate-900"
+                : "min-w-0 break-words italic text-slate-500"
+            }
+          >
             {displaySubject(item.subject)}
           </dd>
         </div>

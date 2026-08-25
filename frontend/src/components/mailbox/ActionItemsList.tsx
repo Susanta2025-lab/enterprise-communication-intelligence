@@ -10,10 +10,10 @@ export function ActionItemsList({ items }: ActionItemsListProps) {
   const actionItems = items ?? [];
 
   return (
-    <section aria-labelledby="analysis-action-items-heading">
-      <h4 id="analysis-action-items-heading" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="analysis-action-items-heading" className="min-w-0">
+      <h5 id="analysis-action-items-heading" className="text-sm font-semibold text-slate-900">
         Action items
-      </h4>
+      </h5>
       {actionItems.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">{NO_ACTION_ITEMS_COPY}</p>
       ) : (
@@ -22,9 +22,11 @@ export function ActionItemsList({ items }: ActionItemsListProps) {
           className="mt-2 list-disc space-y-3 pl-5 text-sm text-slate-800"
         >
           {actionItems.map((item, index) => (
-            <li key={`${item.description}-${index}`}>
-              <p>{item.description}</p>
-              {item.owner ? <p className="text-slate-600">Owner: {item.owner}</p> : null}
+            <li key={`${item.description}-${index}`} className="min-w-0">
+              <p className="min-w-0 break-words">{item.description}</p>
+              {item.owner ? (
+                <p className="min-w-0 break-words text-slate-600">Owner: {item.owner}</p>
+              ) : null}
               {formatMailboxTimestamp(item.due_at) ? (
                 <p className="text-slate-600">Due: {formatMailboxTimestamp(item.due_at)}</p>
               ) : null}

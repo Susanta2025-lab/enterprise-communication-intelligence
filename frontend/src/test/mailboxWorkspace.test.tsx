@@ -140,7 +140,7 @@ describe("mailbox workspace entry", () => {
     renderWorkspace({ fetchImpl });
     expect(await screen.findByTestId("mailbox-unavailable")).toHaveTextContent("Reauthorization required");
     expect(messageCalls(fetchImpl)).toHaveLength(0);
-    expect(screen.getAllByRole("link", { name: "Back to connected mailboxes" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Back to dashboard" }).length).toBeGreaterThan(0);
   });
 
   it("does not fetch mailbox messages for DISCONNECTED connectors", async () => {
@@ -407,7 +407,7 @@ describe("mailbox refresh and errors", () => {
     renderWorkspace({ fetchImpl });
     expect(await screen.findByRole("alert")).toHaveTextContent("That mailbox connection is unavailable.");
     expect(messageCalls(fetchImpl)).toHaveLength(0);
-    expect(screen.getAllByRole("link", { name: "Back to connected mailboxes" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Back to dashboard" }).length).toBeGreaterThan(0);
   });
 
   it("does not request mailbox data without communications:read", async () => {
@@ -427,6 +427,8 @@ describe("mailbox refresh and errors", () => {
     });
     renderWorkspace({ fetchImpl });
     expect(await screen.findByRole("alert")).toHaveTextContent("Sign in again");
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain(TEST_TOKEN);
   });
 
