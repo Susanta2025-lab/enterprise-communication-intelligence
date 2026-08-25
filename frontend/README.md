@@ -34,7 +34,7 @@ The layout is a responsive web app. Narrow viewports stack dashboard and mailbox
 
 Raw message bodies are not displayed. Mailbox, analysis, and workflow content stay in memory. The URL may include the opaque connector account id and, briefly, sanitized OAuth return parameters.
 
-Live browser sign-in requires an operator-provisioned Entra SPA/public-client registration. That step is not performed by the application.
+Live browser sign-in, connector OAuth, mailbox list, selected-message analyze, and workflow review were validated in Phase 15G on the local Vite SPA against local FastAPI and PostgreSQL with real MSAL ECI login and real Gmail/Graph delegated mailbox access. Analysis used `MockAIProvider`. Live Send/execute was not performed. Cloud-hosted browser deployment was not part of that proof.
 
 ## Scripts
 

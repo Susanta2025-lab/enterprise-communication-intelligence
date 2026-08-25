@@ -16,15 +16,15 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A, 15B, 15C, 15D, 15E, and 15F are Completed.** Phase 15G is next.
+Phase 15 is **COMPLETE — READY FOR COMMIT**. **15A through 15G are Completed.**
 
-- **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
+- **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were deferred until 15G.
 - **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
 - **15C is Completed:** connected-mailbox workspace for ACTIVE Gmail and Microsoft Outlook connectors, bounded first-page load (`page_size=10`), opaque cursor Load more, in-memory message selection, lifecycle/error recovery UX. No AI analysis, raw body/detail, or workflow/send. Live mailbox provider calls were not performed.
 - **15D is Completed:** explicit selected-message analyze in the mailbox workspace, `communications:analyze` permission-aware UX, in-memory analysis display (summary, priority, category, action items, read-only AI draft suggestion), re-analyze, and safe error/retry handling. No WorkflowAction, send, raw body/detail, or analysis history page. Live Foundry/Bedrock inference was not performed.
 - **15E is Completed:** explicit WorkflowAction proposal from the current `analysis_id`, immutable snapshot review, explicit Approve/Reject, explicit Send with a mandatory confirmation dialog, EXECUTING uncertainty without retry, and terminal EXECUTED/FAILED UX. Live send was not performed. Backend workflow/execute application code was not changed.
-- **15F is Completed:** context-safe error mapping, 401 Sign in recovery without redirect loops, application ErrorBoundary, confirmation-dialog focus trap/return, semantic landmarks, keyboard and focus-visible hardening, non-color status text, responsive/narrow layouts, and axe-backed component tests. Explicit send/execute safety from 15E is unchanged. Live browser validation remains 15G.
-- Later slices remain deferred: live browser validation and final documentation/phase closure.
+- **15F is Completed:** context-safe error mapping, 401 Sign in recovery without redirect loops, application ErrorBoundary, confirmation-dialog focus trap/return, semantic landmarks, keyboard and focus-visible hardening, non-color status text, responsive/narrow layouts, and axe-backed component tests. Explicit send/execute safety from 15E is unchanged. Live browser validation remained 15G.
+- **15G is Completed:** live browser validation on local React/Vite + FastAPI + PostgreSQL with real MSAL ECI login, real Gmail and Microsoft Graph delegated mailbox access, bounded list (`page_size=10`), Graph opaque pagination with one Load more, explicit selected-message analyze with `MockAIProvider`, explicit Propose → PENDING, explicit Approve → APPROVED, and stop before Send/execute. Both connectors required controlled exact-account reauthorization after in-memory credential loss from a local API process restart (`ACTIVE → REAUTH_REQUIRED → exact-account reauthorization → ACTIVE`). Wrong-account Graph consent on the first attempt was prevented. Final documentation reconciliation, frontend CI job, full offline regression, and roadmap closure are complete. Live Send, live execute, Foundry/Bedrock mailbox inference, and cloud-hosted browser flows were not performed.
 
 Phase 14 remains **Completed**.
 
@@ -267,9 +267,49 @@ Responsive web (not a native app or PWA): stacked dashboard/mailbox/workflow act
 - New backend endpoints, schema, or Phase 12–14 semantic changes
 - Native mobile, PWA, bundle-splitting, or repository-wide README reconciliation (15G)
 
-## Planned later slices
+## 15G — Live Browser Validation + Documentation + Phase Closure
 
-Phase 15G performs live browser validation, documentation closure, and Phase 15 completion. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
+Live validation environment:
+
+```text
+local React/Vite SPA (http://localhost:5173)
+→ real MSAL browser authentication (dedicated Entra SPA)
+→ ECI bearer token
+→ local FastAPI
+→ local PostgreSQL
+→ real Gmail delegated mailbox OAuth (server-side)
+→ real Microsoft Graph delegated mailbox OAuth (server-side)
+```
+
+Validated live:
+
+- real browser MSAL sign-in and all five ECI delegated permissions
+- protected connector dashboard (`GET /api/v1/connector-accounts`)
+- Gmail exact-account credential recovery and bounded mailbox list
+- Gmail selected-message explicit analyze → Propose → Approve (MockAIProvider)
+- Microsoft Graph exact-account credential recovery (wrong-account consent prevented on first attempt)
+- Graph bounded mailbox list, one opaque Load more, selected-message explicit analyze → Propose → Approve (MockAIProvider)
+- both connectors preserved same row/identity and returned `ACTIVE`
+- execute/send request count remained zero
+
+Not validated live:
+
+- actual Send or workflow execute against Gmail/Graph
+- Foundry or Bedrock inference on the connected-mailbox analyze path
+- ACA/ECS/Azure/AWS-hosted browser SPA
+- managed cloud PostgreSQL browser flow
+
+Local-runtime credential-store note: with `CREDENTIAL_STORE_BACKEND=memory`, a FastAPI process restart can leave a persisted `ACTIVE` connector row while delegated provider secret material is no longer available in process memory. Phase 15G recovery used the established lifecycle `ACTIVE → REAUTH_REQUIRED → exact-account reauthorization → ACTIVE` for both providers. Durable cloud credential stores remain the production architecture; this is an expected local-runtime limitation, not connector corruption.
+
+Closure work also delivered:
+
+- GitHub Actions frontend job (`npm ci`, typecheck, lint, test, build)
+- final README and roadmap reconciliation
+- full offline frontend/backend regression
+
+## Post-Phase-15 boundary
+
+Phase 15 does not add sync, search, attachments, workers, webhooks, analysis history UI, workflow history UI, bulk analysis, editable authorized drafts, automatic analysis/workflow/approval/send, execution retry, native mobile, PWA/offline mode, analytics, admin console, or cloud frontend deployment. Later work must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
 
 ## Cloud implications
 

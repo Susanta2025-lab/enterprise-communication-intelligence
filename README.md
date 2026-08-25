@@ -73,7 +73,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 
 ### CI/CD
 
-* GitHub Actions CI (automatic: pip check, ruff, pytest, plus PostgreSQL integration)
+* GitHub Actions CI (automatic: pip check, ruff, pytest, PostgreSQL integration, plus frontend typecheck/lint/test/build)
 * Manual multi-cloud CD (`workflow_dispatch` target `azure` | `aws` | `both`)
 * GitHub OIDC federation (no long-lived deploy secrets)
 * Build-once SHA and `stable` image tags
@@ -186,6 +186,23 @@ Phase 13 does not add automatic replies, mailbox synchronization/webhooks, or cl
 
 Phase 14 does not add mailbox synchronization, search, attachments, bulk analysis, workers, webhooks, or cloud-hosted ACA/ECS mailbox→AI certification. It did not call Foundry or Bedrock.
 
+### Browser Frontend
+
+* Same-repository React + TypeScript + Vite responsive SPA under `frontend/`
+* MSAL public-client browser authentication for ECI application login (separate from mailbox OAuth)
+* FastAPI bearer-token API client with explicit CORS allowlist
+* Connector dashboard for owned Gmail and Microsoft Outlook / Graph accounts
+* Explicit connect, reconnect, and disconnect lifecycle UX
+* Mailbox workspace with bounded first-page load (`page_size=10`), provider-neutral metadata, and opaque cursor Load more
+* Explicit selected-message analyze (`communications:analyze`) with summary, priority, category, action items, and read-only AI draft suggestion
+* Explicit workflow proposal, immutable snapshot review, explicit approve/reject, and explicit Send confirmation UX (`communications:workflow`, `communications:send`)
+* Browser product state is memory-oriented; mailbox content, analysis, and workflow snapshots are not written to localStorage or IndexedDB
+* Safety contract: AI draft ≠ proposed snapshot ≠ approved communication ≠ sent communication
+* No automatic mailbox-wide analysis, workflow proposal, approval, or send; uncertain `EXECUTING` is never blindly retried
+* Phase 15G live browser validation used local Vite + local FastAPI + local PostgreSQL with real MSAL login and real Gmail/Graph delegated mailbox access; analysis used `MockAIProvider`; live Send/execute was not performed
+
+Phase 15 does not deploy the SPA to ACA/ECS/AWS, add sync/search/attachments/workers/webhooks, or certify cloud-hosted browser flows.
+
 ### Engineering
 
 * Clean Architecture
@@ -257,6 +274,14 @@ Phase 14 does not add mailbox synchronization, search, attachments, bulk analysi
 * ✅ Phase 14E – Lifecycle / Privacy / Failure Hardening
 * ✅ Phase 14F – Final Documentation, Observability, Live Validation & Regression
 * ✅ Phase 14 – Connected Mailbox Read and Analysis
+* ✅ Phase 15 – Browser Frontend
+* ✅ Phase 15A – Frontend Foundation + Browser Authentication
+* ✅ Phase 15B – Connector Dashboard + OAuth UX
+* ✅ Phase 15C – Mailbox Workspace + Pagination
+* ✅ Phase 15D – Analysis Experience
+* ✅ Phase 15E – Workflow Review + Explicit Send UX
+* ✅ Phase 15F – Error / Accessibility / Responsive Hardening
+* ✅ Phase 15G – Live Browser Validation + Documentation
 
 ---
 
@@ -480,6 +505,10 @@ docs/
 ├── diagrams/
 └── roadmap/
 
+frontend/
+├── src/
+└── README.md
+
 tests/
 ├── integration/
 ├── providers/
@@ -505,6 +534,17 @@ deployment/
 * Alembic
 * psycopg 3
 * PostgreSQL (production dialect; CI-proven)
+
+### Frontend
+
+* React 19
+* TypeScript
+* Vite
+* MSAL browser authentication
+* TanStack Query
+* React Router
+* Tailwind CSS
+* Vitest + Testing Library + jest-axe
 
 ### Quality & Testing
 
@@ -698,6 +738,14 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 14D – Bounded Mailbox Listing      | ✅ Completed   |
 | ↳ Phase 14E – Lifecycle / Privacy Hardening| ✅ Completed   |
 | ↳ Phase 14F – Docs, Observability & Closure| ✅ Completed   |
+| Phase 15 – Browser Frontend              | ✅ Completed   |
+| ↳ Phase 15A – Frontend Foundation + Auth | ✅ Completed   |
+| ↳ Phase 15B – Connector Dashboard + OAuth| ✅ Completed   |
+| ↳ Phase 15C – Mailbox Workspace          | ✅ Completed   |
+| ↳ Phase 15D – Analysis Experience        | ✅ Completed   |
+| ↳ Phase 15E – Workflow + Explicit Send UX  | ✅ Completed   |
+| ↳ Phase 15F – Accessibility / Responsive | ✅ Completed   |
+| ↳ Phase 15G – Live Browser Validation    | ✅ Completed   |
 
 ---
 
@@ -725,7 +773,9 @@ Not yet implemented:
 * Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
 * Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, Secrets Manager, and Phase 14 list→analyze validation is recorded; those retained deployments have not been redeployed as a Phase 13/14 runtime)
-* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 live proof used `MockAIProvider`)
+* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`)
+* Phase 15 browser SPA deployed to ACA/ECS/AWS or cloud-hosted browser-flow certification
+* Local in-memory credential store may require exact-account reauthorization after a FastAPI process restart even when the connector row remains `ACTIVE`; durable Key Vault / Secrets Manager backends remain the production architecture
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached

@@ -4,7 +4,7 @@
 
 Accepted
 
-Implemented in Phase 15A as the durable browser foundation. Live Entra SPA app-registration provisioning remains an operator step and is not performed by this decision.
+Implemented in Phase 15A as the durable browser foundation. Live Entra SPA registration and real browser sign-in were validated in Phase 15G on the local Vite SPA against local FastAPI.
 
 ## Date
 
@@ -51,7 +51,7 @@ Frontend permission helpers may inspect `scp` only for UX. Backend token validat
 
 - Local development can run Vite on `http://localhost:5173` against FastAPI on `http://localhost:8000` when CORS origins are configured.
 - Mailbox connect/reconnect UX calls existing server-side authorize endpoints, then returns the browser to a fixed configured frontend URL (`FRONTEND_OAUTH_RETURN_URL`) after FastAPI completes token exchange. Mailbox OAuth credentials and tokens never cross to the SPA. When the return URL is unset, callbacks keep sanitized JSON responses.
-- Live browser sign-in requires an operator-provisioned SPA client ID, redirect URI, and explicit `communications:*` delegated scopes.
+- Live browser sign-in requires an operator-provisioned SPA client ID, redirect URI, and explicit `communications:*` delegated scopes. Phase 15G validated this on the local Vite SPA with a dedicated Entra SPA registration; cloud-hosted browser deployment was not part of that proof.
 
 ## Benefits
 
