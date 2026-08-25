@@ -67,7 +67,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 ### Authentication
 
 * Provider-independent OIDC JWT validation
-* Permission authorization (`communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for mailbox OAuth lifecycle)
+* Permission authorization (`communications:read` for mailbox listing; `communications:analyze` for analyze/history; `communications:connect` for mailbox OAuth lifecycle; `communications:workflow` for proposal/approval; `communications:send` for execute; mailbox-backed analyze requires `communications:read` and `communications:analyze`)
 * Fail-closed production (`APP_ENV=production` requires `AUTH_MODE=oidc`)
 * First live identity provider: Microsoft Entra ID (single-tenant resource application)
 
@@ -101,6 +101,8 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * `GET /api/v1/oauth/callbacks/microsoft_graph` (unauthenticated Microsoft redirect; ownership from the authorization session)
 * `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
 * `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
+* `GET /api/v1/connector-accounts/{connector_account_id}/messages` (`communications:read`)
+* `POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` (`communications:read` + `communications:analyze`)
 * Request validation
 * Structured error handling
 * Reusable domain schemas
@@ -122,10 +124,12 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Gmail read-only REST adapter (no Gmail SDK)
 * Microsoft Graph read-only REST adapter (no Graph SDK / MSAL inside ECI)
 * User-owned connector accounts with opaque `credential_ref`
-* Connector ingestion into the existing analysis workflow (below the HTTP surface)
-* Controlled local live adapter verification for Gmail and Microsoft Graph, stopping at `CommunicationMessage`
+* Connector ingestion into the existing analysis workflow
+* Bounded mailbox listing HTTP and selected-message analyze HTTP for owned `ACTIVE` / `mail.read` Gmail and Microsoft Graph accounts
+* Provider-neutral opaque pagination cursor (Graph `@odata.nextLink` is not exposed)
+* Controlled local live adapter verification for Gmail and Microsoft Graph, historically stopping at `CommunicationMessage`; Phase 14 extended that path through list → selected-message analyze
 
-Phase 10 historically did not include production OAuth, connector HTTP APIs, background synchronization, or automatic replies. Phase 13 added mailbox OAuth lifecycle HTTP. Connector message-ingestion HTTP and synchronization remain future work.
+Phase 10 historically did not include production OAuth, connector HTTP APIs, background synchronization, or automatic replies. Phase 13 added mailbox OAuth lifecycle HTTP. Phase 14 adds bounded listing and selected-message analyze. Synchronization, search, attachments, workers, webhooks, and a local mailbox mirror remain future work.
 
 ### Workflow Automation
 
@@ -164,7 +168,23 @@ Phase 12 does not include automatic replies, retry/reconciliation, or exactly-on
 * Locally live-validated Microsoft consent and an explicitly approved Graph reply
 * Live-validated Azure Key Vault and AWS Secrets Manager credential-store backends
 
-Phase 13 does not add automatic replies, mailbox synchronization/webhooks, user-facing connector ingestion/analyze HTTP, or cloud-hosted end-to-end mailbox OAuth certification of the retained ACA/ECS deployments.
+Phase 13 does not add automatic replies, mailbox synchronization/webhooks, or cloud-hosted end-to-end mailbox OAuth certification of the retained ACA/ECS deployments. User-facing listing and selected-message analyze HTTP were added in Phase 14.
+
+### Connected Mailbox Read and Analysis
+
+* Distinct `communications:read` permission; mailbox-backed analyze also requires `communications:analyze`
+* Direct-text `POST /api/v1/communications/analyze` remains distinct and does not require `communications:read`
+* `GET /api/v1/connector-accounts/{id}/messages` lists recent messages as provider-neutral metadata
+* `POST /api/v1/connector-accounts/{id}/messages/analyze` analyzes one selected provider message
+* Ownership-first access: unknown and cross-user accounts are indistinguishable `404`
+* Usable accounts must be owned, `ACTIVE`, and `mail.read`-capable
+* Confirmed permanent OAuth refresh failure persists exact-owned `ACTIVE → REAUTH_REQUIRED`
+* Raw mailbox body is not persisted by this flow
+* Optional persisted analysis provenance: `connector_account_id` and provider `message_id`
+* No automatic `WorkflowAction`, reply, or send
+* Locally live-validated with real Entra OIDC, real Gmail and Microsoft Graph delegated mailboxes, local PostgreSQL, and `MockAIProvider`
+
+Phase 14 does not add mailbox synchronization, search, attachments, bulk analysis, workers, webhooks, or cloud-hosted ACA/ECS mailbox→AI certification. It did not call Foundry or Bedrock.
 
 ### Engineering
 
@@ -230,6 +250,13 @@ Phase 13 does not add automatic replies, mailbox synchronization/webhooks, user-
 * ✅ Phase 13E – Azure Key Vault + AWS Secrets Manager Production Backends
 * ✅ Phase 13F – Disconnect, Reauthorization, Production Hardening & Documentation
 * ✅ Phase 13 – Production Mailbox OAuth
+* ✅ Phase 14A – Read Authorization + Public Contract
+* ✅ Phase 14B – Provider-Neutral Read Connector Factory
+* ✅ Phase 14C – Connected Message → AI Analysis
+* ✅ Phase 14D – Bounded Mailbox Message Listing
+* ✅ Phase 14E – Lifecycle / Privacy / Failure Hardening
+* ✅ Phase 14F – Final Documentation, Observability, Live Validation & Regression
+* ✅ Phase 14 – Connected Mailbox Read and Analysis
 
 ---
 
@@ -275,7 +302,40 @@ CommunicationAnalysisService
 AIProvider
 ```
 
-Controlled local live Gmail and Graph checks stopped at `CommunicationMessage` and did not call Foundry, Bedrock, or PostgreSQL.
+Controlled local live Gmail and Graph checks in Phase 10 stopped at `CommunicationMessage` and did not call Foundry, Bedrock, or PostgreSQL.
+
+Phase 14 adds user-facing connected-mailbox read and selected-message analyze:
+
+```text
+ECI principal
+        ↓
+communications:read
+        ↓
+owned ACTIVE / mail.read connector
+        ↓
+CommunicationConnectorFactory
+        ↓
+lazy delegated AccessTokenProvider
+        ↓
+Gmail / Graph connector
+        ↓
+bounded mailbox listing (opaque cursor)
+
+selected provider message
+        ↓
+CommunicationIngestionService
+        ↓
+CommunicationAnalysisWorkflowService
+        ↓
+CommunicationAnalysisService
+        ↓
+AIProvider
+        ↓
+optional persisted analysis provenance
+(connector_account_id + provider message_id)
+```
+
+`CommunicationConnector` remains the read port. `CommunicationActionExecutor` remains the write port. Analyze does not create a `WorkflowAction` and does not send mail. Local Phase 14 live proof used `MockAIProvider`; it did not call Foundry or Bedrock and did not certify retained ACA/ECS deployments.
 
 Phase 11 adds an approval-gated workflow path. Analyze still does not create or authorize actions:
 
@@ -630,7 +690,14 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 13C – Gmail OAuth Lifecycle      | ✅ Completed   |
 | ↳ Phase 13D – Microsoft Graph OAuth      | ✅ Completed   |
 | ↳ Phase 13E – Key Vault / Secrets Manager| ✅ Completed   |
-| ↳ Phase 13F – Disconnect & Reauthorization | ✅ Completed |
+| ↳ Phase 13F – Disconnect & Reauthorization | ✅ Completed   |
+| Phase 14 – Connected Mailbox Read and Analysis | ✅ Completed   |
+| ↳ Phase 14A – Read Authorization + Contract | ✅ Completed   |
+| ↳ Phase 14B – Read Connector Factory       | ✅ Completed   |
+| ↳ Phase 14C – Connected Message Analyze    | ✅ Completed   |
+| ↳ Phase 14D – Bounded Mailbox Listing      | ✅ Completed   |
+| ↳ Phase 14E – Lifecycle / Privacy Hardening| ✅ Completed   |
+| ↳ Phase 14F – Docs, Observability & Closure| ✅ Completed   |
 
 ---
 
@@ -655,10 +722,10 @@ The current implementation intentionally focuses on architecture and application
 Not yet implemented:
 
 * Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
-* User-facing connector message ingestion / Gmail-Outlook → analyze HTTP
-* Mailbox synchronization, webhooks, and attachments
+* Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
-* Cloud-hosted end-to-end Gmail/Graph OAuth certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, and Secrets Manager validation is recorded; those retained deployments have not been redeployed as a Phase 13 runtime)
+* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, Secrets Manager, and Phase 14 list→analyze validation is recorded; those retained deployments have not been redeployed as a Phase 13/14 runtime)
+* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 live proof used `MockAIProvider`)
 * AWS persistent HTTPS / custom domain (domain and ACM not configured)
 * AWS real-bearer authorized requests (deferred until TLS)
 * Phase 8B temporary IAM policy cleanup if still attached

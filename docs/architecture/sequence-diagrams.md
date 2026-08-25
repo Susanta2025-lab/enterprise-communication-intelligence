@@ -95,11 +95,11 @@ sequenceDiagram
 
 Vendor adapters (fake, Gmail REST, Microsoft Graph REST) implement `CommunicationConnector`. Application code never sees Gmail JSON, MIME, or Graph JSON.
 
-This application path is covered by mocked ingestion-boundary tests. It is **not** a product-facing live-mailbox summary API.
+This application path is covered by mocked ingestion-boundary tests. Phase 14 locally live-validated Gmail and Graph list → selected-message analyze with `MockAIProvider`. That is not a mailbox-sync, search, or cloud-hosted ACA/ECS product API.
 
 ### Controlled live adapter checks (not the application workflow)
 
-Controlled local Gmail and Microsoft Graph verifications stopped at the connector/domain boundary:
+Controlled local Gmail and Microsoft Graph verifications in Phase 10 stopped at the connector/domain boundary:
 
 ```text
 Gmail API / Microsoft Graph REST
@@ -110,9 +110,9 @@ CommunicationMessage
         STOP
 ```
 
-Those live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, or background-sync sequences.
+Those Phase 10 live checks did not call `CommunicationIngestionService`, `CommunicationAnalysisWorkflowService`, `AIProvider` (including Foundry, Bedrock, and `MockAIProvider`), PostgreSQL, or `connector_accounts`. They are not OAuth, send, reply, or background-sync sequences.
 
-The following remain **not implemented** as connector-ingestion or live-adapter flows: background sync, automatic replies, and user-facing connector fetch/analyze HTTP. Mailbox OAuth authorize, callback, disconnect, and reauthorize are a separate lifecycle documented in [`mailbox-oauth.mmd`](../diagrams/mailbox-oauth.mmd). User-approved sending is a separate execute flow documented below. `CommunicationCredentialResolver` remains a below-HTTP boundary that yields `AccessTokenProvider`; OAuth locators use the refreshable store-backed resolver, and legacy locators keep the environment-backed local/dev path.
+The following remain **not implemented** as connector-ingestion or live-adapter flows: background sync, search, attachments, workers, webhooks, and automatic replies. Bounded listing and selected-message analyze HTTP are implemented in Phase 14. Mailbox OAuth authorize, callback, disconnect, and reauthorize are a separate lifecycle documented in [`mailbox-oauth.mmd`](../diagrams/mailbox-oauth.mmd). User-approved sending is a separate execute flow documented below. `CommunicationCredentialResolver` remains a below-HTTP boundary that yields `AccessTokenProvider`; OAuth locators use the refreshable store-backed resolver, and legacy locators keep the environment-backed local/dev path.
 
 ## Identity failure before AI
 

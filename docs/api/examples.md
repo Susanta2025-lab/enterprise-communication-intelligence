@@ -304,3 +304,42 @@ curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/microsoft_graph
 ```
 
 The JSON omits state, PKCE verifier, client secret, and tokens. Live Entra consent is an operator step outside automated tests.
+
+## Bounded mailbox listing (requires OIDC)
+
+`GET /api/v1/connector-accounts/{connector_account_id}/messages` always requires an authenticated principal with `communications:read`. `AUTH_MODE=disabled` returns `401`. Listing returns provider-neutral metadata only. It does not return bodies, tokens, `credential_ref`, or provider pagination URLs.
+
+```bash
+curl -sS "http://localhost:8000/api/v1/connector-accounts/<connector-account-id>/messages?page_size=1" \
+  -H "Authorization: Bearer <access-token-with-communications:read>"
+```
+
+```json
+{
+  "items": [
+    {
+      "provider_message_id": "<opaque-provider-message-id>",
+      "sender": "manager@example.com",
+      "subject": "Project update",
+      "sent_at": "2026-08-24T12:00:00+00:00",
+      "received_at": "2026-08-24T12:00:01+00:00"
+    }
+  ],
+  "next_cursor": "<opaque-cursor-or-null>"
+}
+```
+
+Continue with the opaque `next_cursor` as `cursor`. Do not parse it. Graph `@odata.nextLink` is not returned.
+
+## Selected-message analyze (requires OIDC)
+
+`POST /api/v1/connector-accounts/{connector_account_id}/messages/analyze` always requires an authenticated principal with both `communications:read` and `communications:analyze`. Direct-text `POST /api/v1/communications/analyze` remains a separate route and does not require `communications:read`. Analyze does not create a `WorkflowAction` and does not send mail.
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/<connector-account-id>/messages/analyze \
+  -H "Authorization: Bearer <access-token-with-communications:read-and-analyze>" \
+  -H "Content-Type: application/json" \
+  -d '{"provider_message_id": "<opaque-provider-message-id>"}'
+```
+
+The response reuses `CommunicationAnalysisResponse`. It may include `analysis_id` when authenticated history storage succeeds. It omits raw mailbox bodies, tokens, and `credential_ref`.

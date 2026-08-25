@@ -6,7 +6,7 @@ Mermaid source files for ECI Platform.
 
 | File | Represents |
 |---|---|
-| [`architecture.mmd`](architecture.mmd) | Layered system: HTTP analyze path, connector ingestion below HTTP, and Phase 13 mailbox OAuth / credential-store edges. Phase 11/12 execute sequences remain in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). |
+| [`architecture.mmd`](architecture.mmd) | Layered system: HTTP analyze path, connector ingestion, Phase 14 mailbox list/analyze sequences in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md), and Phase 13 mailbox OAuth / credential-store edges. Phase 11/12 execute sequences remain in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). |
 | [`mailbox-oauth.mmd`](mailbox-oauth.mmd) | Phase 13 mailbox delegated OAuth: authorize/reauthorize/disconnect, credential stores, PostgreSQL advisory coordination, runtime refresh |
 | [`request-flow.mmd`](request-flow.mmd) | Sequence diagram of analyze: validation, identity TX, AI inference, history save, and failure paths including 503-before-AI |
 | [`provider-abstraction.mmd`](provider-abstraction.mmd) | The `AIProvider` interface, `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider`, and the configuration-driven factory |
@@ -23,7 +23,7 @@ Mermaid source files for ECI Platform.
 
 ## Implemented vs. Placeholder
 
-`architecture.mmd`, `request-flow.mmd`, `mailbox-oauth.mmd`, and `provider-abstraction.mmd` describe the analyze, connector, and mailbox-OAuth paths as they exist today. `architecture.mmd` includes the Phase 10 connector path below the HTTP product surface and Phase 13 credential-store edges. It does not depict every workflow execute branch. Phase 11 and Phase 12 sequences live in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). Production mailbox OAuth is implemented; PostgreSQL does not store OAuth tokens. Background workers and automatic replies are not depicted because they are not implemented.
+`architecture.mmd`, `request-flow.mmd`, `mailbox-oauth.mmd`, and `provider-abstraction.mmd` describe the analyze, connector, and mailbox-OAuth paths as they exist today. `architecture.mmd` includes the Phase 10 connector path and Phase 13 credential-store edges. Bounded mailbox listing and selected-message analyze HTTP sequences live in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). It does not depict every workflow execute branch. Phase 11 and Phase 12 sequences live in [`sequence-diagrams.md`](../architecture/sequence-diagrams.md). Production mailbox OAuth is implemented; PostgreSQL does not store OAuth tokens. Background workers and automatic replies are not depicted because they are not implemented.
 
 `deployment-azure.mmd` and `deployment-aws.mmd` describe the Phase 6C hosting paths. Direct Fargate public-IP ingress is verification-only. See [`docs/cloud/deployment.md`](../cloud/deployment.md).
 

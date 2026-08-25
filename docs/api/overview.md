@@ -53,8 +53,8 @@ Client
   → GET/DELETE /api/v1/analyses (communications:analyze)
   → POST/GET /api/v1/workflow-actions (communications:workflow)
   → POST /api/v1/workflow-actions/{id}/execute (communications:send)
-  → GET /api/v1/connector-accounts/{id}/messages (communications:read; served in 14D)
-  → POST /api/v1/connector-accounts/{id}/messages/analyze (communications:read + communications:analyze; served in 14C)
+  → GET /api/v1/connector-accounts/{id}/messages (communications:read)
+  → POST /api/v1/connector-accounts/{id}/messages/analyze (communications:read + communications:analyze)
 ```
 
 Configuration (`app/core/config.py`):
@@ -130,4 +130,4 @@ FastAPI route (app/api/routes/*)
   └── mailbox OAuth services (Gmail/Microsoft connect/callback; disconnect; reauthorize)
 ```
 
-Routes validate the incoming request via Pydantic, resolve a workflow, execution, mailbox-list, mailbox-analyze, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 14D mounts bounded mailbox listing. Phase 14C mounts mailbox-backed analyze. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.
+Routes validate the incoming request via Pydantic, resolve a workflow, execution, mailbox-list, mailbox-analyze, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 14 mounts bounded mailbox listing and mailbox-backed analyze. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

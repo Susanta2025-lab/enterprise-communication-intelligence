@@ -23,6 +23,7 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | Azure Key Vault mailbox credential store | Implemented; live store-validated |
 | AWS Secrets Manager mailbox credential store | Implemented; live store-validated |
 | PostgreSQL advisory-lock credential coordination | Implemented and tested |
+| Connected mailbox list / selected-message analyze | Implemented; locally live-validated with real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider` |
 
 See:
 
@@ -95,4 +96,4 @@ Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI promp
 
 One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
 
-GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`; Azure Database for PostgreSQL and Amazon RDS are not provisioned. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), and [Observability](observability.md).
+GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`; Azure Database for PostgreSQL and Amazon RDS are not provisioned. Phase 14 mailbox listing and selected-message analyze were live-validated on a local ECI runtime; they are not ACA-hosted or ECS-hosted mailbox→AI certification and did not call Foundry or Bedrock. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), and [Observability](observability.md).

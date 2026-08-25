@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ from app.api.dependencies import (
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.core.config import get_settings
+from app.core.exceptions import MailboxOAuthAuthorizationFailedError
 from app.core.security import COMMUNICATIONS_CONNECT_PERMISSION
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.communication_credential_store import CommunicationCredentialRecord
@@ -227,6 +229,125 @@ def test_callback_denial_does_not_exchange(
     assert fake.exchange_calls == 0
     assert "access_denied" not in response.text.lower()
     assert "error_description" not in response.text
+
+
+def test_callback_exchange_failure_is_sanitized_400(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    _clear_settings_env(monkeypatch)
+    _enable_oidc_env(monkeypatch)
+    get_settings.cache_clear()
+    validator = make_test_validator(private_key)
+    service, fake, _unit = _build_service(
+        client=FakeMailboxOAuthClient(
+            exchange_error=MailboxOAuthAuthorizationFailedError(),
+        )
+    )
+    application = create_app()
+    application.dependency_overrides[get_token_validator] = lambda: validator
+    application.dependency_overrides[get_gmail_mailbox_oauth_service] = lambda: service
+    application.dependency_overrides[get_gmail_mailbox_oauth_callback_service] = lambda: service
+    with TestClient(application) as test_client:
+        started = test_client.post(_AUTHORIZE_URL, headers=_connect_header(private_key))
+        assert started.status_code == 200
+        response = test_client.get(
+            _CALLBACK_URL,
+            params={"state": fake.last_state, "code": "AUTH_CODE_SENTINEL_HTTP_FAIL"},
+        )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Mailbox authorization failed."}
+    assert fake.exchange_calls == 1
+    assert "AUTH_CODE_SENTINEL_HTTP_FAIL" not in response.text
+    assert "oauth_error" not in response.text
+    assert "refresh_token" not in response.text
+    assert "id_token" not in response.text
+    assert "error_description" not in response.text
+
+
+def test_callback_id_token_verify_failure_is_sanitized_400(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+    log_events: list[dict],
+) -> None:
+    _clear_settings_env(monkeypatch)
+    _enable_oidc_env(monkeypatch)
+    get_settings.cache_clear()
+    validator = make_test_validator(private_key)
+    email = "callback-mailbox@example.com"
+    subject = "google-sub-callback-verify-001"
+    id_token = "PRIV_CALLBACK_ID_TOKEN_SENTINEL_HHH"
+    code = "AUTH_CODE_SENTINEL_HTTP_VERIFY_FAIL"
+
+    def fetch(_code: str, _verifier: str) -> dict[str, str]:
+        return {
+            "refresh_token": "PRIV_CALLBACK_REFRESH_SENTINEL_III",
+            "id_token": id_token,
+            "access_token": "PRIV_CALLBACK_ACCESS_SENTINEL_JJJ",
+            "scope": (
+                "openid https://www.googleapis.com/auth/gmail.readonly "
+                "https://www.googleapis.com/auth/gmail.send"
+            ),
+        }
+
+    def verify(token: str) -> dict[str, str]:
+        raise ValueError(f"audience mismatch {token} sub={subject} email={email}")
+
+    from app.infrastructure.oauth.google import GoogleMailboxOAuthClient
+
+    oauth_client = GoogleMailboxOAuthClient(
+        client_id="test-client-id.apps.googleusercontent.com",
+        client_secret="PRIV_CALLBACK_CLIENT_SECRET_KKK",
+        redirect_uri="https://eci.example.invalid/api/v1/oauth/callbacks/gmail",
+        token_fetcher=fetch,
+        id_token_verifier=verify,
+    )
+    service, _fake, unit = _build_service(client=oauth_client)
+    application = create_app()
+    application.dependency_overrides[get_token_validator] = lambda: validator
+    application.dependency_overrides[get_gmail_mailbox_oauth_service] = lambda: service
+    application.dependency_overrides[get_gmail_mailbox_oauth_callback_service] = (
+        lambda: service
+    )
+    with TestClient(application) as test_client:
+        started = test_client.post(_AUTHORIZE_URL, headers=_connect_header(private_key))
+        assert started.status_code == 200
+        authorization_url = started.json()["authorization_url"]
+        state = parse_qs(urlparse(authorization_url).query)["state"][0]
+        stored = next(iter(unit.mailbox_authorization_session_store.values()))
+        pkce_verifier = stored.pkce_verifier
+        assert pkce_verifier is not None
+        response = test_client.get(
+            _CALLBACK_URL,
+            params={"state": state, "code": code},
+        )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Mailbox authorization failed."}
+    text = response.text
+    assert id_token not in text
+    assert email not in text
+    assert subject not in text
+    assert code not in text
+    assert "audience mismatch" not in text
+    verify_failed = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_id_token_verify_failed"
+    ]
+    assert len(verify_failed) == 1
+    assert verify_failed[0]["provider"] == "gmail"
+    assert verify_failed[0]["operation"] == "verify_id_token"
+    assert verify_failed[0]["verify_error_class"] == "ValueError"
+    assert verify_failed[0]["subject_present"] is False
+    blob = repr(log_events) + text
+    assert id_token not in blob
+    assert email not in blob
+    assert subject not in blob
+    assert "PRIV_CALLBACK_REFRESH_SENTINEL_III" not in blob
+    assert "PRIV_CALLBACK_ACCESS_SENTINEL_JJJ" not in blob
+    assert "PRIV_CALLBACK_CLIENT_SECRET_KKK" not in blob
+    assert state not in blob
+    assert pkce_verifier not in blob
 
 
 def test_callback_without_oauth_config_is_not_401(

@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeGuard
 from urllib.parse import parse_qs, urlparse
 
 from app.core.exceptions import (
@@ -37,6 +37,20 @@ logger = get_logger(__name__)
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URI = "https://oauth2.googleapis.com/revoke"
+_SAFE_OAUTH_ERRORS = frozenset(
+    {
+        "access_denied",
+        "invalid_client",
+        "invalid_grant",
+        "invalid_request",
+        "invalid_scope",
+        "redirect_uri_mismatch",
+        "server_error",
+        "temporarily_unavailable",
+        "unauthorized_client",
+        "unsupported_grant_type",
+    }
+)
 GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 OPENID_SCOPE = "openid"
@@ -77,6 +91,13 @@ class _GoogleMailboxSecret:
 
     def __repr__(self) -> str:
         return "_GoogleMailboxSecret(schema_version=1)"
+
+
+@dataclass(slots=True)
+class _TokenExchangeDiagnostics:
+    oauth_error: str | None = None
+    refresh_token_present: bool = False
+    id_token_present: bool = False
 
 
 class GoogleMailboxOAuthClient(MailboxOAuthClient):
@@ -164,17 +185,31 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             raise MailboxOAuthAuthorizationFailedError()
         if not code_verifier:
             raise MailboxOAuthAuthorizationFailedError()
+        diagnostics = _TokenExchangeDiagnostics()
         try:
-            token_response = self._fetch_token_response(code, code_verifier)
+            token_response = self._fetch_token_response(code, code_verifier, diagnostics)
+            _record_token_presence(diagnostics, token_response)
             refresh_token = token_response.get("refresh_token")
             id_token_jwt = token_response.get("id_token")
             if not isinstance(refresh_token, str) or not refresh_token:
                 raise MailboxOAuthAuthorizationFailedError()
             if not isinstance(id_token_jwt, str) or not id_token_jwt:
                 raise MailboxOAuthAuthorizationFailedError()
-            claims = self._verify_id_token(id_token_jwt)
+            claims = self._verify_id_token(
+                id_token_jwt,
+                started_at=started_at,
+                diagnostics=diagnostics,
+            )
             subject = claims.get("sub")
-            if not isinstance(subject, str) or not subject.strip():
+            if not _verified_subject_present(subject):
+                _log_id_token_verify_failed(
+                    started_at=started_at,
+                    diagnostics=diagnostics,
+                    verify_error_class="MailboxOAuthAuthorizationFailedError",
+                    subject_present=False,
+                    issuer_present=_verified_claim_present(claims.get("iss")),
+                    audience_present=_verified_claim_present(claims.get("aud")),
+                )
                 raise MailboxOAuthAuthorizationFailedError()
             granted_scopes = _parse_granted_scopes(token_response)
             capabilities = _capabilities_from_scopes(granted_scopes)
@@ -184,11 +219,10 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
                 subject=subject.strip(),
             )
         except MailboxOAuthAuthorizationFailedError:
-            logger.warning(
-                "gmail_oauth_code_exchange_failed",
-                operation="exchange_authorization_code",
-                duration_ms=elapsed_ms(started_at),
-                error_class="MailboxOAuthAuthorizationFailedError",
+            _log_code_exchange_failed(
+                started_at=started_at,
+                error_class_name="MailboxOAuthAuthorizationFailedError",
+                diagnostics=diagnostics,
             )
             raise
         except ServiceUnavailableError:
@@ -208,11 +242,10 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
                     error_class=error_class(exc),
                 )
                 raise ServiceUnavailableError(_UNAVAILABLE) from None
-            logger.warning(
-                "gmail_oauth_code_exchange_failed",
-                operation="exchange_authorization_code",
-                duration_ms=elapsed_ms(started_at),
-                error_class=error_class(exc),
+            _log_code_exchange_failed(
+                started_at=started_at,
+                error_class_name=error_class(exc),
+                diagnostics=diagnostics,
             )
             raise MailboxOAuthAuthorizationFailedError() from None
         logger.info(
@@ -243,7 +276,12 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             autogenerate_code_verifier=False,
         )
 
-    def _fetch_token_response(self, code: str, code_verifier: str) -> Mapping[str, Any]:
+    def _fetch_token_response(
+        self,
+        code: str,
+        code_verifier: str,
+        diagnostics: _TokenExchangeDiagnostics,
+    ) -> Mapping[str, Any]:
         if self._token_fetcher is not None:
             try:
                 fetched = self._token_fetcher(code, code_verifier)
@@ -252,6 +290,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             except ServiceUnavailableError:
                 raise
             except Exception as exc:
+                _record_oauth_error(diagnostics, exc)
                 if _is_transport_failure(exc):
                     raise ServiceUnavailableError(_UNAVAILABLE) from None
                 raise MailboxOAuthAuthorizationFailedError() from None
@@ -265,6 +304,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
         except MailboxOAuthAuthorizationFailedError:
             raise
         except Exception as exc:
+            _record_oauth_error(diagnostics, exc)
             if _is_transport_failure(exc):
                 raise ServiceUnavailableError(_UNAVAILABLE) from None
             raise MailboxOAuthAuthorizationFailedError() from None
@@ -272,39 +312,56 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             raise MailboxOAuthAuthorizationFailedError()
         return fetched
 
-    def _verify_id_token(self, token: str) -> Mapping[str, Any]:
-        if self._id_token_verifier is not None:
-            try:
-                claims = self._id_token_verifier(token)
-            except MailboxOAuthAuthorizationFailedError:
-                raise
-            except ServiceUnavailableError:
-                raise
-            except Exception as exc:
-                if _is_transport_failure(exc):
-                    raise ServiceUnavailableError(_UNAVAILABLE) from None
-                raise MailboxOAuthAuthorizationFailedError() from None
-            if not isinstance(claims, Mapping):
-                raise MailboxOAuthAuthorizationFailedError()
-            return claims
+    def _verify_id_token(
+        self,
+        token: str,
+        *,
+        started_at: float,
+        diagnostics: _TokenExchangeDiagnostics,
+    ) -> Mapping[str, Any]:
         try:
-            from google.auth.transport.requests import Request
-            from google.oauth2 import id_token
-
-            claims = id_token.verify_oauth2_token(
-                token,
-                Request(),
-                audience=self._client_id,
-            )
+            claims = self._id_token_claims(token)
         except MailboxOAuthAuthorizationFailedError:
+            _log_id_token_verify_failed(
+                started_at=started_at,
+                diagnostics=diagnostics,
+                verify_error_class="MailboxOAuthAuthorizationFailedError",
+                subject_present=False,
+            )
+            raise
+        except ServiceUnavailableError:
             raise
         except Exception as exc:
             if _is_transport_failure(exc):
                 raise ServiceUnavailableError(_UNAVAILABLE) from None
+            _log_id_token_verify_failed(
+                started_at=started_at,
+                diagnostics=diagnostics,
+                verify_error_class=error_class(exc),
+                subject_present=False,
+            )
             raise MailboxOAuthAuthorizationFailedError() from None
         if not isinstance(claims, Mapping):
+            _log_id_token_verify_failed(
+                started_at=started_at,
+                diagnostics=diagnostics,
+                verify_error_class="MailboxOAuthAuthorizationFailedError",
+                subject_present=False,
+            )
             raise MailboxOAuthAuthorizationFailedError()
         return claims
+
+    def _id_token_claims(self, token: str) -> Mapping[str, Any]:
+        if self._id_token_verifier is not None:
+            return self._id_token_verifier(token)
+        from google.auth.transport.requests import Request
+        from google.oauth2 import id_token
+
+        return id_token.verify_oauth2_token(
+            token,
+            Request(),
+            audience=self._client_id,
+        )
 
 
 class GoogleMailboxTokenRevoker(MailboxTokenRevoker):
@@ -589,6 +646,122 @@ def _is_transport_failure(exc: Exception) -> bool:
         "ReadTimeout",
         "ChunkedEncodingError",
     }
+
+
+def _log_code_exchange_failed(
+    *,
+    started_at: float,
+    error_class_name: str,
+    diagnostics: _TokenExchangeDiagnostics,
+) -> None:
+    logger.warning(
+        "gmail_oauth_code_exchange_failed",
+        operation="exchange_authorization_code",
+        provider=_PROVIDER,
+        duration_ms=elapsed_ms(started_at),
+        error_class=error_class_name,
+        oauth_error=diagnostics.oauth_error,
+        refresh_token_present=diagnostics.refresh_token_present,
+        id_token_present=diagnostics.id_token_present,
+    )
+
+
+def _log_id_token_verify_failed(
+    *,
+    started_at: float,
+    diagnostics: _TokenExchangeDiagnostics,
+    verify_error_class: str,
+    subject_present: bool,
+    issuer_present: bool | None = None,
+    audience_present: bool | None = None,
+) -> None:
+    fields: dict[str, object] = {
+        "provider": _PROVIDER,
+        "operation": "verify_id_token",
+        "duration_ms": elapsed_ms(started_at),
+        "verify_error_class": verify_error_class,
+        "subject_present": subject_present,
+        "oauth_error": diagnostics.oauth_error,
+        "refresh_token_present": diagnostics.refresh_token_present,
+        "id_token_present": diagnostics.id_token_present,
+    }
+    if issuer_present is not None:
+        fields["issuer_present"] = issuer_present
+    if audience_present is not None:
+        fields["audience_present"] = audience_present
+    logger.warning("gmail_oauth_id_token_verify_failed", **fields)
+
+
+def _verified_subject_present(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _verified_claim_present(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple)):
+        return any(isinstance(item, str) and item.strip() for item in value)
+    return False
+
+
+def _record_token_presence(
+    diagnostics: _TokenExchangeDiagnostics,
+    token_response: Mapping[str, Any],
+) -> None:
+    diagnostics.refresh_token_present = _nonempty_string_present(
+        token_response.get("refresh_token")
+    )
+    diagnostics.id_token_present = _nonempty_string_present(token_response.get("id_token"))
+    if diagnostics.oauth_error is None:
+        diagnostics.oauth_error = _safe_oauth_error_value(token_response.get("error"))
+
+
+def _record_oauth_error(diagnostics: _TokenExchangeDiagnostics, exc: BaseException) -> None:
+    if diagnostics.oauth_error is None:
+        diagnostics.oauth_error = _oauth_error_from_exception(exc)
+
+
+def _oauth_error_from_exception(exc: BaseException) -> str | None:
+    sanitized = _safe_oauth_error_value(getattr(exc, "error", None))
+    if sanitized is not None:
+        return sanitized
+    for arg in exc.args:
+        if isinstance(arg, Mapping):
+            sanitized = _safe_oauth_error_value(arg.get("error"))
+            if sanitized is not None:
+                return sanitized
+    payload = _json_object_from_response(getattr(exc, "response", None))
+    if payload is None:
+        return None
+    return _safe_oauth_error_value(payload.get("error"))
+
+
+def _json_object_from_response(response: Any) -> Mapping[str, Any] | None:
+    if response is None:
+        return None
+    reader = getattr(response, "json", None)
+    if not callable(reader):
+        return None
+    try:
+        payload = reader()
+    except Exception:
+        return None
+    if isinstance(payload, Mapping):
+        return payload
+    return None
+
+
+def _safe_oauth_error_value(raw: object) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    candidate = raw.strip().lower()
+    if candidate not in _SAFE_OAUTH_ERRORS:
+        return None
+    return candidate
+
+
+def _nonempty_string_present(value: object) -> bool:
+    return isinstance(value, str) and bool(value)
 
 
 def _url_matches_session(

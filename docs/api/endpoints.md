@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of completed Phase 13. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Connector fetch capability currently exists below the HTTP product surface. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize), not message ingestion.
+All HTTP endpoints implemented in the repository as of completed Phase 14. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize). Phase 14 adds bounded mailbox listing and selected-message analyze. There is no mailbox sync, search, attachment, bulk, webhook, or worker route.
 
 ## `GET /health`
 

@@ -380,7 +380,9 @@ def test_adr_024_records_mailbox_read_authorization_boundary() -> None:
     assert "**14B is Completed.**" in phase14
     assert "**14C is Completed.**" in phase14
     assert "**14D is Completed.**" in phase14
-    assert "Phase 14 is **Next**" in phase14
+    assert "**14E is Completed.**" in phase14
+    assert "**14F is Completed.**" in phase14
+    assert "Phase 14 is **Completed**" in phase14
     assert "14D" in phase14
     assert "14E" in phase14
     assert "14F" in phase14

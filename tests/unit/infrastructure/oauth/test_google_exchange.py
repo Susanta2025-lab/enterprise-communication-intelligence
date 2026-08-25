@@ -171,3 +171,160 @@ def test_email_claim_is_not_used_as_identity() -> None:
     assert result.external_account_id == _SUB
     assert result.external_account_id != "mailbox@example.com"
     assert b"mailbox@example.com" not in result.secret_material
+
+
+def _exchange_failure_event(log_events: list[dict]) -> dict:
+    matches = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_code_exchange_failed"
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
+class _TokenRejected(Exception):
+    error = "invalid_grant"
+
+
+def test_google_error_code_is_logged_on_token_rejection(log_events: list[dict]) -> None:
+    client = _client(token_error=_TokenRejected("rejected"))
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _exchange_failure_event(log_events)
+    assert event["oauth_error"] == "invalid_grant"
+    assert event["refresh_token_present"] is False
+    assert event["id_token_present"] is False
+    assert event["provider"] == "gmail"
+    assert event["operation"] == "exchange_authorization_code"
+    assert event["error_class"] == "MailboxOAuthAuthorizationFailedError"
+
+
+def test_google_error_body_code_is_logged_without_tokens(log_events: list[dict]) -> None:
+    client = _client(
+        token_response={
+            "error": "redirect_uri_mismatch",
+            "error_description": "See Google Cloud Console",
+        }
+    )
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _exchange_failure_event(log_events)
+    assert event["oauth_error"] == "redirect_uri_mismatch"
+    assert event["refresh_token_present"] is False
+    assert event["id_token_present"] is False
+    assert "error_description" not in event
+
+
+def test_missing_refresh_token_logs_presence_booleans(log_events: list[dict]) -> None:
+    client = _client(token_response=_success_response(refresh_token=""))
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _exchange_failure_event(log_events)
+    assert event["oauth_error"] is None
+    assert event["refresh_token_present"] is False
+    assert event["id_token_present"] is True
+    assert event["refresh_token_present"] is not _REFRESH
+    assert event["id_token_present"] is not _ID_TOKEN
+
+
+def test_missing_id_token_logs_presence_booleans(log_events: list[dict]) -> None:
+    client = _client(token_response=_success_response(id_token=None))
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _exchange_failure_event(log_events)
+    assert event["oauth_error"] is None
+    assert event["refresh_token_present"] is True
+    assert event["id_token_present"] is False
+
+
+def test_successful_exchange_omits_failure_diagnostics(log_events: list[dict]) -> None:
+    client = _client(token_response=_success_response())
+    result = client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    assert result.external_account_id == _SUB
+    failed = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_code_exchange_failed"
+    ]
+    assert failed == []
+    success = [
+        event for event in log_events if event.get("event") == "gmail_oauth_code_exchanged"
+    ]
+    assert len(success) == 1
+    assert "oauth_error" not in success[0]
+    assert "refresh_token_present" not in success[0]
+    assert "id_token_present" not in success[0]
+    verify_failed = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_id_token_verify_failed"
+    ]
+    assert verify_failed == []
+
+
+def _verify_failure_event(log_events: list[dict]) -> dict:
+    matches = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_id_token_verify_failed"
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
+def test_verification_exception_class_is_logged_safely(log_events: list[dict]) -> None:
+    client = _client(
+        token_response=_success_response(),
+        verify_error=ValueError(f"invalid {_ID_TOKEN} sub={_SUB}"),
+    )
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _verify_failure_event(log_events)
+    assert event["provider"] == "gmail"
+    assert event["operation"] == "verify_id_token"
+    assert event["verify_error_class"] == "ValueError"
+    assert event["subject_present"] is False
+    assert "issuer_present" not in event
+    assert "audience_present" not in event
+    assert event["oauth_error"] is None
+    assert event["refresh_token_present"] is True
+    assert event["id_token_present"] is True
+    assert _ID_TOKEN not in repr(event)
+    assert _SUB not in repr(event)
+    assert "invalid" not in str(event.get("verify_error_class"))
+
+
+def test_missing_sub_records_subject_absent_from_verified_claims(
+    log_events: list[dict],
+) -> None:
+    client = _client(
+        token_response=_success_response(),
+        claims={
+            "iss": "https://accounts.google.com",
+            "aud": _CLIENT_ID,
+            "email": "mailbox@example.com",
+        },
+    )
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _verify_failure_event(log_events)
+    assert event["verify_error_class"] == "MailboxOAuthAuthorizationFailedError"
+    assert event["subject_present"] is False
+    assert event["issuer_present"] is True
+    assert event["audience_present"] is True
+    assert "mailbox@example.com" not in repr(log_events)
+    assert _SUB not in repr(event)
+
+
+def test_blank_sub_records_subject_absent(log_events: list[dict]) -> None:
+    client = _client(
+        token_response=_success_response(),
+        claims={"sub": "   ", "iss": "https://accounts.google.com", "aud": _CLIENT_ID},
+    )
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    event = _verify_failure_event(log_events)
+    assert event["subject_present"] is False
+    assert event["issuer_present"] is True
+    assert event["audience_present"] is True

@@ -22,14 +22,14 @@ Client
 → POST /api/v1/communications/analyze
 ```
 
-Analyze and history require `communications:analyze`. Workflow proposal and approval require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox connect require `communications:connect`. Bounded mailbox listing requires `communications:read`. Mailbox-backed analyze requires both `communications:read` and `communications:analyze`. These are distinct capabilities; `OIDC_REQUIRED_PERMISSION` remains the analyze permission. Least privilege: a workflow-only token cannot send mail, a send-only token cannot create or approve a workflow action, none of those imply mailbox OAuth connect, and none of those imply mailbox content read. `communications:analyze` does not authorize mailbox listing. Direct-text `POST /api/v1/communications/analyze` continues to require only `communications:analyze`. `communications:workflow` does not authorize external sending. The Google and Microsoft callbacks are not ECI login and do not use the API bearer token. Live Entra provisioning of `communications:read` is deferred to controlled Phase 14 live validation.
+Analyze and history require `communications:analyze`. Workflow proposal and approval require `communications:workflow`. Execute requires `communications:send`. Gmail and Microsoft mailbox connect require `communications:connect`. Bounded mailbox listing requires `communications:read`. Mailbox-backed analyze requires both `communications:read` and `communications:analyze`. These are distinct capabilities; `OIDC_REQUIRED_PERMISSION` remains the analyze permission. Least privilege: a workflow-only token cannot send mail, a send-only token cannot create or approve a workflow action, none of those imply mailbox OAuth connect, and none of those imply mailbox content read. `communications:analyze` does not authorize mailbox listing. Direct-text `POST /api/v1/communications/analyze` continues to require only `communications:analyze`. `communications:workflow` does not authorize external sending. The Google and Microsoft callbacks are not ECI login and do not use the API bearer token. Live Entra now exposes five delegated ECI permissions: `communications:read`, `communications:analyze`, `communications:connect`, `communications:workflow`, and `communications:send`. Phase 14 locally live-validated mailbox listing and selected-message analyze with real OIDC tokens that included `communications:read`. That is not ACA/ECS mailbox→AI certification.
 
 Live Entra configuration is conceptual here (placeholders only; no tenant or client IDs):
 
 - Resource application: `eci-api-auth-dev`
 - `requestedAccessTokenVersion=2`
 - Application ID URI: `api://<ECI_API_CLIENT_ID>`
-- One delegated scope: `communications:analyze` (expected token claim: `scp`)
+- Delegated scopes: `communications:read`, `communications:analyze`, `communications:connect`, `communications:workflow`, `communications:send` (expected token claim: `scp`)
 
 Runtime settings are identifiers and metadata, not secrets:
 
@@ -41,7 +41,7 @@ OIDC_JWKS_URL=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
 OIDC_REQUIRED_PERMISSION=communications:analyze
 ```
 
-A DEV-ONLY public client (`eci-auth-verifier-dev`) exists for interactive verification. It has no client secret. It is retained as test identity infrastructure with only the ECI delegated permission `communications:analyze`. It is not a runtime or deploy identity. Do not store Entra client secrets in ECI Settings, the container image, or GitHub.
+A DEV-ONLY public client (`eci-auth-verifier-dev`) exists for interactive verification. It has no client secret. It is retained as test identity infrastructure with the five ECI delegated permissions listed above. It is not a runtime or deploy identity. Do not store Entra client secrets in ECI Settings, the container image, or GitHub.
 
 `APP_ENV=production` requires `AUTH_MODE=oidc`. Health and readiness remain public. Production OpenAPI routes stay disabled.
 
@@ -139,5 +139,7 @@ Mailbox OAuth secrets in production are stored in Azure Key Vault or AWS Secrets
 - Storing or caching Entra tokens or AWS credentials in application code
 - Hard-coded AWS profile selection
 - AWS real-bearer authorized requests over TLS (deferred until domain/ACM)
-- Live Google Cloud project certification of a cloud-hosted ECI deployment. Local Google consent and an explicitly approved Gmail reply were validated; that is not ACA/ECS production certification.
-- Live Microsoft Entra mailbox consent certification of a cloud-hosted ECI deployment. Local Entra consent and an explicitly approved Graph reply were validated; that is not ACA/ECS production certification.
+- Live Google Cloud project certification of a cloud-hosted ECI deployment. Local Google consent, an explicitly approved Gmail reply, and Phase 14 local Gmail list→analyze were validated; that is not ACA/ECS production certification.
+- Live Microsoft Entra mailbox consent certification of a cloud-hosted ECI deployment. Local Entra consent, an explicitly approved Graph reply, and Phase 14 local Graph list→analyze were validated; that is not ACA/ECS production certification.
+- ACA-hosted or ECS-hosted Phase 14 mailbox→AI. Phase 14 live proof used local ECI runtime + local PostgreSQL + `MockAIProvider`.
+- Foundry or Bedrock live inference on the connected-mailbox analyze path.

@@ -131,7 +131,7 @@ Expired authorization sessions remain bounded by TTL. `MailboxAuthorizationSessi
 - Microsoft consent can outlive ECI's stored credential until removed in Microsoft/Entra controls.
 - Confirmed `invalid_grant` during execute yields HTTP 200 with workflow `FAILED` and account `REAUTH_REQUIRED`, not HTTP 503.
 - Phase 14E reuses the same owned `ACTIVE → REAUTH_REQUIRED` persistence on mailbox list and mailbox-backed analyze after confirmed permanent refresh failure. `credential_ref` and `granted_capabilities` are preserved. Transient refresh/store failure and mailbox HTTP 401/403 after a valid token do not mutate lifecycle.
-- User-facing Gmail/Outlook → analyze HTTP ingestion is still not a Phase 13 capability.
+- User-facing Gmail/Outlook → analyze HTTP is a Phase 14 capability (bounded listing and selected-message analyze). Analyze does not create a `WorkflowAction` and does not send mail. Successful Phase 14 live list→analyze left the owned connector `ACTIVE`; confirmed permanent refresh failure remains the only automatic `ACTIVE → REAUTH_REQUIRED` mutation on that path.
 
 ## Live validation
 

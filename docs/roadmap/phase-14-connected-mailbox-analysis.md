@@ -31,7 +31,14 @@ automatic replies
 
 ## Status
 
-Phase 14 is **Next**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed. 14D is Completed. 14E is Completed.** Remaining slice is 14F.
+Phase 14 is **Completed**. Architecture is reconciled. **14A is Completed. 14B is Completed. 14C is Completed. 14D is Completed. 14E is Completed. 14F is Completed.**
+
+- **14A is Completed:** `communications:read`, public list/analyze contract, mailbox-read error types, ADR-024.
+- **14B is Completed:** provider-neutral `CommunicationConnectorFactory`, Gmail/Graph routing, lazy access tokens, read-side DI independent of `communications:send`.
+- **14C is Completed:** mounted mailbox-backed analyze for an owned ACTIVE/read-capable account; direct-text analyze unchanged.
+- **14D is Completed:** bounded mailbox listing through `GET /api/v1/connector-accounts/{id}/messages`, opaque cursor, Graph `nextLink` not exposed.
+- **14E is Completed:** confirmed permanent OAuth refresh failure persists exact-owned `ACTIVE → REAUTH_REQUIRED` on list and analyze; transient failures and mailbox HTTP 401/403 do not mutate lifecycle; privacy sentinels stay out of responses and logs.
+- **14F is Completed:** privacy-safe Gmail ID-token verification diagnostics retained as production observability; live Entra `communications:read` provisioning; local-runtime Gmail and Microsoft Graph bounded list → selected-message analyze with `MockAIProvider`; README/docs audit; full offline regression. That proof is not ACA-hosted or ECS-hosted Phase 14 mailbox→AI certification, and it did not call Foundry or Bedrock.
 
 Phase 13 remains **Completed**, including a controlled local live Gmail disconnect → exact-account reauthorization (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`). That proof is not cloud-hosted ACA/ECS certification.
 
@@ -54,7 +61,7 @@ Recommended HTTP authorization:
 
 Neither permission implies the other. `communications:connect` does not authorize mailbox listing or analyze. Direct-text `POST /api/v1/communications/analyze` continues to require `communications:analyze` only.
 
-Phase 14A implements the code, test, and documentation foundation for `communications:read`. Live identity-provider scope provisioning is deferred until controlled Phase 14 live validation. Do not modify live Entra configuration in 14A–14E. **14A is Completed.**
+Phase 14A implements the code, test, and documentation foundation for `communications:read`. Live identity-provider scope provisioning was deferred until controlled Phase 14 live validation (14F). Do not modify live Entra configuration in 14A–14E. **14A is Completed.**
 
 ## Public API shape
 
@@ -127,9 +134,9 @@ No Alembic revision is required. Existing `analyses.connector_account_id` and `a
 
 ## Documentation policy
 
-The final Phase 14 documentation slice (14F) **must** inspect and update every relevant README whose current-state description changed, including the root `README.md`.
+The final Phase 14 documentation slice (14F) inspected and updated every relevant README whose current-state description changed, including the root `README.md`.
 
-Do not skip README updates. Historical Azure/AWS runbooks in `deployment/azure/` and `deployment/aws/` remain historical and must not claim cloud-hosted Phase 14 certification of the retained ACA/ECS deployments.
+Historical Azure/AWS runbooks in `deployment/azure/` and `deployment/aws/` remain historical and must not claim cloud-hosted Phase 14 certification of the retained ACA/ECS deployments.
 
 ## Planned slices
 
@@ -207,23 +214,37 @@ Implementation surface: shared `persist_mailbox_reauthorization_required` on lis
 
 Migration: none.
 
-Docs: 14E lifecycle/privacy notes in API, application-layer, sequence, and ADR-023/024 consequences. Root README sweep remains 14F.
+Docs: 14E lifecycle/privacy notes in API, application-layer, sequence, and ADR-023/024 consequences. Root README sweep was completed in 14F.
 
 Live validation: no.
 
 Exit: owned unusable accounts do not leak cross-user existence; confirmed permanent refresh blocks further mailbox I/O until explicit reauthorization; tokens and bodies stay out of responses and logs.
 
-### 14F — Live Validation + Documentation + Regression
+### 14F — Final Documentation, Observability, Live Validation & Regression
 
-Objective: controlled live proof, README/docs audit, full offline regression.
+**14F is Completed.**
 
-Implementation surface: Phase 14 roadmap completion, API/architecture/cloud docs, ADR if the public read/analysis boundary is recorded as ADR-024, **all relevant README files including root README**.
+Objective: retain production-safe Gmail OAuth observability from live investigation, complete controlled local-runtime live proof, reconcile current-state documentation, and close Phase 14 with full offline regression.
+
+Implementation surface:
+
+- Privacy-safe Gmail ID-token verification diagnostics in `GoogleMailboxOAuthClient`. Verification remains `google.oauth2.id_token.verify_oauth2_token(token, Request(), audience=client_id)` (signature, issuer, audience, expiry). `sub` remains required from verified claims and must still match the bound connector identity on reauthorization. Failure logs record `provider=gmail`, `operation=verify_id_token`, `verify_error_class` (exception class name only), `subject_present`, and `issuer_present` / `audience_present` only from already-verified claims, plus allowlisted token-exchange presence flags (`oauth_error`, `refresh_token_present`, `id_token_present`). Token, claim, and credential values are not logged. The public callback remains `400 {"detail":"Mailbox authorization failed."}`.
+- Live Entra provisioning of `communications:read` alongside the previous four ECI delegated permissions. The verifier was updated to all five scopes. Fresh real ECI OIDC tokens were used.
+- Local-runtime Gmail and Microsoft Graph exact-account reauthorization, bounded `GET .../messages`, selected-message `POST .../messages/analyze` with `MockAIProvider`, and provenance checks. No Foundry or Bedrock inference. No send/reply. No `WorkflowAction`.
+- README/docs audit including root `README.md`. Historical Azure/AWS runbooks remain historical.
 
 Migration: none.
 
 Docs: current-phase docs plus README audit. Deployment runbooks stay historical.
 
-Live validation: yes, after implementation, as a separate controlled operator step. Prefer real owned mailbox + `MockAIProvider` for Gmail and Microsoft, then an optional separate AI-provider proof. No send. Live IdP `communications:read` scope provisioning belongs here if that proof uses real OIDC.
+Live validation: completed as a controlled local-runtime operator step. Recorded sanitized evidence:
+
+- `communications:read` provisioned in live Entra; previous four ECI scope identifiers preserved; verifier updated to all five scopes; fresh real ECI OIDC tokens used
+- Gmail exact-account reauthorization succeeded; same connector and external identity preserved; bounded GET messages passed; optional one-page continuation passed where exercised; selected-message analyze passed with `MockAIProvider`; provenance verified; no raw body persistence; no `WorkflowAction` / send; connector remained `ACTIVE`
+- Microsoft Graph exact-account reauthorization succeeded; same connector and identity preserved; bounded GET messages with `page_size=1` passed; one continuation passed; raw `@odata.nextLink` not exposed; selected-message analyze passed with `MockAIProvider`; provenance verified; no raw body persistence; no `WorkflowAction` / send; connector remained `ACTIVE`
+- Local ECI runtime + local PostgreSQL. Not ACA-hosted or ECS-hosted Phase 14 mailbox→AI certification. Not Foundry or Bedrock live inference.
+
+Mailbox addresses, message ids, sender, subject, body, tokens, external identity values, and credential locators are not recorded.
 
 Exit: docs match implemented behavior; no cloud-hosted Phase 14 certification claim; `pip check`, `ruff`, and pytest pass.
 
@@ -233,11 +254,11 @@ Exit: docs match implemented behavior; no cloud-hosted Phase 14 certification cl
 - Background sync, webhooks, local mirror, scheduled polling
 - Automatic replies, workflow proposal/approval/execute as part of this phase
 - Streaming AI, frontend/mobile UI
-- New cloud resources, managed PostgreSQL, live Entra changes before 14F
+- New cloud resources, managed PostgreSQL, ACA/ECS Phase 14 mailbox→AI certification, Foundry/Bedrock live inference for this flow
 - Alembic schema changes
 
 ## Cloud implications
 
 Repository architecture needs no new Azure or AWS resources. Existing PostgreSQL, Key Vault / Secrets Manager permissions, and OAuth redirects remain the runtime baseline. Image update only.
 
-Cloud-hosted certification of retained ACA/ECS deployments is not a Phase 14 architecture requirement and must not be claimed by historical runbooks.
+Phase 14F validated local ECI runtime + real Entra OIDC + real Gmail delegated mailbox + real Microsoft Graph delegated mailbox + local PostgreSQL + `MockAIProvider`. It did not certify ACA-hosted or ECS-hosted Phase 14 mailbox→AI, and it did not call Foundry or Bedrock. Historical runbooks must not claim that certification.
