@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     azure_key_vault_url: str | None = None
     aws_secrets_manager_region: str | None = None
     aws_secrets_manager_namespace: str = _DEFAULT_AWS_SECRETS_NAMESPACE
+    cors_allowed_origins: str = ""
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -405,6 +406,30 @@ class Settings(BaseSettings):
             raise ValueError("AWS_SECRETS_MANAGER_NAMESPACE is invalid.")
         return value
 
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def normalize_cors_allowed_origins(cls, value: object) -> object:
+        """Treat blank CORS allowlists as empty. Keep a comma-separated string."""
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, list | tuple):
+            return ",".join(str(part).strip() for part in value if str(part).strip())
+        raise ValueError("CORS_ALLOWED_ORIGINS must be a comma-separated origin list.")
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_allowed_origins(cls, value: str) -> str:
+        """Require explicit http(s) origins. Never allow a wildcard."""
+        origins = _parse_cors_allowed_origins(value)
+        return ",".join(origins)
+
+    @property
+    def cors_allow_origins(self) -> tuple[str, ...]:
+        """Return the parsed CORS origin allowlist."""
+        return _parse_cors_allowed_origins(self.cors_allowed_origins)
+
     @model_validator(mode="after")
     def validate_gmail_oauth_settings_together(self) -> Self:
         """Require Gmail OAuth fields together when any one is provided.
@@ -606,6 +631,37 @@ class Settings(BaseSettings):
         if scheme != _PRODUCTION_DATABASE_SCHEME:
             raise ValueError("DATABASE_URL must use postgresql+psycopg when APP_ENV=production.")
         return self
+
+
+def _parse_cors_allowed_origins(value: str) -> tuple[str, ...]:
+    """Parse a comma-separated CORS origin allowlist. Empty means backend-only."""
+    if not value.strip():
+        return ()
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for origin in (part.strip() for part in value.split(",")):
+        if not origin:
+            continue
+        if origin == "*":
+            raise ValueError("CORS_ALLOWED_ORIGINS must not include a wildcard.")
+        parsed = urlparse(origin)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError("CORS_ALLOWED_ORIGINS must contain absolute http(s) origins.")
+        canonical = f"{parsed.scheme}://{parsed.netloc}"
+        if canonical == "*" or parsed.netloc == "*":
+            raise ValueError("CORS_ALLOWED_ORIGINS must not include a wildcard.")
+        if canonical not in seen:
+            seen.add(canonical)
+            normalized.append(canonical)
+    return tuple(normalized)
 
 
 @lru_cache

@@ -39,6 +39,7 @@ _SETTINGS_ENV_VARS = (
     "AZURE_KEY_VAULT_URL",
     "AWS_SECRETS_MANAGER_REGION",
     "AWS_SECRETS_MANAGER_NAMESPACE",
+    "CORS_ALLOWED_ORIGINS",
 )
 
 
@@ -87,6 +88,8 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.aws_secrets_manager_region is None
     assert settings.aws_secrets_manager_namespace == "eci/mailbox-oauth"
     assert settings.durable_oauth_store_is_configured is False
+    assert settings.cors_allowed_origins == ""
+    assert settings.cors_allow_origins == ()
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -928,3 +931,61 @@ def test_production_oauth_with_azure_store_is_allowed(
     settings = Settings(_env_file=None)
     assert settings.durable_oauth_store_is_configured is True
     assert settings.gmail_oauth_is_configured is True
+
+
+def test_cors_allowed_origins_default_is_empty(clear_settings_env: None) -> None:
+    """An unset CORS allowlist keeps the API backend-only."""
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins == ""
+    assert settings.cors_allow_origins == ()
+
+
+def test_cors_allowed_origins_parses_comma_separated_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173, https://eci.example.invalid",
+    )
+    settings = Settings(_env_file=None)
+    assert settings.cors_allow_origins == (
+        "http://localhost:5173",
+        "https://eci.example.invalid",
+    )
+
+
+def test_cors_allowed_origins_blank_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "  ")
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins == ""
+    assert settings.cors_allow_origins == ()
+
+
+def test_cors_allowed_origins_rejects_wildcard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "*")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_cors_allowed_origins_rejects_wildcard_in_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,*")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_cors_allowed_origins_rejects_malformed_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "localhost:5173")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_cors_allowed_origins_rejects_origin_with_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173/app")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

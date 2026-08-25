@@ -18,6 +18,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 12 – Production Communication Execution](phase-12-production-communication-execution.md)
 - [Phase 13 – Production Mailbox OAuth](phase-13-mailbox-delegated-oauth.md)
 - [Phase 14 – Connected Mailbox Read and Analysis](phase-14-connected-mailbox-analysis.md)
+- [Phase 15 – Browser Frontend](phase-15-frontend.md)
 
 ## Status
 
@@ -37,6 +38,7 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 12 – Production Communication Execution | Completed |
 | Phase 13 – Production Mailbox OAuth | Completed |
 | Phase 14 – Connected Mailbox Read and Analysis | Completed |
+| Phase 15 – Browser Frontend | In progress (15A completed; 15B next) |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
@@ -51,3 +53,5 @@ Phase 12A — Execution Target, Routing & Executability Foundation is completed.
 Phase 13A — OAuth Domain, Authorization Session & Security Foundation is completed. Phase 13B — Credential Store + Refreshable Access-Token Foundation is completed. Phase 13C — Google OAuth / Gmail Credential Lifecycle is completed (live Google consent and an explicitly approved Gmail reply validated locally). Phase 13D — Microsoft Entra OAuth / Graph Credential Lifecycle is completed (live Entra consent and an explicitly approved Graph reply validated locally). Phase 13E — Azure Key Vault + AWS Secrets Manager production backends is completed (PostgreSQL advisory-lock coordination; live Azure Key Vault and AWS Secrets Manager store validation). AWS Secrets Manager `get()`/`delete()` treat secrets scheduled for deletion as absent after `DescribeSecret` confirms `DeletedDate`; required IAM includes `secretsmanager:DescribeSecret` on `eci/mailbox-oauth/*` and does not include `ListSecrets`. Phase 13F — Disconnect/Reauthorization, Production Hardening, Documentation & Regression is completed. After 13F, a controlled local live Gmail disconnect → exact-account reauthorization was validated (same connector row `eaae1e04-89a9-4c90-a2c1-f9036438de25`; capabilities restored to `mail.read` and `mail.send`). That is not cloud-hosted ACA/ECS OAuth certification. Phase 13 overall is completed. Details: [Phase 13](phase-13-mailbox-delegated-oauth.md).
 
 Phase 14A — Read Authorization + Public Contract is completed. Phase 14B — Provider-Neutral Read Connector Factory is completed. Phase 14C — Connected Message → AI Analysis is completed. Phase 14D — Bounded Mailbox Message Listing is completed. Phase 14E — Lifecycle / Privacy / Failure Hardening is completed. Phase 14F — Final Documentation, Observability, Live Validation & Regression is completed: privacy-safe Gmail ID-token verification diagnostics retained as production observability (`verify_error_class` and verified-claim presence flags only; validation not weakened); live Entra `communications:read` provisioned with the previous four ECI scopes preserved; local-runtime Gmail and Microsoft Graph bounded list → selected-message analyze with `MockAIProvider`; connectors remained `ACTIVE` after normal successful access; no automatic workflow/send; README audit and full offline regression. That is not ACA-hosted or ECS-hosted Phase 14 mailbox→AI certification and did not call Foundry or Bedrock. Phase 14 overall is completed. Details: [Phase 14](phase-14-connected-mailbox-analysis.md).
+
+Phase 15A — Frontend Foundation + Browser Authentication is completed: same-repository React + TypeScript + Vite SPA, MSAL public-client login, lazy ECI bearer tokens, `GET /api/v1/analyses?limit=1` smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser authentication remain deferred operator steps. Phase 15B — Connector Dashboard + OAuth UX is next. Details: [Phase 15](phase-15-frontend.md).

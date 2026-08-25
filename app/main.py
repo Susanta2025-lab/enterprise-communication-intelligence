@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.middleware import RequestTelemetryMiddleware
@@ -23,7 +24,7 @@ from app.application.exceptions import (
     WorkflowActionNotExecutableError,
     WorkflowActionNotFoundError,
 )
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.exceptions import (
     ECIPlatformError,
     MailboxOAuthAuthorizationFailedError,
@@ -232,9 +233,27 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content={"detail": exc.message})
 
     application.add_middleware(RequestTelemetryMiddleware)
+    _configure_cors(application, settings)
     application.include_router(health.liveness_router)
     application.include_router(create_api_router())
     return application
+
+
+def _configure_cors(application: FastAPI, settings: Settings) -> None:
+    """Allow only configured browser origins to call the API.
+
+    An empty allowlist keeps the API backend-only. Credentials are never
+    enabled; ECI remains a bearer-token API.
+    """
+    if not settings.cors_allow_origins:
+        return
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_allow_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    )
 
 
 app = create_app()
