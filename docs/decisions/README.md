@@ -41,6 +41,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md) | Mailbox Credential Lifecycle, Disconnect and Reauthorization | Accepted |
 | [ADR-024](ADR-024-connected-mailbox-read-and-analysis-authorization-boundary.md) | Connected Mailbox Read and Analysis Authorization Boundary | Accepted |
 | [ADR-025](ADR-025-browser-frontend-and-authentication-architecture.md) | Browser Frontend and Authentication Architecture | Accepted |
+| [ADR-026](ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) | Cloud-hosted browser SPA topology and multi-cloud HTTPS validation | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -79,6 +80,8 @@ ADR-023 records mailbox credential lifecycle. Local disconnect is the authoritat
 ADR-024 records that `communications:read` is distinct from connect, analyze, workflow, and send. Mailbox listing requires `communications:read`. Mailbox-backed AI analysis requires `communications:read` and `communications:analyze`. Direct-text analyze remains `communications:analyze` only. ECI `communications:read` is not provider `mail.read`. Connector ownership, lifecycle, and grant metadata remain resource-level gates. Public provider message ids and pagination cursors stay opaque. `CommunicationConnector` remains the read boundary and stays separate from `CommunicationActionExecutor`. Live Entra now provisions `communications:read` with the previous four ECI scopes. Phase 14 locally live-validated Gmail and Graph list → selected-message analyze with real OIDC tokens and `MockAIProvider`; that is not ACA/ECS or Foundry/Bedrock certification.
 
 ADR-025 records the Phase 15A browser foundation: same-repository React + TypeScript + Vite SPA, MSAL public client, FastAPI bearer tokens, no BFF or application cookies, mailbox OAuth remaining server-side, TanStack Query for server state, and an explicit CORS origin allowlist. A dedicated Entra SPA registration is preferred for live browser operation and was not created in 15A.
+
+ADR-026 records Phase 16 hosting: environment-specific Vite SPA builds, Azure Static Web Apps → ACA, AWS S3/CloudFront SPA plus CloudFront HTTPS → HTTP ALB → ECS (no custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, crossed Graph+Foundry / Gmail+Bedrock proofs, and no live Send by default. ADR-010's ALB-native TLS still needs ACM/domain; Phase 16 uses CloudFront default certificates instead.
 
 ## Template
 

@@ -47,7 +47,7 @@ A DEV-ONLY public client (`eci-auth-verifier-dev`) exists for interactive verifi
 
 `APP_ENV=production` requires `AUTH_MODE=oidc`. Health and readiness remain public. Production OpenAPI routes stay disabled.
 
-Azure authorized inference was verified over Container Apps HTTPS with a real bearer token. Never send a real application-user bearer token over the AWS HTTP verification path. AWS real-bearer authorized inference is deferred until domain/ACM TLS exists.
+Azure authorized inference was verified over Container Apps HTTPS with a real bearer token. Never send a real application-user bearer token over the AWS HTTP verification path. AWS real-bearer browser traffic waits for the Phase 16 CloudFront HTTPS → HTTP ALB → ECS path (ADR-026), not for a custom domain. That path is not deployed in 16A.
 
 ## Microsoft Foundry
 

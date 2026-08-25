@@ -19,6 +19,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 13 – Production Mailbox OAuth](phase-13-mailbox-delegated-oauth.md)
 - [Phase 14 – Connected Mailbox Read and Analysis](phase-14-connected-mailbox-analysis.md)
 - [Phase 15 – Browser Frontend](phase-15-frontend.md)
+- [Phase 16 – Cloud-Hosted Browser & End-to-End Multi-Cloud Validation](phase-16-cloud-browser-multicloud-validation.md)
 
 ## Status
 
@@ -38,7 +39,8 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 12 – Production Communication Execution | Completed |
 | Phase 13 – Production Mailbox OAuth | Completed |
 | Phase 14 – Connected Mailbox Read and Analysis | Completed |
-| Phase 15 – Browser Frontend | Complete — ready for commit (15A–15G completed) |
+| Phase 15 – Browser Frontend | Completed |
+| Phase 16 – Cloud-Hosted Browser & End-to-End Multi-Cloud Validation | 16A completed; 16B–16F not started |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 
@@ -55,3 +57,5 @@ Phase 13A — OAuth Domain, Authorization Session & Security Foundation is compl
 Phase 14A — Read Authorization + Public Contract is completed. Phase 14B — Provider-Neutral Read Connector Factory is completed. Phase 14C — Connected Message → AI Analysis is completed. Phase 14D — Bounded Mailbox Message Listing is completed. Phase 14E — Lifecycle / Privacy / Failure Hardening is completed. Phase 14F — Final Documentation, Observability, Live Validation & Regression is completed: privacy-safe Gmail ID-token verification diagnostics retained as production observability (`verify_error_class` and verified-claim presence flags only; validation not weakened); live Entra `communications:read` provisioned with the previous four ECI scopes preserved; local-runtime Gmail and Microsoft Graph bounded list → selected-message analyze with `MockAIProvider`; connectors remained `ACTIVE` after normal successful access; no automatic workflow/send; README audit and full offline regression. That is not ACA-hosted or ECS-hosted Phase 14 mailbox→AI certification and did not call Foundry or Bedrock. Phase 14 overall is completed. Details: [Phase 14](phase-14-connected-mailbox-analysis.md).
 
 Phase 15A — Frontend Foundation + Browser Authentication is completed: same-repository React + TypeScript + Vite SPA, MSAL public-client login, lazy ECI bearer tokens, `GET /api/v1/analyses?limit=1` smoke contract, explicit CORS allowlist, ADR-025. Phase 15B — Connector Dashboard + OAuth UX is completed: owned connector-account dashboard, server-side Gmail/Graph connect and reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return. Phase 15C — Mailbox Workspace + Pagination is completed: ACTIVE-connector mailbox workspace, bounded list, opaque cursor Load more, in-memory selection. Phase 15D — Analysis Experience is completed: explicit selected-message analyze in the mailbox workspace, in-memory analysis display, read-only AI draft suggestion. Phase 15E — Workflow Review + Explicit Send UX is completed: explicit WorkflowAction proposal, immutable snapshot review, explicit approve/reject, confirmed send, and EXECUTING uncertainty without retry. Live send was not performed. Phase 15F — Error / Accessibility / Responsive Hardening is completed: context-safe error mapping, ErrorBoundary, dialog focus, keyboard/responsive hardening, and axe-backed tests. Phase 15G — Live Browser Validation + Documentation + Phase Closure is completed: real MSAL browser authentication, all five ECI delegated permissions, Gmail and Microsoft Graph bounded live list/analyze/propose/approve with `MockAIProvider`, exact-account reauthorization recovery for both providers, stop before Send/execute, frontend CI job, documentation reconciliation, and full offline regression. That is local Vite + local FastAPI + local PostgreSQL; it is not ACA/ECS-hosted browser certification and did not call Foundry or Bedrock on the mailbox analyze path. Details: [Phase 15](phase-15-frontend.md).
+
+Phase 16A — Cloud Runtime / Deployment Readiness is completed: authenticated read-only Azure and AWS inventory, ADR-026 topology freeze (Azure Static Web Apps → ACA; AWS S3/CloudFront SPA and CloudFront → HTTP ALB → ECS without a custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, configuration and cost/authorization gates. No cloud resources were created or mutated. 16B–16F are not started. Details: [Phase 16](phase-16-cloud-browser-multicloud-validation.md).

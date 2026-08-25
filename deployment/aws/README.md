@@ -4,6 +4,25 @@ Operator runbook for deploying the already verified ECI Docker image to Amazon E
 
 **Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. ECR, cluster, service, both task-definition revisions, IAM roles, security group, and log group are retained. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
 
+## Phase 16A verified current state (read-only)
+
+Authenticated inventory on 2026-08-25 (profile `eci-dev`, `eu-south-2`). No create/update/delete. Some list APIs (`rds:Describe*`, `s3:ListAllMyBuckets`, `cloudfront:ListDistributions`, ELB describe) are denied to `eci-developer`; conclusions below use ECS/IAM evidence plus those denials.
+
+```text
+ECR                         eci-api-dev (dd55327 / stable)
+Cluster                     eci-cluster-dev ACTIVE
+Service                     eci-api-dev desiredCount=0 runningCount=0
+Task definition             eci-api-dev:4 (image dd55327)
+Load balancers on service   none
+SG                          eci-fargate-sg-dev TCP 8000 operator /32
+Task role                   bedrock:InvokeModel only (no Secrets Manager)
+Log group                   /ecs/eci-api-dev (1 day)
+Bedrock profile             eu.anthropic.claude-haiku-4-5-20251001-v1:0 ACTIVE
+RDS / S3 / CloudFront       none found / not inspectable; treat as CREATE LATER
+```
+
+Phase 16 hosting freeze: private S3 + CloudFront SPA; CloudFront HTTPS → HTTP ALB → ECS (no custom domain). ALB has standing cost while retained. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Do not create S3, CloudFront, ALB, or RDS from this runbook unless a later phase explicitly authorizes it.
+
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 AWS hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.

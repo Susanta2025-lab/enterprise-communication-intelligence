@@ -80,7 +80,7 @@ Later credential options:
 1. secret/reference-based PostgreSQL credential
 2. Microsoft Entra-based PostgreSQL authentication where practical
 
-Entra database authentication is not implemented. No Azure PostgreSQL resource exists.
+Entra database authentication is not implemented. Phase 16A inventory confirmed no Azure PostgreSQL resource exists. Phase 16B may create Flexible Server under an explicit cost/authorization gate. Sequential validation must avoid leaving Azure PG and RDS both standing indefinitely. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 ## Future AWS path (conceptual)
 
@@ -97,7 +97,7 @@ Later credential options:
 1. secret-managed DB credential
 2. RDS IAM database authentication where operationally appropriate
 
-IAM database authentication is not implemented. No RDS instance exists.
+IAM database authentication is not implemented. Phase 16A could not call `rds:Describe*` as `eci-developer`; the ECS task has no `DATABASE_URL`. Treat RDS as absent and required later (16D) under an explicit cost/authorization gate.
 
 ## DATABASE_URL and secrets
 

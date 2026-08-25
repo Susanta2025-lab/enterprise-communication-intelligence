@@ -61,7 +61,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Azure Container Apps with user-assigned Managed Identity and Microsoft Foundry
 * Amazon ECS on Fargate with an ECS Task Role and Amazon Bedrock
 * Azure Container Apps managed HTTPS (`allowInsecure=false`, operator `/32`)
-* AWS ALB architecture verified then removed (domain/ACM required before HTTPS)
+* AWS ALB architecture verified then removed; Phase 16A freezes CloudFront HTTPS → HTTP ALB → ECS without a custom domain (not created yet)
 * No cloud credentials baked into the application image
 
 ### Authentication
@@ -282,6 +282,7 @@ Phase 15 does not deploy the SPA to ACA/ECS/AWS, add sync/search/attachments/wor
 * ✅ Phase 15E – Workflow Review + Explicit Send UX
 * ✅ Phase 15F – Error / Accessibility / Responsive Hardening
 * ✅ Phase 15G – Live Browser Validation + Documentation
+* ✅ Phase 16A – Cloud Runtime / Deployment Readiness
 
 ---
 
@@ -746,6 +747,8 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 15E – Workflow + Explicit Send UX  | ✅ Completed   |
 | ↳ Phase 15F – Accessibility / Responsive | ✅ Completed   |
 | ↳ Phase 15G – Live Browser Validation    | ✅ Completed   |
+| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A completed; 16B–16F not started |
+| ↳ Phase 16A – Cloud Runtime / Deployment Readiness | ✅ Completed   |
 
 ---
 
@@ -769,20 +772,20 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven, not cloud-provisioned)
+* Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven; Phase 16A confirmed none exist; 16B/16D create sequentially under authorization)
 * Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
-* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, Secrets Manager, and Phase 14 list→analyze validation is recorded; those retained deployments have not been redeployed as a Phase 13/14 runtime)
+* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, Secrets Manager, and Phase 14 list→analyze validation is recorded; those retained deployments have not been redeployed as a Phase 13/14/16 runtime)
 * Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`)
-* Phase 15 browser SPA deployed to ACA/ECS/AWS or cloud-hosted browser-flow certification
+* Phase 15 browser SPA deployed to Azure Static Web Apps / AWS CloudFront (frozen in Phase 16A / ADR-026; not created)
 * Local in-memory credential store may require exact-account reauthorization after a FastAPI process restart even when the connector row remains `ACTIVE`; durable Key Vault / Secrets Manager backends remain the production architecture
-* AWS persistent HTTPS / custom domain (domain and ACM not configured)
-* AWS real-bearer authorized requests (deferred until TLS)
+* AWS browser HTTPS API path (CloudFront → HTTP ALB → ECS; no custom domain) not yet created; direct task-IP HTTP remains verification-only
+* AWS real-bearer authorized requests (deferred until the Phase 16D HTTPS path exists)
 * Phase 8B temporary IAM policy cleanup if still attached
 * Distributed tracing, custom metrics, dashboards, alerts, and SLOs
 * Database backup, PITR, HA, and cross-region DR
 
-AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only. Current cloud application environments do not have Phase 9 database configuration.
+AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only. Phase 16A freezes CloudFront default HTTPS in front of a new HTTP ALB as the browser path (no custom domain); that ALB is not created yet. Current cloud application environments do not have Phase 9 database configuration.
 
 ---
 

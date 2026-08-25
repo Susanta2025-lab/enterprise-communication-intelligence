@@ -75,7 +75,7 @@ Verified security controls:
 - ACR admin authentication disabled
 - image pull and Foundry access through the same user-assigned managed identity
 - no Azure client secret, Foundry API key, or registry password
-- external HTTPS ingress restricted to operator `/32`, `allowInsecure=false`
+- external HTTPS ingress restricted to operator `/32`, `allowInsecure=false` (Phase 16A inventory confirmed; 16B must change this for browser/OAuth proof)
 - no Front Door, Application Gateway, or WAF
 - min replicas 0, max replicas 1
 
@@ -113,7 +113,7 @@ Verified security controls:
 - no NAT Gateway
 - Phase 8B verified HTTPS domain/ACM → ALB → Fargate, then tore down the ALB for cost control
 
-Earlier live analysis (Phase 6B/6C, before application-user OIDC) returned `provider=amazon_bedrock`. Health and readiness returned HTTP 200. Phase 8D did not invoke Bedrock: `AUTH_MODE=oidc` was live, missing-token analyze returned 401, and a fake unknown-kid JWT returned 401 (JWKS fail-closed). No real bearer token was sent over HTTP. After verification the ECS service was scaled to `desiredCount=0`. Direct task-IP HTTP is verification-only. Never send a real application-user bearer token over that HTTP path. AWS persistent HTTPS requires a custom domain and ACM certificate before an ALB is recreated.
+Earlier live analysis (Phase 6B/6C, before application-user OIDC) returned `provider=amazon_bedrock`. Health and readiness returned HTTP 200. Phase 8D did not invoke Bedrock: `AUTH_MODE=oidc` was live, missing-token analyze returned 401, and a fake unknown-kid JWT returned 401 (JWKS fail-closed). No real bearer token was sent over HTTP. After verification the ECS service was scaled to `desiredCount=0`. Direct task-IP HTTP is verification-only. Never send a real application-user bearer token over that HTTP path. ALB-native HTTPS still requires a custom domain and ACM (ADR-010). Phase 16A freezes a different AWS API path that does **not** need a custom domain: CloudFront default HTTPS → HTTP ALB → ECS. That path is not deployed in 16A. See [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) and [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 Do not publish AWS account ID, role ARNs, VPC IDs, subnet IDs, security-group IDs, ENI IDs, task ARNs, or public IPs.
 

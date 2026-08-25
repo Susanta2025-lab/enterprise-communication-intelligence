@@ -4,6 +4,30 @@ Operator runbook for deploying the already verified ECI Docker image to Azure Co
 
 **Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics and deployed image `eci-api:phase7a-5f4f5f8` (revision `eci-api-dev--0000001`). `eci-api-dev` remains in `rg-eci-deploy-dev` with operator `/32` ingress and min replicas 0. Do not re-run mutating commands unless a later prompt requests it. Never delete `rg-eci-dev`.
 
+## Phase 16A verified current state (read-only)
+
+Authenticated inventory on 2026-08-25. No create/update/delete.
+
+```text
+rg-eci-deploy-dev
+├── ACR                         eciacrdev6c (Basic; eci-api:dd55327 / stable)
+├── UAMI                        eci-ca-identity-dev (AcrPull + Foundry User; no Key Vault role)
+├── LAW                         eci-law-dev
+├── CAE                         eci-ca-env-dev
+├── Container App               eci-api-dev
+│   ├── image                   eciacrdev6c.azurecr.io/eci-api:dd55327
+│   ├── revision                eci-api-dev--0000003 (ScaledToZero)
+│   ├── ingress                 external HTTPS, allowInsecure=false, operator /32
+│   └── scale                   min 0 / max 1
+└── Key Vault                   eci-kv-oauth-dev-susanta (RBAC on)
+
+rg-eci-dev                      Foundry eci-foundry-dev-susanta / eci-project-dev / eci-gpt-54-mini
+Azure PostgreSQL                none
+Azure Static Web Apps           none
+```
+
+Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Do not create SWA or PostgreSQL from this runbook unless a later phase explicitly authorizes it.
+
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 Azure hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
