@@ -8,8 +8,11 @@ import {
   type ListConnectorAccountsQuery,
 } from "./connectorAccounts";
 import {
+  connectorAccountMessageAnalyzePath,
   connectorAccountMessagesPath,
   MAILBOX_UI_PAGE_SIZE,
+  type AnalyzeMailboxMessageQuery,
+  type CommunicationAnalysisResponse,
   type ListMailboxMessagesQuery,
   type MailboxMessageListResponse,
 } from "./mailbox";
@@ -90,6 +93,16 @@ export class EciApiClient {
     return this.requestJson<MailboxMessageListResponse>(
       "GET",
       `${connectorAccountMessagesPath(query.connectorAccountId)}?${params.toString()}`,
+    );
+  }
+
+  async analyzeMailboxMessage(
+    query: AnalyzeMailboxMessageQuery,
+  ): Promise<CommunicationAnalysisResponse> {
+    return this.requestJson<CommunicationAnalysisResponse>(
+      "POST",
+      connectorAccountMessageAnalyzePath(query.connectorAccountId),
+      { provider_message_id: query.providerMessageId },
     );
   }
 

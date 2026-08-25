@@ -13,6 +13,7 @@ import { MailboxHeader } from "../components/mailbox/MailboxHeader";
 import { MailboxLoadingSkeleton } from "../components/mailbox/MailboxLoadingSkeleton";
 import { MailboxUnavailableState } from "../components/mailbox/MailboxUnavailableState";
 import { LoadMoreButton } from "../components/mailbox/LoadMoreButton";
+import { MessageAnalysisSection } from "../components/mailbox/MessageAnalysisSection";
 import { MessageList } from "../components/mailbox/MessageList";
 import { SelectedMessagePanel } from "../components/mailbox/SelectedMessagePanel";
 import { mailboxListErrorMessage, mailboxRetryLabel } from "../components/mailbox/copy";
@@ -20,6 +21,7 @@ import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
 import { ErrorState } from "../components/connectors/ErrorState";
 import { providerLabel } from "../components/connectors/copy";
 import { CONNECTOR_ACCOUNT_QUERY_KEY, useConnectorAccounts } from "../hooks/useConnectorAccounts";
+import { useAnalyzeMailboxMessage } from "../hooks/useAnalyzeMailboxMessage";
 import {
   flattenMailboxItems,
   refreshMailboxMessages,
@@ -35,12 +37,18 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   const { permissions } = useAuth();
   const queryClient = useQueryClient();
   const canRead = hasPermission(permissions, "communications:read");
+  const canAnalyze = hasPermission(permissions, "communications:analyze");
   const connectorsQuery = useConnectorAccounts(apiClient, Boolean(connectorAccountId) && canRead);
   const account = connectorsQuery.data?.items.find((item) => item.id === connectorAccountId);
   const mailboxEnabled = Boolean(connectorAccountId) && canRead && account?.status === "active";
   const mailboxQuery = useMailboxMessages(apiClient, connectorAccountId ?? "", mailboxEnabled);
   const [selected, setSelected] = useState<MailboxMessageListItem | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const analysis = useAnalyzeMailboxMessage(
+    apiClient,
+    connectorAccountId ?? "",
+    selected?.provider_message_id ?? null,
+  );
 
   const items = useMemo(
     () => flattenMailboxItems(mailboxQuery.data?.pages),
@@ -76,7 +84,23 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     if (!connectorAccountId) {
       return;
     }
+    analysis.resetAnalysis();
     await refreshMailboxMessages(queryClient, connectorAccountId);
+  }
+
+  function handleAnalyze(): void {
+    if (!selected || !canAnalyze) {
+      return;
+    }
+    analysis.analyze(selected.provider_message_id);
+  }
+
+  function handleAnalysisRetry(): void {
+    if (analysis.error instanceof EciApiError && analysis.error.status === 404) {
+      void handleRefresh();
+      return;
+    }
+    handleAnalyze();
   }
 
   function handleMailboxRecovery(): void {
@@ -190,8 +214,8 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
       ) : null}
 
       {mailboxQuery.isSuccess || showList ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
-          <div className={selected ? "hidden lg:block" : "block"}>
+        <div className="grid gap-6 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
+          <div className={selected ? "hidden min-w-0 lg:block" : "block min-w-0"}>
             {showEmpty ? <MailboxEmptyState /> : null}
             {showList ? (
               <>
@@ -222,12 +246,23 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
               </>
             ) : null}
           </div>
-          <div className={selected ? "block" : "hidden lg:block"}>
+          <div className={selected ? "block min-w-0" : "hidden min-w-0 lg:block"}>
             <SelectedMessagePanel
               item={selected}
               provider={account.provider}
               onBackToList={() => setSelected(null)}
-            />
+            >
+              {selected ? (
+                <MessageAnalysisSection
+                  canAnalyze={canAnalyze}
+                  pending={analysis.isPending}
+                  result={analysis.result}
+                  error={analysis.error}
+                  onAnalyze={handleAnalyze}
+                  onRetry={handleAnalysisRetry}
+                />
+              ) : null}
+            </SelectedMessagePanel>
           </div>
         </div>
       ) : null}

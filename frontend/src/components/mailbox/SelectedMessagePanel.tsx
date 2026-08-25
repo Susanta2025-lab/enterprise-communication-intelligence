@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { MailboxMessageListItem } from "../../api/mailbox";
 import { formatMailboxTimestamp } from "../../lib/formatTimestamp";
 import { providerLabel } from "../connectors/copy";
@@ -7,9 +9,15 @@ type SelectedMessagePanelProps = {
   item: MailboxMessageListItem | null;
   provider: string;
   onBackToList?: () => void;
+  children?: ReactNode;
 };
 
-export function SelectedMessagePanel({ item, provider, onBackToList }: SelectedMessagePanelProps) {
+export function SelectedMessagePanel({
+  item,
+  provider,
+  onBackToList,
+  children,
+}: SelectedMessagePanelProps) {
   if (!item) {
     return (
       <aside className="rounded-lg border border-slate-200 bg-white p-5" aria-label="Selected message">
@@ -60,9 +68,7 @@ export function SelectedMessagePanel({ item, provider, onBackToList }: SelectedM
           </div>
         ) : null}
       </dl>
-      <p className="mt-6 text-sm text-slate-600">
-        AI analysis will be available in the next product slice.
-      </p>
+      {children}
     </aside>
   );
 }

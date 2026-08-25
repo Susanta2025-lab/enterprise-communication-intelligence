@@ -16,12 +16,13 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A, 15B, and 15C are Completed.** Phase 15D is next.
+Phase 15 is **In progress**. **15A, 15B, 15C, and 15D are Completed.** Phase 15E is next.
 
 - **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
 - **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
 - **15C is Completed:** connected-mailbox workspace for ACTIVE Gmail and Microsoft Outlook connectors, bounded first-page load (`page_size=10`), opaque cursor Load more, in-memory message selection, lifecycle/error recovery UX. No AI analysis, raw body/detail, or workflow/send. Live mailbox provider calls were not performed.
-- Later slices remain deferred: analysis/workflow/send UI, and final documentation/live validation.
+- **15D is Completed:** explicit selected-message analyze in the mailbox workspace, `communications:analyze` permission-aware UX, in-memory analysis display (summary, priority, category, action items, read-only AI draft suggestion), re-analyze, and safe error/retry handling. No WorkflowAction, send, raw body/detail, or analysis history page. Live Foundry/Bedrock inference was not performed.
+- Later slices remain deferred: workflow review and explicit send UX, and final documentation/live validation.
 
 Phase 14 remains **Completed**.
 
@@ -154,9 +155,41 @@ Frontend `scp` checks remain UX only. FastAPI remains authoritative.
 - Live provider OAuth or Entra SPA provisioning
 - Database migration
 
+## 15D — Analysis Experience
+
+Explicit selected-message AI analysis inside the existing mailbox workspace.
+
+```text
+ECI browser principal
+→ ACTIVE mailbox workspace
+→ select one message (no analyze)
+→ Analyze message (communications:read + communications:analyze)
+→ POST /api/v1/connector-accounts/{id}/messages/analyze
+→ display summary, priority, category, action items, read-only AI draft suggestion
+```
+
+Analyze is user-triggered. Opening a mailbox, selecting a row, loading more, or refreshing the list does not analyze. The SPA consumes the existing Phase 14 analyze contract unchanged: JSON body `{ "provider_message_id": "<opaque>" }`. The response reuses `CommunicationAnalysisResponse`. Direct-text `POST /api/v1/communications/analyze` is not used.
+
+Analysis uses TanStack `useMutation` with `retry: false`. One Analyze activation produces one POST. Re-analyze is a second explicit request. While re-analysis is pending, the previous successful result remains visible. A failed re-analysis keeps that previous result and shows a non-destructive error.
+
+Displayed analysis is browser-memory state for the current selection. Changing the selected message clears it. Manual mailbox refresh also clears it, even when the same message remains, so a prior result is not shown as current. Results are not written to localStorage, IndexedDB, or the URL. `provider_message_id` and `analysis_id` stay internal. `analysis_id` is retained in memory for Phase 15E. Raw message bodies are not requested or rendered.
+
+The AI draft is labelled **AI draft suggestion** and **Not approved or sent**. It is read-only. Phase 15D does not create a `WorkflowAction`, approve, reject, execute, or send.
+
+Frontend `scp` checks remain UX only. A signed-in user with `communications:read` but without `communications:analyze` can still browse and select messages; Analyze is disabled with an explanation. FastAPI remains authoritative. Analyze 409 invalidates the connector-account query and moves the workspace toward reconnect UX without retrying analyze. Transient 503 allows a manual Retry and does not invent `REAUTH_REQUIRED`.
+
+### Out of scope for 15D
+
+- WorkflowAction proposal, approval, rejection, execute, or send
+- Editable draft intended for send
+- Raw message body/detail, analysis history page, or delete-analysis UI
+- Mailbox-wide, bulk, automatic, or background analysis
+- Live Foundry/Bedrock inference or Entra SPA provisioning
+- Database migration
+
 ## Planned later slices
 
-Later Phase 15 slices add product UX on this foundation. They must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
+Phase 15E adds workflow review and explicit send UX on this analysis result. Later slices must not collapse ECI login, Gmail mailbox OAuth, and Microsoft mailbox OAuth into one browser flow.
 
 ## Cloud implications
 

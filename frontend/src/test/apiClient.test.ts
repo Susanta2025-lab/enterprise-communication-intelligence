@@ -8,7 +8,11 @@ import {
   MICROSOFT_GRAPH_AUTHORIZE_PATH,
   PROTECTED_ANALYSES_SMOKE_PATH,
 } from "../api/errors";
-import { connectorAccountMessagesPath, MAILBOX_UI_PAGE_SIZE } from "../api/mailbox";
+import {
+  connectorAccountMessageAnalyzePath,
+  connectorAccountMessagesPath,
+  MAILBOX_UI_PAGE_SIZE,
+} from "../api/mailbox";
 import { InteractionRequiredError } from "../auth/tokenProvider";
 import { TEST_TOKEN } from "./fixtures";
 
@@ -244,6 +248,92 @@ describe("mailbox list API client", () => {
       expect(apiError.status).toBe(status);
       expect(apiError.kind).toBe(kind);
       expect(apiError.message).not.toContain(OPAQUE_CURSOR);
+      expect(apiError.message).not.toContain(PROVIDER_MESSAGE_ID);
+    }
+  });
+});
+
+describe("mailbox analyze API client", () => {
+  function mailboxClient(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
+    return new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+      createRequestId: () => REQUEST_ID,
+    });
+  }
+
+  const analysisBody = {
+    analysis: {
+      summary: { text: "The sender requested a quarterly review." },
+      priority: { level: "high" },
+      category: "request",
+      action_items: [{ description: "Prepare the review packet" }],
+      draft_reply: { body: "Thank you. I will follow up shortly." },
+    },
+    provider: "mock",
+    analysis_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  };
+
+  it("posts provider_message_id once with a lazy bearer token", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(200, analysisBody));
+    const client = mailboxClient(fetchImpl);
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    await expect(
+      client.analyzeMailboxMessage({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+      }),
+    ).resolves.toEqual(analysisBody);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.pathname).toBe(connectorAccountMessageAnalyzePath(MAILBOX_ACCOUNT_ID));
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          "X-Request-ID": REQUEST_ID,
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ provider_message_id: PROVIDER_MESSAGE_ID }),
+      }),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(TEST_TOKEN);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(PROVIDER_MESSAGE_ID);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(analysisBody.analysis.summary.text);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(analysisBody.analysis.draft_reply.body);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(analysisBody.analysis_id);
+    log.mockRestore();
+  });
+
+  it.each([
+    [400, "bad_request"],
+    [401, "unauthorized"],
+    [403, "forbidden"],
+    [404, "not_found"],
+    [409, "conflict"],
+    [422, "validation"],
+    [503, "unavailable"],
+    [500, "http_error"],
+  ] as const)("normalizes analyze HTTP %s", async (status, kind) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(status, { detail: PROVIDER_MESSAGE_ID }),
+    );
+    const client = mailboxClient(fetchImpl);
+    try {
+      await client.analyzeMailboxMessage({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+      });
+      throw new Error("expected EciApiError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EciApiError);
+      const apiError = error as EciApiError;
+      expect(apiError.status).toBe(status);
+      expect(apiError.kind).toBe(kind);
       expect(apiError.message).not.toContain(PROVIDER_MESSAGE_ID);
     }
   });

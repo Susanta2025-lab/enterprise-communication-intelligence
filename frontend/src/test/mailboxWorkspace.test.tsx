@@ -229,8 +229,8 @@ describe("mailbox list rendering", () => {
     expect(within(panel).getByText("Ada Lovelace")).toBeInTheDocument();
     expect(within(panel).getByText("Quarterly review")).toBeInTheDocument();
     expect(within(panel).getByText("Gmail")).toBeInTheDocument();
-    expect(within(panel).getByText(/AI analysis will be available/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze message" })).toBeDisabled();
+    expect(screen.getByText(/communications:analyze permission/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(MESSAGE_ID_ONE);
     expect(messageCalls(fetchImpl).every(([url]) => !String(url).includes("/analyze"))).toBe(true);
     expect(fetchImpl.mock.calls.every(([url]) => !String(url).includes("workflow"))).toBe(true);
