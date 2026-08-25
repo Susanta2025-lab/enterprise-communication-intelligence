@@ -283,6 +283,7 @@ Phase 15 does not deploy the SPA to ACA/ECS/AWS, add sync/search/attachments/wor
 * ✅ Phase 15F – Error / Accessibility / Responsive Hardening
 * ✅ Phase 15G – Live Browser Validation + Documentation
 * ✅ Phase 16A – Cloud Runtime / Deployment Readiness
+* ✅ Phase 16B – Azure Full-Stack Browser Deployment
 
 ---
 
@@ -747,8 +748,9 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 15E – Workflow + Explicit Send UX  | ✅ Completed   |
 | ↳ Phase 15F – Accessibility / Responsive | ✅ Completed   |
 | ↳ Phase 15G – Live Browser Validation    | ✅ Completed   |
-| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A completed; 16B–16F not started |
+| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A–16B completed; 16C–16F not started |
 | ↳ Phase 16A – Cloud Runtime / Deployment Readiness | ✅ Completed   |
+| ↳ Phase 16B – Azure Full-Stack Browser Deployment | ✅ Completed   |
 
 ---
 
@@ -772,12 +774,12 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Managed Azure PostgreSQL or Amazon RDS (Phase 9 is CI-proven; Phase 16A confirmed none exist; 16B/16D create sequentially under authorization)
+* Amazon RDS (Phase 9 is CI-proven; Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` exists from Phase 16B; 16D creates RDS under authorization)
 * Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
-* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification of the retained Azure Container App / ECS service (local Google, Microsoft, Key Vault, Secrets Manager, and Phase 14 list→analyze validation is recorded; those retained deployments have not been redeployed as a Phase 13/14/16 runtime)
-* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`)
-* Phase 15 browser SPA deployed to Azure Static Web Apps / AWS CloudFront (frozen in Phase 16A / ADR-026; not created)
+* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification on Azure Container Apps (16B deployed current-master ACA + SWA + PostgreSQL; mailbox OAuth, Foundry inference, and Send were not started)
+* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`; 16B configured Foundry but did not invoke it)
+* Phase 15 browser SPA on AWS CloudFront (Azure Static Web Apps `eci-web-dev` exists from Phase 16B)
 * Local in-memory credential store may require exact-account reauthorization after a FastAPI process restart even when the connector row remains `ACTIVE`; durable Key Vault / Secrets Manager backends remain the production architecture
 * AWS browser HTTPS API path (CloudFront → HTTP ALB → ECS; no custom domain) not yet created; direct task-IP HTTP remains verification-only
 * AWS real-bearer authorized requests (deferred until the Phase 16D HTTPS path exists)

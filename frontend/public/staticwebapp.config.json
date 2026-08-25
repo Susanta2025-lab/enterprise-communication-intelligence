@@ -1,0 +1,19 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "*.css", "*.js", "*.ico", "*.svg", "*.png", "*.woff2"]
+  },
+  "mimeTypes": {
+    ".json": "application/json",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".svg": "image/svg+xml",
+    ".woff2": "font/woff2"
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'"
+  }
+}

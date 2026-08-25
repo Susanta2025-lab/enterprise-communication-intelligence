@@ -108,10 +108,12 @@ Do not introduce Terraform, Bicep, CDK, or CloudFormation in Phase 16. Continue 
 
 ## Consequences
 
-- Azure browser proof can reuse ACA managed HTTPS after ingress is opened beyond operator `/32` and the current image is replaced.
+- Azure browser proof reuses ACA managed HTTPS. 16B opened ingress beyond operator `/32` and replaced the Phase 8 image with current `master` (`eci-api:7518360`).
+- Azure Static Web Apps control-plane location is West US 2. Spain Central is not a SWA region; West Europe refused new SWA customers. Static content is still served from the SWA global edge. Hostname: `https://witty-island-03f5de51e.7.azurestaticapps.net`.
+- Runtime UAMI requires **Key Vault Secrets Officer** (not Secrets User) because the credential store calls get, set, and delete.
 - AWS browser proof requires new CloudFront, S3, and ALB resources; ALB has standing cost during 16D/16E.
 - Entra and mailbox OAuth apps gain extra HTTPS redirect/callback URIs; they are not replaced.
-- Key Vault and Secrets Manager become mandatory cloud credential stores; UAMI and ECS task role need later data-plane permissions.
+- Key Vault and Secrets Manager become mandatory cloud credential stores. Azure runtime UAMI has Key Vault Secrets Officer (16B). ECS task role still needs Secrets Manager data-plane permissions in 16D.
 - ADR-010 remains the historical ALB-native TLS decision. This ADR selects CloudFront default HTTPS in front of HTTP ALB so Phase 16 does not wait on a custom domain.
 
 ## Benefits

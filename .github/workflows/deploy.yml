@@ -13,6 +13,10 @@
 # environment, task/execution roles, logging, and port mappings are preserved.
 #
 # Trigger: workflow_dispatch only. No push/PR/tag deployment.
+#
+# Azure database migration remains an operator step (`alembic upgrade head`).
+# ACA secrets and production environment values are operator-managed; this
+# workflow updates the Container App image only on Azure.
 
 name: Deploy
 
@@ -27,6 +31,11 @@ on:
           - azure
           - aws
           - both
+      azure_frontend:
+        description: Also deploy the Azure production SPA to Static Web Apps
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -108,6 +117,62 @@ jobs:
             --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --image "${ACR_IMAGE}:${SHORT_SHA}"
+
+  azure-frontend:
+    name: Azure Static Web Apps
+    if: ${{ (inputs.target == 'azure' || inputs.target == 'both') && inputs.azure_frontend == true }}
+    runs-on: ubuntu-latest
+    environment: azure
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production Vite build
+        env:
+          VITE_ECI_API_BASE_URL: ${{ vars.VITE_ECI_API_BASE_URL }}
+          VITE_ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          VITE_ENTRA_SPA_CLIENT_ID: ${{ vars.VITE_ENTRA_SPA_CLIENT_ID }}
+          VITE_ENTRA_REDIRECT_URI: ${{ vars.VITE_ENTRA_REDIRECT_URI }}
+          VITE_ECI_API_SCOPES: ${{ vars.VITE_ECI_API_SCOPES }}
+        run: npm run build
+
+      - name: Azure OIDC login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Static Web App
+        env:
+          AZURE_STATIC_WEB_APP_NAME: ${{ vars.AZURE_STATIC_WEB_APP_NAME }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          TOKEN="$(az staticwebapp secrets list \
+            --name "${AZURE_STATIC_WEB_APP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query properties.apiKey \
+            --output tsv)"
+          export SWA_CLI_DEPLOYMENT_TOKEN="${TOKEN}"
+          unset TOKEN
+          npx --yes @azure/static-web-apps-cli deploy dist --env production
+          unset SWA_CLI_DEPLOYMENT_TOKEN
 
   aws:
     name: AWS ECR and ECS

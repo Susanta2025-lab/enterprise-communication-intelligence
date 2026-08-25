@@ -80,7 +80,7 @@ Later credential options:
 1. secret/reference-based PostgreSQL credential
 2. Microsoft Entra-based PostgreSQL authentication where practical
 
-Entra database authentication is not implemented. Phase 16A inventory confirmed no Azure PostgreSQL resource exists. Phase 16B may create Flexible Server under an explicit cost/authorization gate. Sequential validation must avoid leaving Azure PG and RDS both standing indefinitely. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
+Entra database authentication is not implemented. Phase 16B created Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta` (PostgreSQL 16, Burstable `Standard_B1ms`, 32 GiB, HA disabled, TLS required, schema head `13a0001`). Sequential validation must still avoid leaving Azure PG and RDS both standing indefinitely. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 ## Future AWS path (conceptual)
 
@@ -165,4 +165,4 @@ CI PostgreSQL is not production backup, HA, or DR proof.
 
 ## Current cloud environments
 
-Azure Container Apps `eci-api-dev` and ECS service `eci-api-dev` still run the Phase 8 image without Phase 9 database configuration. Phase 9D does not deploy and does not mutate Azure, AWS, Entra, or GitHub settings.
+Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). ECS service `eci-api-dev` still has no Phase 9 database configuration (16D).

@@ -130,7 +130,7 @@ flowchart TD
 | Scale | min 0 / max 1 |
 | Final replica state | 0 / ScaledToZero |
 
-Security retained: User-Assigned Managed Identity, Container App secret count 0, ACR admin authentication disabled, operator `/32` ingress.
+Security retained: User-Assigned Managed Identity, ACR admin authentication disabled. Phase 7B used operator `/32` ingress and zero ACA secrets. Phase 16B uses public HTTPS ingress (OIDC access control), ACA secretrefs for `DATABASE_URL` and mailbox OAuth client secrets, and Key Vault Secrets Officer on the runtime UAMI.
 
 One `GET /health` returned HTTP 200 with `X-Request-ID`. Log Analytics retained `http_request_started` and `http_request_completed` with the matching `request_id`, `status_code` 200, and numeric `duration_ms`. `ContainerAppSystemLogs_CL` is available for platform events.
 

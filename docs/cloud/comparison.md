@@ -35,7 +35,7 @@ The same Docker image was verified locally and deployed to both clouds. Direct F
 | AI Platform | Microsoft Foundry | Amazon Bedrock |
 | Model | GPT-5.4-mini deployment | Claude Haiku 4.5 |
 | Runtime scaling | min 0 / max 1 | service scaled to `desiredCount` 0 after verification |
-| Verification ingress | HTTPS + operator `/32` | task public IP:8000 + operator `/32` |
+| Verification ingress | HTTPS public (OIDC; 16B) | task public IP:8000 + operator `/32` |
 | Logging during deployment | Container Apps live logs (diagnostic) | CloudWatch `awslogs` |
 | Retained application logs | Log Analytics `eci-law-dev` (30 days) | CloudWatch Logs `/ecs/eci-api-dev` (1 day) |
 | Platform metrics | Container Apps native metrics | Standard AWS/ECS CPU and memory |
@@ -53,7 +53,7 @@ GitHub Actions CI is automatic and tests-only. Manual `workflow_dispatch` CD dep
 | Concern | Azure | AWS |
 |---|---|---|
 | Application-user auth | Entra JWT over HTTPS | Entra JWT configured; real bearer deferred until TLS |
-| Live ingress | Container Apps HTTPS, operator `/32` | operator `/32` HTTP (verification-only) |
+| Live ingress | Container Apps HTTPS, public (OIDC) | operator `/32` HTTP (verification-only) |
 | Production TLS | ACA managed TLS | domain/ACM deferred |
 | Deploy identity | user-assigned managed identity `eci-github-deploy-dev` | IAM role `eci-github-deploy-dev` |
 | Workload identity | user-assigned managed identity `eci-ca-identity-dev` | Task Role `eci-bedrock-task-role-dev` |
@@ -80,7 +80,7 @@ The persistence implementation is the same on both clouds: PostgreSQL via SQLAlc
 | Concern | Azure | AWS |
 |---|---|---|
 | Production dialect | PostgreSQL | PostgreSQL |
-| Managed database in Phase 9 | not provisioned | not provisioned |
+| Managed database | Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` (16B) | not provisioned (16D) |
 | Preferred future colocated DB | Azure Database for PostgreSQL Flexible Server | Amazon RDS for PostgreSQL |
 | Phase 9 proof | GitHub Actions `postgres:16` | GitHub Actions `postgres:16` |
 

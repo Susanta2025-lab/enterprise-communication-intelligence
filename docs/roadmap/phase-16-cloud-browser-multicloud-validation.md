@@ -22,10 +22,10 @@ Baseline commit (Phase 15 closure): `b1267c440279c9804e27c2d2b747c6c7caf408a2`.
 
 ## Status
 
-Phase 16A is **Completed**. Phases 16B–16F are **Not started**.
+Phase 16A is **Completed**. Phase 16B is **COMPLETE — READY FOR COMMIT**. Phases 16C–16F are **Not started**.
 
 - **16A is Completed:** authenticated read-only Azure and AWS inventory; topology freeze; ADR-026; configuration/cost/authorization matrices; offline regression. No cloud mutation.
-- **16B is Not started:** Azure full-stack browser deployment.
+- **16B is COMPLETE — READY FOR COMMIT:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
 - **16C is Not started:** Azure live mailbox → Microsoft Foundry validation.
 - **16D is Not started:** AWS HTTPS + full-stack browser deployment.
 - **16E is Not started:** AWS live mailbox → Amazon Bedrock validation.
@@ -48,7 +48,7 @@ Azure Static Web Apps
 
 Current ACA HTTPS FQDN (reuse): `eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io`
 
-Future SPA origin: `https://<azure-swa-host>` (generated at SWA create; do not invent it).
+Azure SPA origin (16B): `https://witty-island-03f5de51e.7.azurestaticapps.net`
 
 ### AWS
 
@@ -135,43 +135,43 @@ Inventory, reuse/create matrices, HTTPS topology, environment matrices, ADR-026,
 
 ## 16B — Azure Full-Stack Browser Deployment
 
-**Status: Not started.**
+**Status: COMPLETE — READY FOR COMMIT.**
+
+Baseline commit: `75183601e9e82c55650363456aa8a863fc64d992` (Phase 16A docs; GitHub CI green).
 
 ### Objective
 
 Host the Azure SPA on Static Web Apps and run current `master` on ACA with PostgreSQL, Key Vault, CORS, and OAuth return — reachable by browser and OAuth callbacks over HTTPS.
 
-### Planned cloud mutations (each a separate gate)
+### Result
 
-- ACR push of current image
-- ACA image + environment update
-- ACA ingress change (operator `/32` → public HTTPS; OIDC remains access control)
-- Azure Static Web Apps create
-- Azure Database for PostgreSQL Flexible Server create
-- Key Vault RBAC for UAMI (`Key Vault Secrets User` or equivalent)
-- Entra `eci-web-dev` HTTPS SPA redirect
-- Gmail and Microsoft mailbox HTTPS callbacks on the ACA FQDN
-- `alembic upgrade head` against the new Azure database
+HTTPS Azure SPA → Entra/MSAL (`eci-web-dev`) → ACA HTTPS → Azure PostgreSQL → Key Vault configured (not invoked for mailbox OAuth) → protected `GET /api/v1/analyses?limit=1`. Empty connector dashboard is expected (clean cloud database). No mailbox OAuth consent. No Foundry inference. No Send.
 
-### Authorization gates
+### Deployed resources
 
-Separate `BLOCKED — USER AUTHORIZATION REQUIRED` for SWA create, PostgreSQL create, ACA image/config, ACA ingress, Key Vault RBAC, Entra redirect, and mailbox callback URI adds.
+| Resource | Result |
+|---|---|
+| ACR image | `eciacrdev6c.azurecr.io/eci-api:7518360` (immutable SHA; `stable` not overwritten) |
+| ACA | `eci-api-dev` revision `eci-api-dev--0000004`; min 0 / max 1; HTTPS only; public ingress; OIDC retained |
+| SWA | `eci-web-dev` in `rg-eci-deploy-dev`; Free SKU; control-plane West US 2 (Spain Central is not a SWA region; West Europe rejected new customers) |
+| SWA hostname | `https://witty-island-03f5de51e.7.azurestaticapps.net` |
+| PostgreSQL | `eci-pg-dev-susanta`; version 16; Burstable `Standard_B1ms`; 32 GiB; HA off; Spain Central; TLS `require_secure_transport=on` |
+| Alembic | existing chain to head `13a0001`; no new revision |
+| Key Vault RBAC | runtime UAMI `eci-ca-identity-dev`: **Key Vault Secrets Officer** (get/set/delete required; Secrets User is read-only) |
+| Credential store | `CREDENTIAL_STORE_BACKEND=azure_key_vault` |
+| CORS / OAuth return | SWA origin only |
+| Entra SPA | `eci-web-dev` redirects: `http://localhost:5173` + SWA HTTPS |
+| Mailbox callbacks | ACA HTTPS Gmail and Microsoft Graph URIs registered; localhost preserved; unused in 16B |
 
-### Cost gates
-
-PostgreSQL Flexible Server is **material** (stop/start may still bill storage). SWA is low/usage. ACA already exists (min replicas 0). Foundry is not invoked in 16B.
+Firewall for PostgreSQL is public-access with `/32` rules for ACA outbound and operator migration only. Not `0.0.0.0/0`. Not blanket Allow Azure services.
 
 ### Live validation boundary
 
-Browser MSAL against ACA is in scope. Live mailbox OAuth and Foundry inference wait for 16C. No Send.
+Browser MSAL against ACA passed. Live mailbox OAuth and Foundry inference wait for 16C. No Send.
 
-### Expected tests
+### Cost state after 16B
 
-Offline regression plus operator HTTPS smoke (health/OIDC) after deploy. No live mailbox/AI unless a later 16B prompt explicitly authorizes a narrow check.
-
-### Exit criteria
-
-Azure SPA origin live; ACA serving current image with production Settings names below; PostgreSQL migrated; Key Vault backend selected; CORS and `FRONTEND_OAUTH_RETURN_URL` set to the SWA origin; ingress allows browser and OAuth providers.
+Retained: ACR Basic (standing), ACA Consumption min=0 (usage), LAW (low ingest), Key Vault (low), Foundry (not invoked). New: SWA Free (no standing SKU charge; bandwidth quota), PostgreSQL Flexible Server **material** (compute while running; storage continues if stopped; auto-starts after 7 days stopped). Do not stop/delete for 16C. `rg-eci-dev` unchanged.
 
 ---
 
@@ -342,9 +342,24 @@ Parity notes, cost state recorded, ADR/roadmap/README consistent, no silent bill
 | Entra `eci-web-dev` | SPA redirect `http://localhost:5173` only | REUSE | Add HTTPS redirect | None | |
 | Entra `eci-api-auth-dev` | Five delegated scopes present | REUSE | No new app | None | |
 
-ACA env **names** present: `AI_PROVIDER`, `APP_ENV`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, `AZURE_CLIENT_ID`, `AUTH_MODE`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`, `OIDC_REQUIRED_PERMISSION`.
+ACA env **names** present in 16A: `AI_PROVIDER`, `APP_ENV`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, `AZURE_CLIENT_ID`, `AUTH_MODE`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`, `OIDC_REQUIRED_PERMISSION`.
 
-Missing for Phase 16: `DATABASE_URL`, `CREDENTIAL_STORE_BACKEND`, `AZURE_KEY_VAULT_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_OAUTH_RETURN_URL`, Gmail OAuth, Microsoft mailbox OAuth.
+Missing in 16A: `DATABASE_URL`, `CREDENTIAL_STORE_BACKEND`, `AZURE_KEY_VAULT_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_OAUTH_RETURN_URL`, Gmail OAuth, Microsoft mailbox OAuth.
+
+### After 16B (Azure)
+
+| Resource | 16B state |
+|---|---|
+| ACR `eciacrdev6c` | Added immutable tag `7518360`; historical tags retained |
+| UAMI `eci-ca-identity-dev` | AcrPull + Foundry User + **Key Vault Secrets Officer** |
+| `eci-github-deploy-dev` | Also Website Contributor on SWA `eci-web-dev` |
+| ACA `eci-api-dev` | Image `eci-api:7518360`; revision `eci-api-dev--0000004`; public HTTPS; `allowInsecure=false`; min 0 / max 1 |
+| SWA `eci-web-dev` | Free; West US 2; `https://witty-island-03f5de51e.7.azurestaticapps.net` |
+| PostgreSQL `eci-pg-dev-susanta` | PG 16; `Standard_B1ms`; 32 GiB; HA off; TLS on; schema head `13a0001` |
+| Entra `eci-web-dev` | localhost + SWA HTTPS SPA redirects |
+| Mailbox OAuth apps | ACA HTTPS callbacks registered; unused in 16B |
+
+ACA production Settings names now include the 16A set plus `DATABASE_URL` (secretref), `CREDENTIAL_STORE_BACKEND`, `AZURE_KEY_VAULT_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_OAUTH_RETURN_URL`, and Gmail/Microsoft OAuth (secrets via secretref).
 
 ---
 
@@ -415,13 +430,13 @@ Do not put real secrets in docs or Git.
 | `AZURE_KEY_VAULT_URL` | `https://eci-kv-oauth-dev-susanta.vault.azure.net` | runtime URL |
 | `GMAIL_OAUTH_CLIENT_ID` | existing Google OAuth client | public identifier |
 | `GMAIL_OAUTH_CLIENT_SECRET` | secret reference / ACA secret — never in Git | secret |
-| `GMAIL_OAUTH_REDIRECT_URI` | `https://<aca-host>/api/v1/oauth/callbacks/gmail` | runtime URL |
+| `GMAIL_OAUTH_REDIRECT_URI` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/gmail` | runtime URL |
 | `MICROSOFT_OAUTH_CLIENT_ID` | existing Graph mailbox app | public identifier |
 | `MICROSOFT_OAUTH_CLIENT_SECRET` | secret reference — never in Git | secret |
-| `MICROSOFT_OAUTH_REDIRECT_URI` | `https://<aca-host>/api/v1/oauth/callbacks/microsoft_graph` | runtime URL |
+| `MICROSOFT_OAUTH_REDIRECT_URI` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/microsoft_graph` | runtime URL |
 | `MICROSOFT_OAUTH_TENANT` | existing tenant alias or GUID | public identifier |
-| `CORS_ALLOWED_ORIGINS` | `https://<azure-swa-host>` and optional `http://localhost:5173` | runtime URL |
-| `FRONTEND_OAUTH_RETURN_URL` | `https://<azure-swa-host>` (fixed; never from query) | runtime URL |
+| `CORS_ALLOWED_ORIGINS` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | runtime URL |
+| `FRONTEND_OAUTH_RETURN_URL` | `https://witty-island-03f5de51e.7.azurestaticapps.net` (fixed; never from query) | runtime URL |
 
 Gmail requested scopes (code, not Settings): `openid`, `gmail.readonly`, `gmail.send`.
 
@@ -464,7 +479,7 @@ Same variable names. Same five full scope identifiers against `eci-api-auth-dev`
 | `VITE_ECI_API_BASE_URL` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io` | `https://<aws-api-cloudfront-host>` |
 | `VITE_ENTRA_TENANT_ID` | same tenant | same tenant |
 | `VITE_ENTRA_SPA_CLIENT_ID` | `eci-web-dev` | `eci-web-dev` |
-| `VITE_ENTRA_REDIRECT_URI` | `https://<azure-swa-host>` | `https://<aws-spa-cloudfront-host>` |
+| `VITE_ENTRA_REDIRECT_URI` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | `https://<aws-spa-cloudfront-host>` |
 | `VITE_ECI_API_SCOPES` | `api://<eci-api-client-id>/communications:read,analyze,connect,workflow,send` (full identifiers) | same identifiers |
 
 ---
@@ -473,11 +488,11 @@ Same variable names. Same five full scope identifiers against `eci-api-auth-dev`
 
 | Row | LOCAL | AZURE | AWS |
 |---|---|---|---|
-| MSAL SPA redirect | `http://localhost:5173` | `https://<azure-swa-host>` | `https://<aws-spa-cloudfront-host>` |
-| Gmail provider callback | `http://localhost:8000/api/v1/oauth/callbacks/gmail` | `https://<aca-host>/api/v1/oauth/callbacks/gmail` | `https://<aws-api-cloudfront-host>/api/v1/oauth/callbacks/gmail` |
-| Microsoft mailbox callback | `http://localhost:8000/api/v1/oauth/callbacks/microsoft_graph` | `https://<aca-host>/api/v1/oauth/callbacks/microsoft_graph` | `https://<aws-api-cloudfront-host>/api/v1/oauth/callbacks/microsoft_graph` if that cloud must accept Graph callbacks |
-| `FRONTEND_OAUTH_RETURN_URL` | `http://localhost:5173` | `https://<azure-swa-host>` | `https://<aws-spa-cloudfront-host>` |
-| CORS origin (that cloud’s API) | `http://localhost:5173` | SWA origin + optional localhost | SPA CloudFront origin + optional localhost |
+| MSAL SPA redirect | `http://localhost:5173` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | `https://<aws-spa-cloudfront-host>` |
+| Gmail provider callback | `http://localhost:8000/api/v1/oauth/callbacks/gmail` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/gmail` | `https://<aws-api-cloudfront-host>/api/v1/oauth/callbacks/gmail` |
+| Microsoft mailbox callback | `http://localhost:8000/api/v1/oauth/callbacks/microsoft_graph` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/microsoft_graph` | `https://<aws-api-cloudfront-host>/api/v1/oauth/callbacks/microsoft_graph` if that cloud must accept Graph callbacks |
+| `FRONTEND_OAUTH_RETURN_URL` | `http://localhost:5173` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | `https://<aws-spa-cloudfront-host>` |
+| CORS origin (that cloud’s API) | `http://localhost:5173` | SWA origin only | SPA CloudFront origin + optional localhost |
 
 CORS remains an explicit allowlist, no wildcard, `allow_credentials=false`. Each cloud API should allow **its matching SPA origin** plus localhost if local development is retained — not every deployed SPA origin.
 
@@ -485,11 +500,11 @@ CORS remains an explicit allowlist, no wildcard, `allow_credentials=false`. Each
 
 ## Ingress
 
-### Azure (current → later)
+### Azure (current → 16B)
 
-Current: external HTTPS, `allowInsecure=false`, operator `/32`. That blocks browsers and Google/Microsoft OAuth redirects.
+16A: external HTTPS, `allowInsecure=false`, operator `/32`. That blocked browsers and Google/Microsoft OAuth redirects.
 
-Later 16B: public ACA HTTPS. Application OIDC is the primary access control. Do not mutate in 16A.
+16B: public ACA HTTPS. Application OIDC is the primary access control. `allowInsecure=false`.
 
 ### AWS (current → later)
 
@@ -505,7 +520,8 @@ Later 16D: CloudFront HTTPS → ALB HTTP → ECS. Fargate SG allows ALB. ALB SG 
 |---|---|---|---|
 | Azure UAMI | AcrPull | Present | None |
 | Azure UAMI | Foundry User | Present | None |
-| Azure UAMI | Key Vault secrets data plane | **Missing** | Add Secrets User (or equivalent) in 16B |
+| Azure UAMI | Key Vault secrets data plane | **Key Vault Secrets Officer** (16B) | None — Secrets User cannot set/delete |
+| Azure GitHub deploy UAMI | SWA deploy | Website Contributor on `eci-web-dev` (16B) | None for Azure SPA CD |
 | AWS execution role | ECR pull + awslogs | Present | None |
 | AWS task role | `bedrock:InvokeModel` on Haiku EU profile | Present | None |
 | AWS task role | Secrets Manager on `eci/mailbox-oauth/*`: CreateSecret, GetSecretValue, PutSecretValue, UpdateSecretVersionStage, DescribeSecret, DeleteSecret | **Missing** | Add in 16D; do **not** add `ListSecrets`; add KMS only if the namespace is CMK-encrypted |
@@ -534,20 +550,19 @@ Do not call either in 16A.
 - Advisory locks: required for durable credential mutations (`pg_advisory_xact_lock`).
 - Sequential: Azure proof first, then stop/pause Azure PG before RDS (or reverse) so both are not standing indefinitely.
 
-Database cost gates: both are mandatory for a credible cloud proof; no reusable server exists; cost class potentially material; stop may still bill storage; delete destroys data; later create prompts must stop before create.
+Database cost gates: Azure Flexible Server exists after 16B; RDS remains 16D. Sequential validation still applies so both paid databases are not left standing indefinitely. Stop may still bill storage; delete destroys data.
 
 ---
 
 ## CI/CD plan
 
-Current: `.github/workflows/ci.yml` (automatic tests, including frontend); `.github/workflows/deploy.yml` (`workflow_dispatch` azure/aws/both; backend image only).
+Current: `.github/workflows/ci.yml` (automatic tests, including frontend); `.github/workflows/deploy.yml` (`workflow_dispatch` azure/aws/both; optional `azure_frontend`; backend image plus Azure SPA).
 
-Phase 16 recommendation (implement in 16B/16D, not 16A):
+Phase 16B implemented:
 
 - Keep **manual** `workflow_dispatch`. Do not auto-deploy on push.
-- Extend the existing deploy workflow with optional frontend jobs rather than a second CD product.
-- Backend: build current image, push ACR/ECR, update ACA/ECS, apply env safely, run `alembic upgrade head` once against the new DB (not from every replica startup).
-- Frontend: Azure production Vite build + SWA deploy; AWS production Vite build + S3 sync + CloudFront invalidation.
+- Backend Azure job still builds once, pushes SHA (+ `stable` on CD), updates ACA image only. ACA secrets/env and `alembic upgrade head` remain operator steps.
+- Frontend Azure job: production Vite build from GitHub environment `azure` public `VITE_*` variables, then SWA deploy via Azure OIDC. Use `SWA_CLI_DEPLOYMENT_TOKEN` (never pass the token as a CLI flag). Required GitHub environment variables: `AZURE_STATIC_WEB_APP_NAME`, `VITE_ECI_API_BASE_URL`, `VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ENTRA_REDIRECT_URI`, `VITE_ECI_API_SCOPES`. GitHub deploy UAMI has Website Contributor on `eci-web-dev`.
 
 ---
 
@@ -559,7 +574,7 @@ Phase 16 recommendation (implement in 16B/16D, not 16A):
 
 ## Mailbox OAuth client reuse
 
-Reuse existing development Google and Microsoft mailbox OAuth apps. Later add cloud HTTPS redirect URIs; keep local HTTP callbacks. Do not create new OAuth applications unless a provider refuses additional URIs. No provider mutation in 16A.
+Reuse existing development Google and Microsoft mailbox OAuth apps. Phase 16B added ACA HTTPS redirect URIs and kept local HTTP callbacks. Do not create new OAuth applications unless a provider refuses additional URIs. 16B did not start mailbox OAuth.
 
 ---
 

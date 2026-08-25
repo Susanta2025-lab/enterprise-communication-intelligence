@@ -2,9 +2,35 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics and deployed image `eci-api:phase7a-5f4f5f8` (revision `eci-api-dev--0000001`). `eci-api-dev` remains in `rg-eci-deploy-dev` with operator `/32` ingress and min replicas 0. Do not re-run mutating commands unless a later prompt requests it. Never delete `rg-eci-dev`.
+**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. Phase 16B is the current Azure runtime (image `eci-api:7518360`, revision `eci-api-dev--0000004`, public HTTPS, SWA + PostgreSQL). Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
 
-## Phase 16A verified current state (read-only)
+## Phase 16B verified current state
+
+```text
+rg-eci-deploy-dev
+├── ACR                         eciacrdev6c (includes eci-api:7518360)
+├── UAMI                        eci-ca-identity-dev (AcrPull + Foundry User + Key Vault Secrets Officer)
+├── GitHub UAMI                 eci-github-deploy-dev (AcrPush/Reader + Container Apps Contributor + Website Contributor on SWA)
+├── LAW                         eci-law-dev
+├── CAE                         eci-ca-env-dev
+├── Container App               eci-api-dev
+│   ├── image                   eciacrdev6c.azurecr.io/eci-api:7518360
+│   ├── revision                eci-api-dev--0000004
+│   ├── ingress                 external HTTPS, allowInsecure=false, public (no /32)
+│   └── scale                   min 0 / max 1
+├── Key Vault                   eci-kv-oauth-dev-susanta
+├── SWA                         eci-web-dev (Free, West US 2)
+│                               https://witty-island-03f5de51e.7.azurestaticapps.net
+└── PostgreSQL                  eci-pg-dev-susanta (PG 16, Standard_B1ms, 32 GiB, HA off)
+
+rg-eci-dev                      Foundry unchanged. Do not delete.
+```
+
+16B did not invoke Foundry, did not start mailbox OAuth, and did not Send. Schema head is `13a0001`. Migration remains an operator `alembic upgrade head`. ACA secrets (`database-url`, OAuth client secrets) are not in Git.
+
+GitHub Environment `azure` frontend CD needs public identifier variables only: `AZURE_STATIC_WEB_APP_NAME`, `VITE_ECI_API_BASE_URL`, `VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ENTRA_REDIRECT_URI`, `VITE_ECI_API_SCOPES`. Do not store the SWA deployment token in Git. Rotate it with `az staticwebapp secrets reset-api-key` if it is ever printed.
+
+## Phase 16A verified current state (read-only, historical)
 
 Authenticated inventory on 2026-08-25. No create/update/delete.
 
@@ -26,19 +52,19 @@ Azure PostgreSQL                none
 Azure Static Web Apps           none
 ```
 
-Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Do not create SWA or PostgreSQL from this runbook unless a later phase explicitly authorizes it.
+Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Phase 16B created SWA and PostgreSQL under explicit authorization (see current state above).
 
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 Azure hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
 
-Current ECI application architecture (code and documentation; not a claim that `eci-api-dev` was redeployed):
+Current ECI application architecture (code and documentation; Phase 16B redeployed `eci-api-dev` as current `master` with production OIDC, PostgreSQL, Key Vault backend, and Foundry config — not mailbox OAuth or Foundry inference certification):
 
 - Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP). Analyze is not an anonymous public API.
 - Mailbox delegated OAuth is a separate identity domain from that login (Gmail/Microsoft consent → opaque credential store → `ConnectorAccount.credential_ref`).
 - Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault `eci-kv-oauth-dev-susanta` at the store/factory path.
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
-- Production ACA would use managed identity for Key Vault. The retained Container App image (`eci-api:phase7a-5f4f5f8` / later CD tags recorded elsewhere) has **not** been redeployed or certified as a complete Phase 13 mailbox-OAuth runtime or a Phase 14 mailbox→AI runtime. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`. It did not certify ACA-hosted mailbox→AI and did not call Foundry.
+- Production ACA uses managed identity for Key Vault. Phase 16B runs `eci-api:7518360` on ACA with Key Vault selected; mailbox OAuth and Foundry inference were not started. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
 
 See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 

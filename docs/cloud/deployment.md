@@ -68,14 +68,15 @@ ECI Docker image
 
 Runtime: `AI_PROVIDER=microsoft_foundry`, `APP_ENV=production`, `AUTH_MODE=oidc`.
 
-Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, Log Analytics workspace `eci-law-dev`, current image `eci-api:dd55327`). The earlier `phase6c` and `phase7a-5f4f5f8` tags remain in ACR.
+Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, Log Analytics workspace `eci-law-dev`, SWA `eci-web-dev`, PostgreSQL `eci-pg-dev-susanta`, current image `eci-api:7518360`, revision `eci-api-dev--0000004`). Historical tags `dd55327`, `phase6c`, and `phase7a-5f4f5f8` remain in ACR.
 
 Verified security controls:
 
 - ACR admin authentication disabled
 - image pull and Foundry access through the same user-assigned managed identity
+- Key Vault secret get/set/delete through **Key Vault Secrets Officer** on that UAMI
 - no Azure client secret, Foundry API key, or registry password
-- external HTTPS ingress restricted to operator `/32`, `allowInsecure=false` (Phase 16A inventory confirmed; 16B must change this for browser/OAuth proof)
+- external HTTPS ingress, `allowInsecure=false`, public (OIDC is access control; 16B removed operator `/32`)
 - no Front Door, Application Gateway, or WAF
 - min replicas 0, max replicas 1
 
@@ -173,7 +174,7 @@ AWS environment: `AWS_REGION` (`eu-south-2`), `AWS_ROLE_ARN`, `AWS_ECR_REPOSITOR
 
 GitHub Environments `azure` and `aws` exist with the non-secret identifier variables listed above. Do not store Azure client secrets or AWS access keys in GitHub.
 
-Phase 8D executed Deploy after live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` were configured. Run `dd55327` used `target=both`. GitHub OIDC token exchange succeeded on Azure and AWS. The workflow built once and tagged `dd55327` and `stable`. ACR and ECR received the same digest `sha256:0590bf6f7b2ae5614dd35af0307763cb0303e98948531bab2352258e6773ed70`. Azure currently runs `eci-api:dd55327`. AWS currently uses task definition `eci-api-dev:4`. CD remains `workflow_dispatch` only.
+Phase 8D executed Deploy after live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` were configured. Run `dd55327` used `target=both`. GitHub OIDC token exchange succeeded on Azure and AWS. The workflow built once and tagged `dd55327` and `stable`. ACR and ECR received the same digest `sha256:0590bf6f7b2ae5614dd35af0307763cb0303e98948531bab2352258e6773ed70`. Azure currently runs `eci-api:7518360` (Phase 16B). AWS currently uses task definition `eci-api-dev:4`. CD remains `workflow_dispatch` only. Azure frontend SWA deploy is an optional dispatch input.
 
 Phase 9C verified PostgreSQL on GitHub Actions run `32336909759` (Lint and test success; PostgreSQL integration success; 34 tests; Alembic round-trip to revision `9a0001`). That job does not deploy and does not use a managed cloud database. Phase 9D does not run `deploy.yml`. Current Azure and AWS runtimes still do not have Phase 9 `DATABASE_URL`. Do not deploy the Phase 9 image until a colocated PostgreSQL database exists.
 
@@ -216,7 +217,7 @@ Common:
 - no static cloud credentials baked into the image
 - cloud identity resolved at runtime
 
-Azure: ACR admin disabled; managed-identity pull and Foundry authentication; operator `/32` HTTPS ingress with `allowInsecure=false`.
+Azure: ACR admin disabled; managed-identity pull and Foundry authentication; public HTTPS ingress with `allowInsecure=false` (OIDC is access control).
 
 AWS: dedicated ECI security group; operator `/32` on TCP 8000; no `0.0.0.0/0` inbound on 8000; separate execution and task roles; least-privilege Bedrock `InvokeModel`; no NAT; no standing ALB after Phase 8B teardown.
 
@@ -275,7 +276,7 @@ See [GitHub Actions](#github-actions).
 - AWS persistent HTTPS / custom domain (domain and ACM deferred)
 - automatic (push/tag) cloud deployment
 - Phase 8B temporary IAM policy cleanup (`ECIPhase8BIngressVerificationPolicy`), if still attached — IAM-admin follow-up
-- Azure Database for PostgreSQL / Amazon RDS (not provisioned; see [PostgreSQL persistence](persistence.md))
+- Amazon RDS (not provisioned; see [PostgreSQL persistence](persistence.md))
 - Key Vault / Secrets Manager injection of `DATABASE_URL`
 - Entra or RDS IAM database authentication
 - automatic schema migration from application startup or from every replica
