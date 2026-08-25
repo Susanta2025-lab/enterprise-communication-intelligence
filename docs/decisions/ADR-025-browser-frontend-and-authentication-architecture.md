@@ -50,8 +50,8 @@ Frontend permission helpers may inspect `scp` only for UX. Backend token validat
 ## Consequences
 
 - Local development can run Vite on `http://localhost:5173` against FastAPI on `http://localhost:8000` when CORS origins are configured.
+- Mailbox connect/reconnect UX calls existing server-side authorize endpoints, then returns the browser to a fixed configured frontend URL (`FRONTEND_OAUTH_RETURN_URL`) after FastAPI completes token exchange. Mailbox OAuth credentials and tokens never cross to the SPA. When the return URL is unset, callbacks keep sanitized JSON responses.
 - Live browser sign-in requires an operator-provisioned SPA client ID, redirect URI, and explicit `communications:*` delegated scopes.
-- Mailbox connect/reconnect UX can later call existing server-side authorize endpoints; it must not embed Google or Microsoft OAuth clients in the SPA.
 
 ## Benefits
 

@@ -16,11 +16,11 @@ Mailbox OAuth remains server-side and separate from ECI login.
 
 ## Status
 
-Phase 15 is **In progress**. **15A is Completed.** Phase 15B is next.
+Phase 15 is **In progress**. **15A and 15B are Completed.** Phase 15C is next.
 
 - **15A is Completed:** frontend foundation, MSAL browser authentication, typed API client, protected analyses smoke contract, explicit CORS allowlist, ADR-025. Live Entra SPA registration and real browser sign-in were not performed.
-- **15B — Connector Dashboard + OAuth UX:** not started.
-- Later slices remain deferred: OAuth callback frontend return, mailbox listing UI, analysis/workflow/send UI, and final documentation/live validation.
+- **15B is Completed:** owned connector-account dashboard, Gmail/Microsoft Graph connect and exact-account reauthorize UX, disconnect confirmation, optional `FRONTEND_OAUTH_RETURN_URL` callback return, sanitized OAuth return handling in the SPA. Mailbox OAuth remains server-side. Live provider OAuth and Entra SPA registration were not performed.
+- Later slices remain deferred: mailbox listing UI, analysis/workflow/send UI, and final documentation/live validation.
 
 Phase 14 remains **Completed**.
 
@@ -53,6 +53,7 @@ Empty CORS configuration keeps the API backend-only. Wildcard origins are reject
 2. Set public SPA values (`VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ECI_API_SCOPES`).
 3. From `frontend/`: `npm install`, `npm run dev`.
 4. From the repository root, run FastAPI as usual with `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
+5. Optional mailbox-OAuth return: set `FRONTEND_OAUTH_RETURN_URL=http://localhost:5173` on the API. When unset, callbacks keep the existing sanitized JSON responses.
 
 `VITE_ECI_API_SCOPES` must be the full delegated identifiers using exact permission names:
 
@@ -81,6 +82,37 @@ Live browser authentication requires a dedicated Entra SPA/public-client registr
 - OAuth callback → frontend redirect
 - Analysis, workflow, approve/reject, or send UI
 - Creating or mutating Entra/Azure/AWS resources
+- Database migration
+
+## 15B — Connector Dashboard + OAuth UX
+
+Authenticated SPA dashboard for owned Gmail and Microsoft Graph connector lifecycle.
+
+```text
+ECI browser principal
+→ MSAL ECI bearer token
+→ GET /api/v1/connector-accounts (communications:read)
+→ Connect / Reconnect / Disconnect (communications:connect)
+→ FastAPI mailbox OAuth start
+→ provider consent
+→ FastAPI callback
+→ optional 302 to FRONTEND_OAUTH_RETURN_URL
+→ SPA refreshes owned accounts
+```
+
+`GET /api/v1/connector-accounts` returns a bounded owned collection. The public item includes `id`, `provider`, `status`, `granted_capabilities`, `created_at`, and `updated_at`. It omits `credential_ref`, `external_account_id`, locators, and tokens.
+
+Mailbox OAuth stays server-side. The SPA calls existing authorize/reauthorize endpoints, then navigates to the returned `authorization_url`. PKCE, state, token exchange, and credential persistence do not run in the browser. MSAL remains ECI login only.
+
+`FRONTEND_OAUTH_RETURN_URL` is optional, server-configured, and never taken from callback query input. Success returns `?oauth=success&provider=gmail|microsoft_graph`. Failures return only `denied`, `expired`, `identity_mismatch`, or `failed`. Authorization codes, state, tokens, locators, and raw provider errors are not placed on the Location header. When the setting is unset, callbacks keep the previous sanitized JSON behavior.
+
+Disconnect requires an explicit confirmation dialog. Frontend `scp` checks are UX only; FastAPI remains authoritative.
+
+### Out of scope for 15B
+
+- Mailbox message listing, pagination, selection, or analysis UI
+- Workflow, approve/reject, or send UI
+- Live provider OAuth or Entra SPA provisioning
 - Database migration
 
 ## Planned later slices

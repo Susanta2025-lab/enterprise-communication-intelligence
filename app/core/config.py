@@ -3,7 +3,7 @@
 import re
 from functools import lru_cache
 from typing import Literal, Self
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     aws_secrets_manager_region: str | None = None
     aws_secrets_manager_namespace: str = _DEFAULT_AWS_SECRETS_NAMESPACE
     cors_allowed_origins: str = ""
+    frontend_oauth_return_url: str | None = None
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -425,10 +426,36 @@ class Settings(BaseSettings):
         origins = _parse_cors_allowed_origins(value)
         return ",".join(origins)
 
+    @field_validator("frontend_oauth_return_url", mode="before")
+    @classmethod
+    def normalize_frontend_oauth_return_url(cls, value: object) -> object:
+        """Treat blank frontend OAuth return URLs as unset."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("frontend_oauth_return_url")
+    @classmethod
+    def validate_frontend_oauth_return_url(cls, value: str | None) -> str | None:
+        """Require a fixed absolute http(s) URL. Never accept userinfo or query."""
+        return _parse_frontend_oauth_return_url(value)
+
     @property
     def cors_allow_origins(self) -> tuple[str, ...]:
         """Return the parsed CORS origin allowlist."""
         return _parse_cors_allowed_origins(self.cors_allowed_origins)
+
+    @model_validator(mode="after")
+    def validate_frontend_oauth_return_url_for_environment(self) -> Self:
+        """Production mailbox-return URLs must be https."""
+        value = self.frontend_oauth_return_url
+        if value is None or self.app_env != "production":
+            return self
+        parsed = urlparse(value)
+        if parsed.scheme != "https":
+            raise ValueError("FRONTEND_OAUTH_RETURN_URL must be https when APP_ENV=production.")
+        return self
 
     @model_validator(mode="after")
     def validate_gmail_oauth_settings_together(self) -> Self:
@@ -662,6 +689,33 @@ def _parse_cors_allowed_origins(value: str) -> tuple[str, ...]:
             seen.add(canonical)
             normalized.append(canonical)
     return tuple(normalized)
+
+
+def _parse_frontend_oauth_return_url(value: str | None) -> str | None:
+    """Validate a fixed frontend OAuth return URL. Empty means JSON callbacks."""
+    if value is None:
+        return None
+    parsed = urlparse(value)
+    hostname = (parsed.hostname or "").lower()
+    localhost = hostname in {"localhost", "127.0.0.1", "::1"}
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or not hostname
+        or hostname == "*"
+    ):
+        raise ValueError(
+            "FRONTEND_OAUTH_RETURN_URL must be an absolute http(s) URL without "
+            "userinfo, query, or fragment."
+        )
+    if parsed.scheme == "http" and not localhost:
+        raise ValueError("FRONTEND_OAUTH_RETURN_URL may use http only for localhost.")
+    path = parsed.path if parsed.path else ""
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
 
 @lru_cache

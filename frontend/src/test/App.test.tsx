@@ -14,10 +14,17 @@ function renderApp(options: {
   logout?: () => Promise<void>;
   error?: string | null;
 }) {
-  const fetchImpl =
+    const fetchImpl =
     options.fetchImpl ??
-    vi.fn<typeof fetch>(async () => {
-      return new Response(JSON.stringify({ items: [], limit: 1, offset: 0 }), {
+    vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/v1/analyses")) {
+        return new Response(JSON.stringify({ items: [], limit: 1, offset: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ items: [], limit: 20, offset: 0 }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -64,12 +71,14 @@ describe("authentication shell", () => {
     expect(login).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the authenticated shell and wires sign-out", async () => {
+  it("renders the authenticated shell, loads connectors, and wires sign-out", async () => {
     const user = userEvent.setup();
     const { fetchImpl, logout } = renderApp({ isAuthenticated: true });
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();
+    expect(fetchImpl).toHaveBeenCalled();
+    expect(fetchImpl.mock.calls[0]?.[0]).toEqual(expect.stringContaining("/api/v1/connector-accounts"));
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(logout).toHaveBeenCalledTimes(1);
   });
@@ -91,7 +100,6 @@ describe("protected API status panel", () => {
     const user = userEvent.setup();
     const { fetchImpl } = renderApp({ isAuthenticated: true });
     await user.click(screen.getByRole("button", { name: "Check API connection" }));
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledWith(
       expect.stringContaining(PROTECTED_ANALYSES_SMOKE_PATH),
       expect.objectContaining({

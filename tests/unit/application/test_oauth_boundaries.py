@@ -155,7 +155,9 @@ def test_gmail_and_microsoft_oauth_routes_exist() -> None:
     )
     assert "/connector-accounts/{connector_account_id}/disconnect" in lifecycle
     assert "/connector-accounts/{connector_account_id}/reauthorize" in lifecycle
+    assert '    "/connector-accounts",' in lifecycle or '"/connector-accounts"' in lifecycle
     assert "require_authenticated_communications_connect" in lifecycle
+    assert "require_authenticated_communications_read" in lifecycle
 
 
 def test_future_oauth_contracts_reject_client_supplied_credential_ref() -> None:

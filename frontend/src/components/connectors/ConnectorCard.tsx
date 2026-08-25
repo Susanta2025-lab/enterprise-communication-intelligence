@@ -1,0 +1,70 @@
+import type { ConnectorAccount } from "../../api/connectorAccounts";
+import { Button } from "../ui/button";
+import { CapabilityBadge } from "./CapabilityBadge";
+import { ConnectorStatus } from "./ConnectorStatus";
+import { providerLabel } from "./copy";
+import { PermissionGate } from "./PermissionGate";
+
+type ConnectorCardProps = {
+  account: ConnectorAccount;
+  connectBusy: boolean;
+  onReconnect: (account: ConnectorAccount) => void;
+  onDisconnect: (account: ConnectorAccount) => void;
+};
+
+export function ConnectorCard({
+  account,
+  connectBusy,
+  onReconnect,
+  onDisconnect,
+}: ConnectorCardProps) {
+  const label = providerLabel(account.provider);
+  const capabilities = account.granted_capabilities ?? [];
+  const canReconnect = account.status === "reauth_required" || account.status === "disconnected";
+  const canDisconnect = account.status === "active" || account.status === "reauth_required";
+
+  return (
+    <article className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div>
+        <h3 className="text-base font-semibold text-slate-900">{label}</h3>
+        <ConnectorStatus status={account.status} />
+      </div>
+      {capabilities.length > 0 ? (
+        <ul className="flex flex-wrap gap-2" aria-label={`${label} capabilities`}>
+          {capabilities.map((capability) => (
+            <li key={capability}>
+              <CapabilityBadge capability={capability} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">No mailbox capabilities currently granted.</p>
+      )}
+      <PermissionGate
+        permission="communications:connect"
+        fallback={
+          <p className="text-sm text-slate-600">
+            Connecting or disconnecting a mailbox requires the communications:connect permission.
+          </p>
+        }
+      >
+        <div className="mt-auto flex flex-wrap gap-2">
+          {canReconnect ? (
+            <Button onClick={() => onReconnect(account)} disabled={connectBusy}>
+              Reconnect
+            </Button>
+          ) : null}
+          {canDisconnect ? (
+            <Button
+              className="bg-white text-slate-900 ring-1 ring-slate-300 hover:bg-slate-50"
+              onClick={() => onDisconnect(account)}
+              disabled={connectBusy}
+            >
+              Disconnect
+            </Button>
+          ) : null}
+        </div>
+      </PermissionGate>
+    </article>
+  );
+}

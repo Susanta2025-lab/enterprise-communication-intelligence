@@ -1,5 +1,7 @@
 import { createContext, useContext } from "react";
 
+import type { EciPermission } from "./permissions";
+
 export type AuthSession = {
   isAuthenticated: boolean;
   displayName: string | null;
@@ -7,6 +9,7 @@ export type AuthSession = {
   logout: () => Promise<void>;
   error: string | null;
   interactionInProgress: boolean;
+  permissions: readonly EciPermission[];
 };
 
 export const AuthContext = createContext<AuthSession | null>(null);

@@ -294,6 +294,33 @@ Returned by `GET /api/v1/oauth/callbacks/microsoft_graph` after a successful Mic
 
 The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
 
+## `OwnedConnectorAccountItem` (`app/schemas/connector_accounts.py`)
+
+Returned inside `GET /api/v1/connector-accounts`. Extra fields are forbidden. This is the dashboard contract, not the disconnect response.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | `UUID` | Connector-account id used by lifecycle actions. Not shown as user-facing content in the SPA. |
+| `provider` | `str` | Stored provider (`gmail` or `microsoft_graph`) |
+| `status` | `ConnectorAccountStatus` | `active`, `disconnected`, or `reauth_required` |
+| `granted_capabilities` | `tuple[CommunicationCapability, ...] \| None` | Explicit grants, or `null` when unknown/cleared |
+| `created_at` | `datetime` | Created timestamp |
+| `updated_at` | `datetime` | Updated timestamp |
+
+The item omits `external_account_id`, `credential_ref`, locators, tokens, and provider subject/object IDs.
+
+## `OwnedConnectorAccountListResponse` (`app/schemas/connector_accounts.py`)
+
+Bounded page of owned connector accounts. Extra fields are forbidden.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `items` | `list[OwnedConnectorAccountItem]` | Bounded page, newest first |
+| `limit` | `int` | Page size |
+| `offset` | `int` | Page offset |
+
+Total count is omitted. Default `limit` is 20; maximum is 100.
+
 ## `ConnectorAccountResponse` (`app/schemas/oauth.py`)
 
 Returned by `POST /api/v1/connector-accounts/{connector_account_id}/disconnect`. Extra fields are forbidden.

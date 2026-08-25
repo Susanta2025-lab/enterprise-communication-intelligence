@@ -62,12 +62,14 @@ _SETTINGS_ENV_VARS = (
     "MICROSOFT_OAUTH_CLIENT_SECRET",
     "MICROSOFT_OAUTH_REDIRECT_URI",
     "MICROSOFT_OAUTH_TENANT",
+    "FRONTEND_OAUTH_RETURN_URL",
 )
 
 
 def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in _SETTINGS_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "")
     get_settings.cache_clear()
 
 

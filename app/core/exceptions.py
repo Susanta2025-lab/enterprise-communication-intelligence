@@ -65,6 +65,14 @@ class MailboxOAuthAuthorizationFailedError(ECIPlatformError):
         super().__init__(message)
 
 
+class MailboxOAuthIdentityMismatchError(MailboxOAuthAuthorizationFailedError):
+    """Raised when reauthorization must use the same bound mailbox identity.
+
+    Public JSON remains the parent failed message. Frontend redirect
+    classification may distinguish this case without exposing identity.
+    """
+
+
 class UnsupportedCommunicationCredentialProviderError(ECIPlatformError):
     """Raised when credential resolution is requested for an unsupported provider."""
 

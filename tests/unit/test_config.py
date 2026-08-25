@@ -40,6 +40,7 @@ _SETTINGS_ENV_VARS = (
     "AWS_SECRETS_MANAGER_REGION",
     "AWS_SECRETS_MANAGER_NAMESPACE",
     "CORS_ALLOWED_ORIGINS",
+    "FRONTEND_OAUTH_RETURN_URL",
 )
 
 
@@ -90,6 +91,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.durable_oauth_store_is_configured is False
     assert settings.cors_allowed_origins == ""
     assert settings.cors_allow_origins == ()
+    assert settings.frontend_oauth_return_url is None
 
 
 def test_mailbox_credential_env_vars_are_ignored_by_settings(
@@ -987,5 +989,67 @@ def test_cors_allowed_origins_rejects_origin_with_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173/app")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_frontend_oauth_return_url_default_is_unset(clear_settings_env: None) -> None:
+    settings = Settings(_env_file=None)
+    assert settings.frontend_oauth_return_url is None
+
+
+def test_frontend_oauth_return_url_blank_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "  ")
+    settings = Settings(_env_file=None)
+    assert settings.frontend_oauth_return_url is None
+
+
+def test_frontend_oauth_return_url_accepts_localhost_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "http://localhost:5173")
+    settings = Settings(_env_file=None)
+    assert settings.frontend_oauth_return_url == "http://localhost:5173"
+
+
+def test_frontend_oauth_return_url_accepts_https_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "https://eci.example.invalid/oauth")
+    settings = Settings(_env_file=None)
+    assert settings.frontend_oauth_return_url == "https://eci.example.invalid/oauth"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "localhost:5173",
+        "http://example.com",
+        "https://user:pass@eci.example.invalid",
+        "https://eci.example.invalid?next=1",
+        "https://eci.example.invalid#frag",
+        "javascript:alert(1)",
+        "//evil.example",
+    ],
+)
+def test_frontend_oauth_return_url_rejects_unsafe_values(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", value)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_frontend_oauth_return_url_production_requires_https(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://example.invalid/")
+    monkeypatch.setenv("OIDC_AUDIENCE", "eci-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://example.invalid/.well-known/jwks.json")
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "http://localhost:5173")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)

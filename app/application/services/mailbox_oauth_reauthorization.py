@@ -12,6 +12,7 @@ from uuid import UUID
 from app.application.exceptions import ConnectorAccountConflictError
 from app.core.exceptions import (
     MailboxOAuthAuthorizationFailedError,
+    MailboxOAuthIdentityMismatchError,
     PersistenceError,
     ServiceUnavailableError,
 )
@@ -54,7 +55,7 @@ def load_reauthorization_target(
     if bound.provider != provider:
         raise MailboxOAuthAuthorizationFailedError()
     if bound.external_account_id != external_account_id:
-        raise MailboxOAuthAuthorizationFailedError()
+        raise MailboxOAuthIdentityMismatchError()
     if bound.status not in {
         ConnectorAccountStatus.DISCONNECTED,
         ConnectorAccountStatus.REAUTH_REQUIRED,
@@ -87,7 +88,7 @@ def persist_reauthorized_connector_account(
             if bound.provider != provider:
                 raise MailboxOAuthAuthorizationFailedError()
             if bound.external_account_id != external_account_id:
-                raise MailboxOAuthAuthorizationFailedError()
+                raise MailboxOAuthIdentityMismatchError()
             if bound.status not in {
                 ConnectorAccountStatus.DISCONNECTED,
                 ConnectorAccountStatus.REAUTH_REQUIRED,

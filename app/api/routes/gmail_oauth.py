@@ -3,11 +3,17 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import RedirectResponse
 
 from app.api.dependencies import (
     get_gmail_mailbox_oauth_callback_service,
     get_gmail_mailbox_oauth_service,
     require_authenticated_communications_connect,
+)
+from app.api.oauth_frontend_return import (
+    classify_oauth_callback_failure,
+    is_oauth_callback_failure,
+    maybe_oauth_frontend_redirect,
 )
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.core.security import AuthenticatedPrincipal
@@ -78,9 +84,19 @@ def start_gmail_authorization(
     description=(
         "Google redirect target for Gmail mailbox consent. This endpoint does not "
         "use the ECI bearer token. Ownership comes from the authorization session. "
-        "Authorization codes and tokens are never returned."
+        "Authorization codes and tokens are never returned. When "
+        "FRONTEND_OAUTH_RETURN_URL is configured, a 302 returns the browser to "
+        "that fixed location after server-side completion. The return target is "
+        "never taken from callback query input."
     ),
     responses={
+        200: {
+            "model": GmailAuthorizationCallbackResponse,
+            "description": "Sanitized JSON result when no frontend return URL is configured.",
+        },
+        302: {
+            "description": "Redirect to the configured frontend return URL.",
+        },
         400: {
             "model": ErrorResponse,
             "description": "Mailbox authorization was denied or could not be completed.",
@@ -99,9 +115,22 @@ def complete_gmail_authorization(
     code: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
-) -> GmailAuthorizationCallbackResponse:
+) -> GmailAuthorizationCallbackResponse | RedirectResponse:
     """Consume OAuth state and complete Gmail mailbox credential storage."""
-    result = service.complete_authorization(code=code, state=state, error=error)
+    try:
+        result = service.complete_authorization(code=code, state=state, error=error)
+    except Exception as exc:
+        if is_oauth_callback_failure(exc):
+            redirected = maybe_oauth_frontend_redirect(
+                provider="gmail",
+                oauth=classify_oauth_callback_failure(exc),
+            )
+            if redirected is not None:
+                return redirected
+        raise
+    redirected = maybe_oauth_frontend_redirect(provider="gmail", oauth="success")
+    if redirected is not None:
+        return redirected
     return GmailAuthorizationCallbackResponse(
         provider=result.provider,
         connector_account_id=result.connector_account_id,

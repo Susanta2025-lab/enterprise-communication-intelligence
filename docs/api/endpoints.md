@@ -288,6 +288,27 @@ Unauthorized and forbidden requests do not open an execution unit of work, resol
 
 ---
 
+## `GET /api/v1/connector-accounts`
+
+**Purpose:** Return a bounded page of connector accounts owned by the authenticated ECI user. This is the dashboard collection. It is not mailbox message listing.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/connector-accounts`
+- **Query:** `limit` (default 20, maximum 100) and `offset` (default 0)
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:read`.
+- **Response model:** `OwnedConnectorAccountListResponse` (`items`, `limit`, `offset`)
+- **Item fields:** `id`, `provider`, `status`, `granted_capabilities`, `created_at`, `updated_at`
+- **Not returned:** `credential_ref`, `external_account_id`, locators, tokens, refresh state, or provider subject/object IDs
+- **Status codes:**
+  - `200 OK` — bounded owned page. Callers without an identity mapping receive `{ "items": [], "limit": ..., "offset": ... }`
+  - `401` / `403` — authentication/authorization failure
+  - `422` — `limit` or `offset` outside the allowed bounds
+  - `503` — persistence currently unavailable
+
+Unknown and cross-user accounts are not included. This route does not invent placeholder rows for missing providers.
+
+---
+
 ## `POST /api/v1/connector-accounts/gmail/authorize`
 
 **Purpose:** Start a server-side Gmail mailbox consent session and return the Google authorization URL. This is mailbox OAuth, not ECI login.
@@ -315,13 +336,14 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 - **Path:** `/api/v1/oauth/callbacks/gmail`
 - **Query:** `code`, `state`, and `error` when Google supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
 - **Authentication:** none. This is not an ECI bearer-token route.
-- **Response model:** `GmailAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`)
+- **Response model:** `GmailAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
 - **Status codes:**
-  - `200 OK` — Gmail connector account created, reactivated, or reused
-  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read`
-  - `503` — Gmail OAuth unavailable, persistence failure, or credential-store compensation failure
+  - `200 OK` — Gmail connector account created, reactivated, or reused (JSON; return URL unset)
+  - `302` — redirect to the configured frontend return URL after server-side completion (`FRONTEND_OAUTH_RETURN_URL` set). Query is only `oauth` and `provider`.
+  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read` (JSON when return URL is unset)
+  - `503` — Gmail OAuth unavailable, persistence failure, or credential-store compensation failure (JSON when return URL is unset)
 
-Invalid state does not call Google. Consent denial consumes the session and does not exchange a token. Tokens are never returned. Live Google Cloud setup remains an external operator step; automated tests mock Google.
+Invalid state does not call Google. Consent denial consumes the session and does not exchange a token. Tokens are never returned. The frontend return target is server-configured and is never taken from `return_to` or other callback query input. Live Google Cloud setup remains an external operator step; automated tests mock Google.
 
 ---
 
@@ -352,13 +374,14 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 - **Path:** `/api/v1/oauth/callbacks/microsoft_graph`
 - **Query:** `code`, `state`, and `error` when Microsoft supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
 - **Authentication:** none. This is not an ECI bearer-token route.
-- **Response model:** `MicrosoftAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`)
+- **Response model:** `MicrosoftAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
 - **Status codes:**
-  - `200 OK` — Microsoft Graph connector account created, reactivated, or reused
-  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read`
-  - `503` — Microsoft OAuth unavailable, persistence failure, or credential-store compensation failure
+  - `200 OK` — Microsoft Graph connector account created, reactivated, or reused (JSON; return URL unset)
+  - `302` — redirect to the configured frontend return URL after server-side completion (`FRONTEND_OAUTH_RETURN_URL` set). Query is only `oauth` and `provider`.
+  - `400` — invalid/expired/consumed state, consent denied, missing refresh token, invalid ID token, or missing `mail.read` (JSON when return URL is unset)
+  - `503` — Microsoft OAuth unavailable, persistence failure, or credential-store compensation failure (JSON when return URL is unset)
 
-Invalid state does not call Microsoft. Consent denial consumes the session and does not exchange a token. Tokens are never returned. CONNECT creates or reuses an account by verified `{tid}:{oid}`. REAUTHORIZE attaches a new credential only to the bound account and only when the verified identity matches. Automated tests mock Microsoft.
+Invalid state does not call Microsoft. Consent denial consumes the session and does not exchange a token. Tokens are never returned. CONNECT creates or reuses an account by verified `{tid}:{oid}`. REAUTHORIZE attaches a new credential only to the bound account and only when the verified identity matches. The frontend return target is server-configured and is never taken from callback query input. Automated tests mock Microsoft.
 
 ---
 

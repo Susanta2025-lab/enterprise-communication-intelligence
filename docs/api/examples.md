@@ -262,6 +262,34 @@ curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/gmail/authorize
 
 The JSON omits state, PKCE verifier, client secret, and tokens.
 
+## Owned connector accounts (requires OIDC)
+
+`GET /api/v1/connector-accounts` always requires an authenticated principal with `communications:read`. `AUTH_MODE=disabled` returns `401`. Callers without an identity mapping receive an empty page.
+
+```bash
+curl -sS "http://localhost:8000/api/v1/connector-accounts?limit=20&offset=0" \
+  -H "Authorization: Bearer <access-token-with-communications:read>"
+```
+
+```json
+{
+  "items": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "provider": "gmail",
+      "status": "active",
+      "granted_capabilities": ["mail.read", "mail.send"],
+      "created_at": "2026-08-25T00:00:00+00:00",
+      "updated_at": "2026-08-25T00:00:00+00:00"
+    }
+  ],
+  "limit": 20,
+  "offset": 0
+}
+```
+
+The JSON omits `credential_ref`, `external_account_id`, locators, and tokens.
+
 ## Disconnect (requires OIDC)
 
 ```bash

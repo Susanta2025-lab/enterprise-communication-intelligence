@@ -76,6 +76,7 @@ _SETTINGS_ENV_VARS = (
     "MICROSOFT_OAUTH_CLIENT_SECRET",
     "MICROSOFT_OAUTH_REDIRECT_URI",
     "MICROSOFT_OAUTH_TENANT",
+    "FRONTEND_OAUTH_RETURN_URL",
 )
 _LOCATOR = "oauth-http-disconnect-01"
 _GOOGLE_SUB = "google-oidc-sub-http-001"
@@ -85,6 +86,7 @@ _REFRESH = "REFRESH_TOKEN_SENTINEL_HTTP_DISC"
 def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in _SETTINGS_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("FRONTEND_OAUTH_RETURN_URL", "")
     get_settings.cache_clear()
 
 

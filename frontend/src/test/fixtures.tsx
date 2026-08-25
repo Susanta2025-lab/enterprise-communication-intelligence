@@ -37,6 +37,7 @@ export function createAuthSession(overrides: Partial<AuthSession> = {}): AuthSes
     logout: async () => undefined,
     error: null,
     interactionInProgress: false,
+    permissions: ["communications:read", "communications:connect"],
     ...overrides,
   };
 }

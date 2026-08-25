@@ -1,18 +1,23 @@
-"""Owned connector-account disconnect and reauthorization routes."""
+"""Owned connector-account list, disconnect, and reauthorization routes."""
 
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
     get_connector_account_oauth_service,
     get_connector_account_service,
     require_authenticated_communications_connect,
+    require_authenticated_communications_read,
 )
 from app.application.services.connector_account_oauth import ConnectorAccountOAuthService
 from app.application.services.connector_accounts import ConnectorAccountService
 from app.core.security import AuthenticatedPrincipal
+from app.schemas.connector_accounts import (
+    OwnedConnectorAccountItem,
+    OwnedConnectorAccountListResponse,
+)
 from app.schemas.errors import ErrorResponse
 from app.schemas.oauth import (
     ConnectorAccountReauthorizeResponse,
@@ -20,6 +25,21 @@ from app.schemas.oauth import (
 )
 
 router = APIRouter(tags=["connector-accounts"])
+
+_READ_AUTH_RESPONSES = {
+    401: {
+        "model": ErrorResponse,
+        "description": "Missing or invalid bearer token.",
+    },
+    403: {
+        "model": ErrorResponse,
+        "description": "Authenticated caller lacks communications:read.",
+    },
+    503: {
+        "model": ErrorResponse,
+        "description": "Connector-account listing is currently unavailable.",
+    },
+}
 
 _CONNECT_AUTH_RESPONSES = {
     401: {
@@ -39,6 +59,55 @@ _CONNECT_AUTH_RESPONSES = {
         "description": "Connector-account lifecycle is currently unavailable.",
     },
 }
+
+
+@router.get(
+    "/connector-accounts",
+    response_model=OwnedConnectorAccountListResponse,
+    summary="List owned connector accounts",
+    description=(
+        "Returns a bounded page of connector accounts owned by the authenticated "
+        "caller. Requires communications:read. Callers without an identity mapping "
+        "receive an empty page. Unknown and cross-user accounts are not included. "
+        "Locator, token, and provider identity internals are never returned."
+    ),
+    responses={
+        **_READ_AUTH_RESPONSES,
+        200: {
+            "model": OwnedConnectorAccountListResponse,
+            "description": "Bounded owned connector-account page.",
+        },
+    },
+)
+def list_owned_connector_accounts(
+    principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+    service: Annotated[
+        ConnectorAccountService,
+        Depends(get_connector_account_service),
+    ],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OwnedConnectorAccountListResponse:
+    """Return connector accounts owned by the current authenticated user."""
+    records = service.list_owned(principal, limit=limit, offset=offset)
+    return OwnedConnectorAccountListResponse(
+        items=[
+            OwnedConnectorAccountItem(
+                id=record.id,
+                provider=record.provider,
+                status=record.status,
+                granted_capabilities=record.granted_capabilities,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+            for record in records
+        ],
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

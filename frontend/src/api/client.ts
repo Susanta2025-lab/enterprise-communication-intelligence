@@ -1,7 +1,17 @@
 import type { AccessTokenProvider } from "../auth/tokenProvider";
 import { InteractionRequiredError } from "../auth/tokenProvider";
 import {
+  connectorAccountDisconnectPath,
+  connectorAccountReauthorizePath,
+  type AuthorizationStartResponse,
+  type ConnectorAccountListResponse,
+  type ListConnectorAccountsQuery,
+} from "./connectorAccounts";
+import {
+  CONNECTOR_ACCOUNTS_PATH,
   EciApiError,
+  GMAIL_AUTHORIZE_PATH,
+  MICROSOFT_GRAPH_AUTHORIZE_PATH,
   kindForStatus,
   messageForKind,
   PROTECTED_ANALYSES_SMOKE_PATH,
@@ -32,6 +42,37 @@ export class EciApiClient {
 
   async getAnalysesSmoke(): Promise<AnalysisListResponse> {
     return this.requestJson<AnalysisListResponse>("GET", PROTECTED_ANALYSES_SMOKE_PATH);
+  }
+
+  async listConnectorAccounts(
+    query: ListConnectorAccountsQuery = {},
+  ): Promise<ConnectorAccountListResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(query.limit ?? 20));
+    params.set("offset", String(query.offset ?? 0));
+    return this.requestJson<ConnectorAccountListResponse>(
+      "GET",
+      `${CONNECTOR_ACCOUNTS_PATH}?${params.toString()}`,
+    );
+  }
+
+  async startGmailAuthorization(): Promise<AuthorizationStartResponse> {
+    return this.requestJson<AuthorizationStartResponse>("POST", GMAIL_AUTHORIZE_PATH);
+  }
+
+  async startMicrosoftGraphAuthorization(): Promise<AuthorizationStartResponse> {
+    return this.requestJson<AuthorizationStartResponse>("POST", MICROSOFT_GRAPH_AUTHORIZE_PATH);
+  }
+
+  async reauthorizeConnectorAccount(connectorAccountId: string): Promise<AuthorizationStartResponse> {
+    return this.requestJson<AuthorizationStartResponse>(
+      "POST",
+      connectorAccountReauthorizePath(connectorAccountId),
+    );
+  }
+
+  async disconnectConnectorAccount(connectorAccountId: string): Promise<void> {
+    await this.requestJson<unknown>("POST", connectorAccountDisconnectPath(connectorAccountId));
   }
 
   private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
