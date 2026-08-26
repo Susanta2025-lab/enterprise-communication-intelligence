@@ -22,11 +22,11 @@ Baseline commit (Phase 15 closure): `b1267c440279c9804e27c2d2b747c6c7caf408a2`.
 
 ## Status
 
-Phase 16A is **Completed**. Phase 16B is **COMPLETE — READY FOR COMMIT**. Phases 16C–16F are **Not started**.
+Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **COMPLETE — READY FOR COMMIT**. Phases 16D–16F are **Not started**.
 
 - **16A is Completed:** authenticated read-only Azure and AWS inventory; topology freeze; ADR-026; configuration/cost/authorization matrices; offline regression. No cloud mutation.
-- **16B is COMPLETE — READY FOR COMMIT:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
-- **16C is Not started:** Azure live mailbox → Microsoft Foundry validation.
+- **16B is Completed:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
+- **16C is COMPLETE — READY FOR COMMIT:** Azure Graph delegated OAuth → Key Vault durability across ACA recycle → one MicrosoftFoundryProvider selected-message Analyze → explicit Propose (PENDING) → explicit Approve (APPROVED). STOP before Send.
 - **16D is Not started:** AWS HTTPS + full-stack browser deployment.
 - **16E is Not started:** AWS live mailbox → Amazon Bedrock validation.
 - **16F is Not started:** cross-cloud parity, security/cost hardening, final documentation.
@@ -135,7 +135,7 @@ Inventory, reuse/create matrices, HTTPS topology, environment matrices, ADR-026,
 
 ## 16B — Azure Full-Stack Browser Deployment
 
-**Status: COMPLETE — READY FOR COMMIT.**
+**Status: Completed.**
 
 Baseline commit: `75183601e9e82c55650363456aa8a863fc64d992` (Phase 16A docs; GitHub CI green).
 
@@ -177,35 +177,103 @@ Retained: ACR Basic (standing), ACA Consumption min=0 (usage), LAW (low ingest),
 
 ## 16C — Azure Live Mailbox → Microsoft Foundry Validation
 
-**Status: Not started.**
+**Status: COMPLETE — READY FOR COMMIT.**
+
+Baseline commit: `f19dba6280d58dd364058728ee7f3987c7fe1e8f` (Phase 16B closure; GitHub CI green).
 
 ### Objective
 
 Prove Graph mailbox → Foundry analyze → propose → approve on Azure. Stop before Send.
 
+### Result
+
+Azure-hosted path:
+
+```text
+Azure Static Web Apps
+→ Entra/MSAL
+→ Azure Container Apps
+→ Azure PostgreSQL
+→ Azure Key Vault
+→ Microsoft Graph
+→ MicrosoftFoundryProvider
+→ Analyze
+→ Propose
+→ Approve
+→ STOP before Send
+```
+
+Sanitized live proof:
+
+- Real Microsoft Graph delegated OAuth completed.
+- Graph `ConnectorAccount` remained **ACTIVE**.
+- Delegated credentials stored via Azure Key Vault (`CREDENTIAL_STORE_BACKEND=azure_key_vault`).
+- Initial bounded Graph list `page_size=10` passed.
+- ACA same-revision process/replica recycle occurred (same image, environment, ingress, scale, and UAMI; revision `eci-api-dev--0000004`).
+- Post-recycle ACA health/readiness passed.
+- Post-recycle Graph list passed with **no reauthorization**.
+- Durable delegated credential behavior proven: OAuth → credential persistence → Graph list → ACA same-revision restart → Graph list → no reauthorization.
+- Exactly one selected-message Analyze passed through real `MicrosoftFoundryProvider` and the existing Foundry deployment `eci-gpt-54-mini`.
+- `MockAIProvider` was **not** used.
+- Exactly one Foundry inference.
+- Explicit Propose created exactly one `WorkflowAction` in **PENDING**.
+- Explicit Approve transitioned the same action to **APPROVED**.
+- Approval provenance confirmed from ACA/Log Analytics: one `POST` approve, `workflow_action_approved`, HTTP 200; no second approve.
+- Execute/send request count remained **zero**. Live Send was **not** performed.
+- Gmail unused. Amazon Bedrock unused. AWS unused.
+- No cloud resource created or deleted in 16C.
+- No application-code change. No Alembic revision. Schema head remains `13a0001`.
+
+The authorized browser Approve action completed successfully server-side even though the Cursor/browser automation appeared stalled afterward. ACA telemetry proved **PENDING → APPROVED** with HTTP 200.
+
+AI draft ≠ workflow proposal ≠ approved communication ≠ sent communication. The Send button may become eligible after **APPROVED**; Phase 16C did not execute it.
+
+This is not geo redundancy, disaster recovery, Key Vault outage resilience, multi-replica race certification, credential-rotation certification, Foundry load/throughput/quality benchmarking, multiple-message certification, Gmail→Foundry cloud certification, or Foundry retry/reconciliation.
+
+### Frontend presentation-state observation
+
+Mailbox analysis and workflow-card presentation is browser-memory state. An SPA remount caused the displayed analysis/workflow card to disappear. The persisted `WorkflowAction` remained durable in Azure PostgreSQL and was recoverable through existing read APIs. No second analysis or Foundry call was required. No backend persistence defect occurred. This is **not data loss**. Workflow-history/recovery UI is a deliberate post-Phase-16 frontend enhancement / known UX limitation. Phase 16C did not add that UI.
+
 ### Planned cloud mutations
 
-None required if 16B configuration is complete. Optional: one Foundry inference. No Send.
+None. Optional Foundry: exactly one selected-message inference (consumed). No Send.
 
 ### Authorization gates
 
-Live Microsoft mailbox OAuth; live Foundry inference. Each separate.
+Completed: live Microsoft mailbox OAuth; one live Foundry inference; explicit Propose; explicit Approve. Each was a separate gate. Send/execute was not authorized.
 
 ### Cost gates
 
-Foundry: **one** selected-message real analysis unless an explicit retry is required after failure. Avoid repeated calls.
+Foundry: **one** selected-message real analysis. No retry. No additional AI call during closure.
 
 ### Live validation boundary
 
-Microsoft Graph mailbox on Azure only. Not Gmail. Not Send. Not Bedrock.
+Microsoft Graph mailbox on Azure only. Not Gmail. Not Send. Not Bedrock. Not AWS.
 
 ### Expected tests
 
-Controlled live path plus offline regression if code changed (expected: configuration only).
+Offline focused and full frontend/backend regression. No live Azure/Graph/Foundry calls during 16C documentation closure.
+
+### Offline regression (16C closure)
+
+- Focused frontend (MSAL/auth, connector dashboard, mailbox workspace, Analyze, Propose/Approve/Send safety): 11 files, **154 passed**
+- Full frontend: `npm ci`; typecheck pass; lint pass; **182 passed** (18 files); production build pass (chunk-size advisory on the existing SPA bundle; not a 16C defect)
+- Focused backend (OIDC/scopes, Graph OAuth, identity matching, credential store/Key Vault fakes, token refresh, connector lifecycle, bounded Graph listing, mailbox analyze, Foundry factory, analysis/workflow persistence, approve, execute-not-called, privacy/logging): **789 passed**
+- Local PostgreSQL (`tests/postgres` against existing disposable `eci_test`; not Azure production): **82 passed**
+- Full backend `python -m pytest`: **1947 passed**, 82 skipped (PostgreSQL suite skipped without the test URL in the default run)
+- `python -m pip check`: no broken requirements
+- `python -m ruff check .`: all checks passed
+- `git diff --check`: recorded after documentation edits
+
+No application-code change. No Alembic revision. Schema head remains `13a0001`.
+
+### Cost state after 16C
+
+No new resources. PostgreSQL Flexible Server remained running (do **not** stop in this closure; sequential database/cost handling belongs before or during 16D under a separate authorization gate). SWA Free. ACA normal runtime plus one same-revision recycle. Key Vault normal operations. Graph normal provider usage. Exactly one Foundry inference; no additional AI retry.
 
 ### Exit criteria
 
-Delegated Graph credentials persist across ACA replica recycle without normal reauthorization; one Foundry mailbox analysis; Propose → Approve; stop before Send.
+Delegated Graph credentials persist across ACA replica recycle without normal reauthorization; one Foundry mailbox analysis via `MicrosoftFoundryProvider`; Propose → PENDING → Approve → APPROVED; stop before Send; offline regression green. Working tree left unstaged/uncommitted.
 
 ---
 
@@ -533,7 +601,7 @@ Later 16D: CloudFront HTTPS → ALB HTTP → ECS. Fargate SG allows ALB. ALB SG 
 
 | Slice | Provider | Policy |
 |---|---|---|
-| 16C | Microsoft Foundry | One selected-message analysis unless one explicit retry after failure |
+| 16C | Microsoft Foundry | Consumed: one selected-message analysis. No retry. No additional inference during 16C closure. |
 | 16E | Amazon Bedrock | One selected-message analysis unless one explicit retry after failure |
 
 Do not call either in 16A.
@@ -546,7 +614,7 @@ Do not call either in 16A.
 - Azure: Flexible Server in Spain Central, TLS required, firewall/VNet so ACA can connect.
 - AWS: RDS PostgreSQL in the ECS VPC, TLS required, SG from `eci-fargate-sg-dev`.
 - Credentials: injected `DATABASE_URL`; do not commit passwords. Entra/IAM DB auth remains future (ADR-014).
-- Migration: `alembic upgrade head` once per new database. Current head: **`13a0001`**. No new revision in 16A.
+- Migration: `alembic upgrade head` once per new database. Current head: **`13a0001`**. No new revision in 16A, 16B, or 16C.
 - Advisory locks: required for durable credential mutations (`pg_advisory_xact_lock`).
 - Sequential: Azure proof first, then stop/pause Azure PG before RDS (or reverse) so both are not standing indefinitely.
 

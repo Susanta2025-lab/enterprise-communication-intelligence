@@ -109,6 +109,7 @@ Do not introduce Terraform, Bicep, CDK, or CloudFormation in Phase 16. Continue 
 ## Consequences
 
 - Azure browser proof reuses ACA managed HTTPS. 16B opened ingress beyond operator `/32` and replaced the Phase 8 image with current `master` (`eci-api:7518360`).
+- Phase 16C live-validated the frozen Azure path: Graph delegated OAuth → Key Vault persistence → Graph list → ACA same-revision recycle → Graph list without reauthorization → one `MicrosoftFoundryProvider` selected-message analysis → explicit Propose (PENDING) → explicit Approve (APPROVED) → STOP before Send. That does not certify geo redundancy, Key Vault outage resilience, multi-replica races, credential rotation, Foundry load/quality, Gmail on Azure, or live execute/send.
 - Azure Static Web Apps control-plane location is West US 2. Spain Central is not a SWA region; West Europe refused new SWA customers. Static content is still served from the SWA global edge. Hostname: `https://witty-island-03f5de51e.7.azurestaticapps.net`.
 - Runtime UAMI requires **Key Vault Secrets Officer** (not Secrets User) because the credential store calls get, set, and delete.
 - AWS browser proof requires new CloudFront, S3, and ALB resources; ALB has standing cost during 16D/16E.

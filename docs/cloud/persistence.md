@@ -165,4 +165,4 @@ CI PostgreSQL is not production backup, HA, or DR proof.
 
 ## Current cloud environments
 
-Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). ECS service `eci-api-dev` still has no Phase 9 database configuration (16D).
+Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). Phase 16C persisted a Graph `ConnectorAccount` (ACTIVE) and a `WorkflowAction` (PENDING → APPROVED) on that database. Schema head remains `13a0001`. No new Alembic revision. ECS service `eci-api-dev` still has no Phase 9 database configuration (16D).

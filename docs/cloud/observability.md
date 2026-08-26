@@ -226,6 +226,22 @@ AWS CloudWatch Logs (`/ecs/eci-api-dev`) retained matching `http_request_*` and 
 
 Use Log Analytics and CloudWatch for historical inspection. Do not treat live Container Apps console streaming as the Phase 8D evidence path.
 
+## Phase 16C approval provenance
+
+Phase 16C reused the Phase 7 telemetry contract. No OpenTelemetry, Application Insights, dashboards, or alerts were added.
+
+Azure Log Analytics (`eci-law-dev`) retained bounded ACA console events proving the Azure Graph → Foundry → workflow path:
+
+- one mailbox analyze request completed HTTP 200
+- one `microsoft_foundry_analysis_requested` / `microsoft_foundry_analysis_completed` pair (`provider=microsoft_foundry`)
+- one `workflow_action_created`
+- one `workflow_action_approved` after `POST .../approve` completed HTTP 200
+- zero `/execute` and zero `workflow_action_execution*` events
+
+Those logs did not contain mailbox identity, message subject/body, analysis/draft text, tokens, Key Vault secret names, or `credential_ref`. The authorized browser Approve completed server-side even though the Cursor/browser automation appeared stalled afterward. Operational `request_id` values were used only for live correlation and are not retained in this document.
+
+This is not a claim of tracing completeness, multi-replica certification, or Send-path telemetry.
+
 ## Cross-cloud comparison
 
 | Concern | Shared / Azure / AWS |

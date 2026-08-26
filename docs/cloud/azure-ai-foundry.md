@@ -64,6 +64,8 @@ The following Foundry resources have been verified manually with an HTTP 200 inf
 | Model version | 2026-03-17 |
 | Deployment type | DataZoneStandard |
 
+Phase 16C live-validated **one** selected-message analysis of a real Microsoft Graph mailbox message through the Azure-hosted ECI path (`MicrosoftFoundryProvider`, deployment `eci-gpt-54-mini`). `MockAIProvider` was not used. That is not load testing, throughput certification, model-quality benchmarking, multiple-message certification, Gmail→Foundry cloud certification, or Foundry retry/reconciliation.
+
 ## Behavior
 
 The provider receives a `CommunicationRequest` and returns a `CommunicationAnalysisResult` with `provider="microsoft_foundry"`.
@@ -101,6 +103,6 @@ Do not run that path from the pytest suite.
 
 ## Production deployment
 
-Phase 6C hosts the same Foundry adapter on Azure Container Apps with user-assigned Managed Identity `eci-ca-identity-dev` and `DefaultAzureCredential`. Azure App Service is not used.
+Phase 6C hosts the same Foundry adapter on Azure Container Apps with user-assigned Managed Identity `eci-ca-identity-dev` and `DefaultAzureCredential`. Azure App Service is not used. Phase 16C used that same adapter for one connected-mailbox inference on ACA.
 
 See [Deployment](deployment.md) and the [Azure runbook](../../deployment/azure/README.md).

@@ -28,6 +28,15 @@ rg-eci-dev                      Foundry unchanged. Do not delete.
 
 16B did not invoke Foundry, did not start mailbox OAuth, and did not Send. Schema head is `13a0001`. Migration remains an operator `alembic upgrade head`. ACA secrets (`database-url`, OAuth client secrets) are not in Git.
 
+Phase 16C live-validated the existing Azure runtime with **no resource create/delete** and **no image/revision/config change**:
+
+```text
+SWA → MSAL → ACA → Azure PostgreSQL → Key Vault → Microsoft Graph
+→ MicrosoftFoundryProvider (one inference) → Propose → Approve → STOP before Send
+```
+
+Proven: Graph delegated OAuth; `ConnectorAccount` ACTIVE; Key Vault-backed credentials survived a same-revision ACA process/replica recycle; post-recycle Graph list with no reauthorization; one Foundry selected-message analysis; `MockAIProvider` unused; Propose PENDING; Approve APPROVED; execute/send count zero. SPA remount can drop in-browser analysis/workflow presentation; persisted workflow remains in PostgreSQL and is recoverable through existing read APIs (known UX limitation, not data loss). Do not stop PostgreSQL in 16C closure.
+
 GitHub Environment `azure` frontend CD needs public identifier variables only: `AZURE_STATIC_WEB_APP_NAME`, `VITE_ECI_API_BASE_URL`, `VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ENTRA_REDIRECT_URI`, `VITE_ECI_API_SCOPES`. Do not store the SWA deployment token in Git. Rotate it with `az staticwebapp secrets reset-api-key` if it is ever printed.
 
 ## Phase 16A verified current state (read-only, historical)
@@ -64,7 +73,7 @@ Current ECI application architecture (code and documentation; Phase 16B redeploy
 - Mailbox delegated OAuth is a separate identity domain from that login (Gmail/Microsoft consent → opaque credential store → `ConnectorAccount.credential_ref`).
 - Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault `eci-kv-oauth-dev-susanta` at the store/factory path.
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
-- Production ACA uses managed identity for Key Vault. Phase 16B runs `eci-api:7518360` on ACA with Key Vault selected; mailbox OAuth and Foundry inference were not started. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
+- Production ACA uses managed identity for Key Vault. Phase 16B runs `eci-api:7518360` on ACA with Key Vault selected. Phase 16C live-validated Graph delegated OAuth and one Foundry mailbox analysis on that runtime and stopped before Send. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
 
 See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 

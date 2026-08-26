@@ -39,7 +39,7 @@ See [Authentication](authentication.md).
 
 ## Persistence
 
-Phase 9 selects cloud-portable PostgreSQL with ephemeral CI proof. Azure Database for PostgreSQL and Amazon RDS are not provisioned. Shared cross-cloud databases and dual standing managed databases are rejected for this phase. See [PostgreSQL persistence](persistence.md) and [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
+Phase 9 selects cloud-portable PostgreSQL with ephemeral CI proof. Phase 16B provisioned Azure Database for PostgreSQL Flexible Server; Amazon RDS remains 16D. Shared cross-cloud databases and dual standing managed databases remain rejected. See [PostgreSQL persistence](persistence.md) and [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
 
 ## Observability
 
@@ -54,15 +54,17 @@ Phase 8 is complete. Phase 9 persistence is complete at the application and CI-p
 Cloud runtimes still do **not** provide:
 
 - production Gmail OAuth live cloud-hosted certification
-- production Microsoft Graph OAuth live cloud-hosted certification
-- ACA-hosted or ECS-hosted Phase 14 mailbox→AI certification
-- Foundry or Bedrock live inference on the connected-mailbox analyze path
-- cloud mailbox onboarding of the retained ACA/ECS services
+- ECS-hosted Phase 14 mailbox→AI certification
+- Amazon Bedrock live inference on the connected-mailbox analyze path
+- cloud mailbox onboarding of the retained ECS service
 - background mailbox sync
 - automatic replies from cloud-hosted ECI
+- live Send / execute on a cloud-hosted path
 
-Environment-backed `CommunicationCredentialResolver` and user-approved Graph/Gmail execute exist in the application. Bounded mailbox listing and selected-message analyze HTTP exist in the application and were live-validated locally with `MockAIProvider`. This document does not claim Azure or AWS connector, mailbox-read, or send-path deployment verification.
+Phase 16C live-validated Azure-hosted Microsoft Graph delegated OAuth, Azure Key Vault credential durability across an ACA same-revision recycle, one `MicrosoftFoundryProvider` selected-message analysis, and explicit Propose → Approve, stopping before Send.
+
+Environment-backed `CommunicationCredentialResolver` and user-approved Graph/Gmail execute exist in the application. Bounded mailbox listing and selected-message analyze HTTP exist in the application and were live-validated locally with `MockAIProvider`. Phase 16C certified the Azure Graph → Foundry analyze → Propose → Approve path on ACA. This document does not claim AWS connector, mailbox-read, or send-path deployment verification.
 
 Controlled live adapter verification in Phase 10 was local and stopped at `CommunicationMessage`. Phase 14 locally live-validated list → selected-message analyze.
 
-Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). Phase 12 adds user-approved Gmail and Microsoft Graph reply execution through `POST /api/v1/workflow-actions/{action_id}/execute`. Phase 13 implements delegated Gmail/Microsoft OAuth, disconnect/reauthorize HTTP, Azure Key Vault and AWS Secrets Manager mailbox credential stores, and PostgreSQL advisory-lock coordination. Phase 14 adds `communications:read`, bounded listing, and selected-message analyze. Local Google/Microsoft consent and explicitly approved replies, live Key Vault/Secrets Manager store validation, and local mailbox list→analyze are recorded on the phase roadmaps. Live cloud-hosted mailbox OAuth or Phase 14 mailbox→AI certification of ACA/ECS and automatic replies remain later work. ALB-native HTTPS still requires a custom domain and ACM (ADR-010). Phase 16A froze CloudFront default HTTPS in front of an HTTP ALB so browser bearer tokens do not wait on a custom domain; that AWS path is not created in 16A. Phase 16B provisioned Azure Static Web Apps, Azure PostgreSQL Flexible Server, and current-master ACA with Key Vault selected; mailbox OAuth, Foundry inference, and Send wait for 16C. `DATABASE_URL` injection from Key Vault/Secrets Manager, AWS RDS, private networking, and advanced observability remain later work. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
+Phase 11 workflow automation is application-layer work documented in [Phase 11](../roadmap/phase-11-workflow-automation.md). Phase 12 adds user-approved Gmail and Microsoft Graph reply execution through `POST /api/v1/workflow-actions/{action_id}/execute`. Phase 13 implements delegated Gmail/Microsoft OAuth, disconnect/reauthorize HTTP, Azure Key Vault and AWS Secrets Manager mailbox credential stores, and PostgreSQL advisory-lock coordination. Phase 14 adds `communications:read`, bounded listing, and selected-message analyze. Local Google/Microsoft consent and explicitly approved replies, live Key Vault/Secrets Manager store validation, and local mailbox list→analyze are recorded on the phase roadmaps. Azure-hosted Graph mailbox OAuth and Graph → Foundry analyze → Propose → Approve were live-validated in Phase 16C and stopped before Send. AWS Gmail → Bedrock and automatic replies remain later work. ALB-native HTTPS still requires a custom domain and ACM (ADR-010). Phase 16A froze CloudFront default HTTPS in front of an HTTP ALB so browser bearer tokens do not wait on a custom domain; that AWS path is not created in 16A. Phase 16B provisioned Azure Static Web Apps, Azure PostgreSQL Flexible Server, and current-master ACA with Key Vault selected. `DATABASE_URL` injection from Key Vault/Secrets Manager, AWS RDS, private networking, and advanced observability remain later work. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).

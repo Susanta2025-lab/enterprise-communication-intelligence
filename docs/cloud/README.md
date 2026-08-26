@@ -17,14 +17,14 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | Application-user OIDC JWT | Implemented (`AUTH_MODE=oidc`; live Entra is the first IdP) |
 | GitHub Actions CI/CD | Implemented (automatic tests-only CI; manual `workflow_dispatch` CD) |
 | GitHub OIDC deploy federation | Implemented (Azure UAMI and AWS IAM role `eci-github-deploy-dev`) |
-| PostgreSQL persistence architecture | Implemented and CI-proven; no managed cloud database provisioned |
+| PostgreSQL persistence architecture | Implemented and CI-proven; Azure Flexible Server provisioned in 16B and used for 16C connector/workflow durability; Amazon RDS remains 16D |
 | Gmail delegated OAuth | Implemented; locally live-validated, including disconnect → exact-account reauthorize |
-| Microsoft Graph delegated OAuth | Implemented; locally live-validated |
-| Azure Key Vault mailbox credential store | Implemented; live store-validated |
+| Microsoft Graph delegated OAuth | Implemented; locally live-validated; Azure-hosted live-validated in 16C |
+| Azure Key Vault mailbox credential store | Implemented; live store-validated; Azure-hosted Graph credentials survived an ACA same-revision recycle in 16C |
 | AWS Secrets Manager mailbox credential store | Implemented; live store-validated |
 | PostgreSQL advisory-lock credential coordination | Implemented and tested |
-| Connected mailbox list / selected-message analyze | Implemented; locally live-validated with real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider` |
-| Phase 16 cloud-hosted browser topology | Frozen in 16A ([ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md)); not deployed |
+| Connected mailbox list / selected-message analyze | Implemented; locally live-validated with `MockAIProvider`; Azure Graph → `MicrosoftFoundryProvider` live-validated once in 16C |
+| Phase 16 cloud-hosted browser topology | Frozen in 16A ([ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md)); Azure deployed in 16B and live-validated through Approve in 16C; AWS SPA/API HTTPS remains 16D |
 
 See:
 
@@ -97,4 +97,4 @@ Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI promp
 
 One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
 
-GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`. Phase 16B provisioned Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta`; Amazon RDS remains for 16D. Phase 14 mailbox listing and selected-message analyze were live-validated on a local ECI runtime; they are not ACA-hosted mailbox→AI certification and did not call Foundry or Bedrock. Phase 16B deployed Azure Static Web Apps `eci-web-dev` and current-master ACA; AWS SPA/API HTTPS remains 16D. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [Observability](observability.md), and [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
+GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`. Phase 16B provisioned Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta`; Amazon RDS remains for 16D. Phase 16C live-validated Azure Graph delegated OAuth, Key Vault-backed credential durability across an ACA same-revision recycle, one `MicrosoftFoundryProvider` selected-message analysis, and explicit Propose → Approve, stopping before Send. That Azure proof did not use Gmail, Bedrock, or AWS and did not execute/send. Phase 14 mailbox listing and selected-message analyze remain the local `MockAIProvider` certification. Phase 16B deployed Azure Static Web Apps `eci-web-dev` and current-master ACA; AWS SPA/API HTTPS remains 16D. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [Observability](observability.md), and [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).

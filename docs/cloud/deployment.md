@@ -4,7 +4,7 @@ Phase 6C deploys one provider-independent Docker image to local Docker, Azure Co
 
 Phase 8 adds application-user OIDC, Azure managed HTTPS confirmation, AWS ALB verification then teardown, and GitHub Actions CI/CD with OIDC federation. Operator `/32` ingress restriction is network access control, not a substitute for API authentication. Production clouds use `AUTH_MODE=oidc`.
 
-Phase 13 adds delegated mailbox OAuth and durable Azure Key Vault / AWS Secrets Manager credential stores in application code. Local Google/Microsoft consent and live store validation are recorded on the Phase 13 roadmap. Phase 14 adds bounded mailbox listing and selected-message analyze in application code; local-runtime live proof used real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider`. The retained Container App and ECS service have not been redeployed or certified as a complete Phase 13 mailbox-OAuth runtime or a Phase 14 mailbox→AI runtime. That local proof did not call Foundry or Bedrock. Key Vault and Secrets Manager are mailbox OAuth backends, not `DATABASE_URL` injection.
+Phase 13 adds delegated mailbox OAuth and durable Azure Key Vault / AWS Secrets Manager credential stores in application code. Local Google/Microsoft consent and live store validation are recorded on the Phase 13 roadmap. Phase 14 adds bounded mailbox listing and selected-message analyze in application code; local-runtime live proof used real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider`. Phase 16B redeployed ACA as current `master` with Azure PostgreSQL and Key Vault selected. Phase 16C live-certified the Azure Graph mailbox OAuth → Key Vault durability → Foundry analyze → Propose → Approve path on that runtime and stopped before Send. The retained ECS service has not been redeployed or certified as a Phase 13/14 mailbox runtime. Key Vault and Secrets Manager are mailbox OAuth backends, not `DATABASE_URL` injection.
 
 ## Same image
 
@@ -80,7 +80,7 @@ Verified security controls:
 - no Front Door, Application Gateway, or WAF
 - min replicas 0, max replicas 1
 
-Live analysis returned `provider=microsoft_foundry`. Phase 8D added one authorized analyze over HTTPS after a real Entra bearer token (Foundry calls = 1). Health and readiness returned HTTP 200. The Azure app remains deployed with restricted ingress.
+Live analysis returned `provider=microsoft_foundry`. Phase 8D added one authorized analyze over HTTPS after a real Entra bearer token (Foundry calls = 1). Health and readiness returned HTTP 200. Phase 16B opened public HTTPS ingress (OIDC is access control). Phase 16C added one connected-mailbox Foundry inference on the same ACA runtime (`MicrosoftFoundryProvider`; `MockAIProvider` not used).
 
 Do not publish the operator IP, subscription ID, tenant ID, principal ID, identity client ID, or complete Azure resource IDs.
 
