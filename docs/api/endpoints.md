@@ -295,7 +295,7 @@ Unauthorized and forbidden requests do not open an execution unit of work, resol
 - **Method:** `GET`
 - **Path:** `/api/v1/connector-accounts`
 - **Query:** `limit` (default 20, maximum 100) and `offset` (default 0)
-- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:read`.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:read`. Listing uses PostgreSQL persistence only. It does not require mailbox OAuth provider settings or the credential store.
 - **Response model:** `OwnedConnectorAccountListResponse` (`items`, `limit`, `offset`)
 - **Item fields:** `id`, `provider`, `status`, `granted_capabilities`, `created_at`, `updated_at`
 - **Not returned:** `credential_ref`, `external_account_id`, locators, tokens, refresh state, or provider subject/object IDs

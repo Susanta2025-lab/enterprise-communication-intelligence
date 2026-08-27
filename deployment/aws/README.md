@@ -2,9 +2,37 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Amazon ECS on Fargate in `eu-south-2`.
 
-**Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. ECR, cluster, service, both task-definition revisions, IAM roles, security group, and log group are retained. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+**Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. Phase 16D is the current AWS runtime (`eci-api-dev:6`, image `0050b30`, CloudFront HTTPS → HTTP ALB → ECS, RDS + Secrets Manager). Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
 
-## Phase 16A verified current state (read-only)
+## Phase 16D verified current state
+
+Region `eu-south-2`. No mailbox OAuth, Bedrock inference, or Send.
+
+```text
+ECR                         eci-api-dev tag 0050b30
+                            digest sha256:d2e8f50738729033ca58a390ca490a95c7a51f9944316e600eecfb14d3c46316
+Cluster                     eci-cluster-dev
+Service                     eci-api-dev desired 1 / running 1 / pending 0
+Task definition             eci-api-dev:6 (IMAGE ONLY vs :5)
+Target group                eci-api-tg-dev one HEALTHY target
+ALB                         eci-alb-dev HTTP :80 origin
+API CloudFront              E2IF9K4FM4A6WJ https://dnookm0ucbhv1.cloudfront.net
+SPA CloudFront              E1XFNK98P7PU2W https://d1ut7j94w7lt3b.cloudfront.net
+S3                          eci-web-aws-dev-034456343525 private; OAC eci-spa-oac-dev
+                            Block Public Access all four enabled; website hosting not configured
+RDS                         eci-pg-dev PostgreSQL 16.15 db eci role eci_app Alembic 13a0001
+DATABASE_URL                ECS secret reference only
+Credential store            aws_secrets_manager (not invoked for mailbox OAuth)
+Health / readiness          200 / 200
+Protected GETs              /api/v1/analyses?limit=1 200
+                            /api/v1/connector-accounts 200 after corrective image
+```
+
+SPA and API use separate CloudFront distributions. Custom domain is not required. Connector-list 503 was resolved by `get_connector_account_listing_service` (`communications:read`, persistence only). Temporary 16D operator IAM is 16F cleanup debt. Permanent runtime policies `eci-mailbox-secrets-runtime-dev` (task role) and `eci-runtime-db-secret-execution-dev` (execution role) are not cleanup candidates.
+
+See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
+
+## Phase 16A verified current state (read-only, historical)
 
 Authenticated inventory on 2026-08-25 (profile `eci-dev`, `eu-south-2`). No create/update/delete. Some list APIs (`rds:Describe*`, `s3:ListAllMyBuckets`, `cloudfront:ListDistributions`, ELB describe) are denied to `eci-developer`; conclusions below use ECS/IAM evidence plus those denials.
 
@@ -21,22 +49,22 @@ Bedrock profile             eu.anthropic.claude-haiku-4-5-20251001-v1:0 ACTIVE
 RDS / S3 / CloudFront       none found / not inspectable; treat as CREATE LATER
 ```
 
-Phase 16 hosting freeze: private S3 + CloudFront SPA; CloudFront HTTPS → HTTP ALB → ECS (no custom domain). ALB has standing cost while retained. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Do not create S3, CloudFront, ALB, or RDS from this runbook unless a later phase explicitly authorizes it.
+Phase 16 hosting freeze: private S3 + CloudFront SPA; CloudFront HTTPS → HTTP ALB → ECS (no custom domain). ALB has standing cost while retained. Phase 16D created that path (see current state above). Do not create or mutate S3, CloudFront, ALB, or RDS from this historical runbook unless a later phase explicitly authorizes it.
 
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 AWS hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
 
-Current ECI application architecture (code and documentation; not a claim that the retained ECS service was redeployed):
+Current ECI application architecture (code and documentation; Phase 16D redeployed `eci-api-dev` as current `master` with production OIDC, RDS, Secrets Manager backend, and Bedrock config — not mailbox OAuth or Bedrock inference certification):
 
 - Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP).
 - Mailbox delegated OAuth is a separate identity domain from that login and from Bedrock.
 - AWS Secrets Manager is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=aws_secrets_manager`). Runtime production identity is the ECS task role through the boto3 default credential chain. Settings hold region and namespace only. No AWS access keys in Settings.
 - Least-privilege mailbox secret actions on `eci/mailbox-oauth/*`: `CreateSecret`, `GetSecretValue`, `PutSecretValue`, `UpdateSecretVersionStage`, `DescribeSecret`, `DeleteSecret`. `ListSecrets` is not required.
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
-- Phase 13E live-validated Secrets Manager at the store/factory path using the existing ECI developer identity. That is store validation, not a claim that `eci-api-dev` now runs Phase 13 mailbox OAuth.
-- The operator IAM user (`eci-developer` / profile `eci-dev`) is **not** the production ECS application identity. The application uses `eci-bedrock-task-role-dev` (and would use that same task-role pattern for Secrets Manager in a production mailbox-OAuth deployment).
-- The retained ECS service may still be the historical Phase 6C/7/8 image and has **not** been certified as a complete Phase 13 mailbox-OAuth runtime or a Phase 14 mailbox→AI runtime. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`. It did not certify ECS-hosted mailbox→AI and did not call Bedrock.
+- Phase 13E live-validated Secrets Manager at the store/factory path using the existing ECI developer identity. Phase 16D selected `CREDENTIAL_STORE_BACKEND=aws_secrets_manager` on ECS. That is not a claim that Gmail or Graph mailbox OAuth ran on `eci-api-dev`.
+- The operator IAM user (`eci-developer` / profile `eci-dev`) is **not** the production ECS application identity. The application uses `eci-bedrock-task-role-dev` plus `eci-mailbox-secrets-runtime-dev`.
+- The retained ECS service now runs image `0050b30` / task definition `eci-api-dev:6` behind CloudFront HTTPS. It has **not** been certified as a complete Phase 13 mailbox-OAuth runtime or a Phase 14 mailbox→AI runtime. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`. 16D did not call Gmail, Graph mailbox, or Bedrock.
 
 See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 

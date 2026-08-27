@@ -4,7 +4,7 @@
 
 Accepted
 
-The decision is frozen in Phase 16A from authenticated read-only inventory plus current application contracts. No cloud resources were created or mutated in 16A. Implementation is Phase 16B–16F.
+The decision is frozen in Phase 16A from authenticated read-only inventory plus current application contracts. No cloud resources were created or mutated in 16A. Implementation: 16B and 16C completed the Azure path; 16D completed AWS HTTPS hosting (COMPLETE / PASS); 16E is next for Gmail → Bedrock; 16F remains parity/hardening.
 
 ## Date
 
@@ -112,9 +112,9 @@ Do not introduce Terraform, Bicep, CDK, or CloudFormation in Phase 16. Continue 
 - Phase 16C live-validated the frozen Azure path: Graph delegated OAuth → Key Vault persistence → Graph list → ACA same-revision recycle → Graph list without reauthorization → one `MicrosoftFoundryProvider` selected-message analysis → explicit Propose (PENDING) → explicit Approve (APPROVED) → STOP before Send. That does not certify geo redundancy, Key Vault outage resilience, multi-replica races, credential rotation, Foundry load/quality, Gmail on Azure, or live execute/send.
 - Azure Static Web Apps control-plane location is West US 2. Spain Central is not a SWA region; West Europe refused new SWA customers. Static content is still served from the SWA global edge. Hostname: `https://witty-island-03f5de51e.7.azurestaticapps.net`.
 - Runtime UAMI requires **Key Vault Secrets Officer** (not Secrets User) because the credential store calls get, set, and delete.
-- AWS browser proof requires new CloudFront, S3, and ALB resources; ALB has standing cost during 16D/16E.
-- Entra and mailbox OAuth apps gain extra HTTPS redirect/callback URIs; they are not replaced.
-- Key Vault and Secrets Manager become mandatory cloud credential stores. Azure runtime UAMI has Key Vault Secrets Officer (16B). ECS task role still needs Secrets Manager data-plane permissions in 16D.
+- AWS browser proof required new CloudFront, S3, and ALB resources; ALB has standing cost during 16D/16E. Phase 16D implemented the frozen AWS path: private S3 + CloudFront OAC SPA `https://d1ut7j94w7lt3b.cloudfront.net`; API CloudFront `https://dnookm0ucbhv1.cloudfront.net` → HTTP ALB `eci-alb-dev` → ECS `eci-api-dev:6` (image `0050b30`) → RDS `eci-pg-dev` → Secrets Manager backend. Entra/MSAL, CORS, protected analyses, and connector-list reads passed. Gmail, Graph mailbox, Bedrock inference, and Send were not exercised. The connector-list 503 correction (`get_connector_account_listing_service`) is a composition fix, not a topology change.
+- Entra and mailbox OAuth apps gain extra HTTPS redirect/callback URIs; they are not replaced. 16D added the AWS SPA CloudFront redirect while preserving localhost and Azure SWA redirects.
+- Key Vault and Secrets Manager become mandatory cloud credential stores. Azure runtime UAMI has Key Vault Secrets Officer (16B). ECS task role has `eci-mailbox-secrets-runtime-dev` (16D). The ECS execution role has `eci-runtime-db-secret-execution-dev` for the `DATABASE_URL` secret reference. Temporary 16D operator IAM is cleanup debt for 16F.
 - ADR-010 remains the historical ALB-native TLS decision. This ADR selects CloudFront default HTTPS in front of HTTP ALB so Phase 16 does not wait on a custom domain.
 
 ## Benefits

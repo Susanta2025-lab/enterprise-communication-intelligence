@@ -47,9 +47,9 @@ ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented
 
 ADR-008 records the Phase 7 observability decision: portable structured logs with request correlation, plus native Azure and AWS log retention and platform metrics. Tracing and custom metric infrastructure remain deferred.
 
-ADR-009 records provider-independent OIDC JWT validation and permission `communications:analyze`. Live Entra is the first IdP. Azure real-bearer requests are verified; AWS real bearer is deferred until TLS.
+ADR-009 records provider-independent OIDC JWT validation and permission `communications:analyze`. Live Entra is the first IdP. Azure real-bearer requests are verified. Phase 16D verified AWS real-bearer requests over CloudFront HTTPS (analyses and connector-list; no Bedrock).
 
-ADR-010 records Azure Container Apps managed HTTPS as live ingress, and AWS ALB as verified then torn down. Direct AWS task HTTP is verification-only.
+ADR-010 records Azure Container Apps managed HTTPS as live ingress, and AWS ALB as verified then torn down in Phase 8B. Direct AWS task HTTP is verification-only. ADR-026 selects CloudFront default HTTPS in front of HTTP ALB for Phase 16; 16D implemented that path.
 
 ADR-011 records automatic tests-only CI and manual multi-cloud CD with GitHub OIDC. First verified deploy is commit `dd55327` with identical ACR and ECR digests.
 
@@ -81,7 +81,7 @@ ADR-024 records that `communications:read` is distinct from connect, analyze, wo
 
 ADR-025 records the Phase 15A browser foundation: same-repository React + TypeScript + Vite SPA, MSAL public client, FastAPI bearer tokens, no BFF or application cookies, mailbox OAuth remaining server-side, TanStack Query for server state, and an explicit CORS origin allowlist. A dedicated Entra SPA registration is preferred for live browser operation and was not created in 15A.
 
-ADR-026 records Phase 16 hosting: environment-specific Vite SPA builds, Azure Static Web Apps → ACA, AWS S3/CloudFront SPA plus CloudFront HTTPS → HTTP ALB → ECS (no custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, crossed Graph+Foundry / Gmail+Bedrock proofs, and no live Send by default. ADR-010's ALB-native TLS still needs ACM/domain; Phase 16 uses CloudFront default certificates instead.
+ADR-026 records Phase 16 hosting: environment-specific Vite SPA builds, Azure Static Web Apps → ACA, AWS S3/CloudFront SPA plus CloudFront HTTPS → HTTP ALB → ECS (no custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, crossed Graph+Foundry / Gmail+Bedrock proofs, and no live Send by default. ADR-010's ALB-native TLS still needs ACM/domain; Phase 16 uses CloudFront default certificates instead. 16B/16C implemented the Azure path. 16D implemented AWS HTTPS hosting (COMPLETE / PASS) without Gmail, Bedrock, or Send. 16E is next.
 
 ## Template
 

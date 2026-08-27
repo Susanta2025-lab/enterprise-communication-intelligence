@@ -61,7 +61,7 @@ The project is being developed as a practical demonstration of **AI Solution Arc
 * Azure Container Apps with user-assigned Managed Identity and Microsoft Foundry
 * Amazon ECS on Fargate with an ECS Task Role and Amazon Bedrock
 * Azure Container Apps managed HTTPS (`allowInsecure=false`, operator `/32`)
-* AWS ALB architecture verified then removed; Phase 16A freezes CloudFront HTTPS → HTTP ALB → ECS without a custom domain (not created yet)
+* AWS ALB architecture verified then removed in Phase 8B; Phase 16D restores CloudFront HTTPS → HTTP ALB → ECS without a custom domain (SPA and API are separate distributions)
 * No cloud credentials baked into the application image
 
 ### Authentication
@@ -284,6 +284,8 @@ Phase 15 does not deploy the SPA to ACA/ECS/AWS, add sync/search/attachments/wor
 * ✅ Phase 15G – Live Browser Validation + Documentation
 * ✅ Phase 16A – Cloud Runtime / Deployment Readiness
 * ✅ Phase 16B – Azure Full-Stack Browser Deployment
+* ✅ Phase 16C – Azure Live Mailbox → Microsoft Foundry Validation
+* ✅ Phase 16D – AWS HTTPS + Full-Stack Browser Deployment
 
 ---
 
@@ -748,9 +750,11 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 15E – Workflow + Explicit Send UX  | ✅ Completed   |
 | ↳ Phase 15F – Accessibility / Responsive | ✅ Completed   |
 | ↳ Phase 15G – Live Browser Validation    | ✅ Completed   |
-| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A–16B completed; 16C–16F not started |
+| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A–16D completed; 16E next; 16F not started |
 | ↳ Phase 16A – Cloud Runtime / Deployment Readiness | ✅ Completed   |
 | ↳ Phase 16B – Azure Full-Stack Browser Deployment | ✅ Completed   |
+| ↳ Phase 16C – Azure Live Mailbox → Foundry Validation | ✅ Completed   |
+| ↳ Phase 16D – AWS HTTPS + Full-Stack Browser Deployment | ✅ Completed   |
 
 ---
 
@@ -774,20 +778,18 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Amazon RDS (Phase 9 is CI-proven; Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` exists from Phase 16B; 16D creates RDS under authorization)
+* Amazon RDS `eci-pg-dev` exists from Phase 16D (PostgreSQL 16.15; schema head `13a0001`); dual standing Azure+AWS databases remain a 16F cost-hardening concern
 * Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
-* Cloud-hosted end-to-end Gmail/Graph OAuth or Phase 14 mailbox→AI certification on Azure Container Apps (16B deployed current-master ACA + SWA + PostgreSQL; mailbox OAuth, Foundry inference, and Send were not started)
-* Foundry or Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`; 16B configured Foundry but did not invoke it)
-* Phase 15 browser SPA on AWS CloudFront (Azure Static Web Apps `eci-web-dev` exists from Phase 16B)
+* AWS-hosted Gmail OAuth or Phase 14 mailbox→AI certification on ECS (16D hosted the AWS SPA/API path; Gmail, Graph mailbox, Bedrock inference, and Send were not started). Azure Graph → Foundry analyze → Propose → Approve was live-validated in 16C and stopped before Send
+* Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`; 16C used Foundry once on Azure; 16D did not invoke Bedrock)
 * Local in-memory credential store may require exact-account reauthorization after a FastAPI process restart even when the connector row remains `ACTIVE`; durable Key Vault / Secrets Manager backends remain the production architecture
-* AWS browser HTTPS API path (CloudFront → HTTP ALB → ECS; no custom domain) not yet created; direct task-IP HTTP remains verification-only
-* AWS real-bearer authorized requests (deferred until the Phase 16D HTTPS path exists)
+* Phase 16F temporary IAM inventory/cleanup, cost hardening, and cross-cloud parity
 * Phase 8B temporary IAM policy cleanup if still attached
 * Distributed tracing, custom metrics, dashboards, alerts, and SLOs
 * Database backup, PITR, HA, and cross-region DR
 
-AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Direct AWS task HTTP remains verification-only. Phase 16A freezes CloudFront default HTTPS in front of a new HTTP ALB as the browser path (no custom domain); that ALB is not created yet. Current cloud application environments do not have Phase 9 database configuration.
+AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Phase 16D restored CloudFront default HTTPS in front of HTTP ALB `eci-alb-dev` as the browser API path (no custom domain). Direct AWS task HTTP remains verification-only. Never send a real bearer token to task-IP HTTP. Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` and Amazon RDS `eci-pg-dev` both exist; sequential stop/pause belongs to 16F.
 
 ---
 

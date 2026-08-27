@@ -201,12 +201,12 @@ Default local `python -m pytest` skips `tests/postgres/` unless `ECI_POSTGRES_TE
 - migration upgrade / downgrade / upgrade
 - 34 real PostgreSQL tests
 - SQLite local test strategy
+- Azure managed PostgreSQL connection (16B/16C Flexible Server `eci-pg-dev-susanta`)
+- Amazon RDS connection (16D `eci-pg-dev` via ECS; health/readiness and connector-list reads)
 
 **Not yet proven**
 
-- Azure managed PostgreSQL connection
-- Amazon RDS connection
-- private networking to a database
+- private networking to a database as a hardened production pattern
 - passwordless Azure database identity
 - AWS RDS IAM database authentication
 - managed HA / failover

@@ -242,6 +242,20 @@ Those logs did not contain mailbox identity, message subject/body, analysis/draf
 
 This is not a claim of tracing completeness, multi-replica certification, or Send-path telemetry.
 
+## Phase 16D connector-list provenance
+
+Phase 16D reused the Phase 7 telemetry contract. No OpenTelemetry, dashboards, or alerts were added.
+
+CloudWatch Logs (`/ecs/eci-api-dev`) retained bounded events proving the AWS hosted connector-list path after the corrective image:
+
+- authentication succeeded
+- identity `find_existing`
+- `connector_accounts_listed` with `result_count=0`
+
+No OAuth-store or provider operation occurred. Those logs did not contain tokens, mailbox identity, secret names, or `credential_ref`.
+
+This is not a claim of Gmail, Graph mailbox, Bedrock inference, or Send-path telemetry.
+
 ## Cross-cloud comparison
 
 | Concern | Shared / Azure / AWS |

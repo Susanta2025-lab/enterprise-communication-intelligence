@@ -42,7 +42,7 @@ The same Docker image was verified locally and deployed to both clouds. Direct F
 | Idle compute | min replicas 0 | desiredCount 0 |
 | Static cloud credentials | None | None |
 
-A production AWS service would normally introduce a stable ingress layer and TLS termination.
+A production AWS service would normally introduce a stable ingress layer and TLS termination. Phase 16D did that with CloudFront default HTTPS in front of HTTP ALB (no custom domain). See the Phase 16 comparison below.
 
 ## Production hardening (Phase 8)
 
@@ -52,13 +52,28 @@ GitHub Actions CI is automatic and tests-only. Manual `workflow_dispatch` CD dep
 
 | Concern | Azure | AWS |
 |---|---|---|
-| Application-user auth | Entra JWT over HTTPS | Entra JWT configured; real bearer deferred until TLS |
-| Live ingress | Container Apps HTTPS, public (OIDC) | operator `/32` HTTP (verification-only) |
-| Production TLS | ACA managed TLS | domain/ACM deferred |
+| Application-user auth | Entra JWT over HTTPS | Entra JWT configured; Phase 8 real bearer deferred until TLS |
+| Live ingress | Container Apps HTTPS, public (OIDC) | Phase 8: operator `/32` HTTP (verification-only) |
+| Production TLS | ACA managed TLS | Phase 8: domain/ACM deferred |
 | Deploy identity | user-assigned managed identity `eci-github-deploy-dev` | IAM role `eci-github-deploy-dev` |
 | Workload identity | user-assigned managed identity `eci-ca-identity-dev` | Task Role `eci-bedrock-task-role-dev` |
 
-See [Authentication](authentication.md), [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), [ADR-010](../decisions/ADR-010-multi-cloud-ingress.md), [ADR-011](../decisions/ADR-011-github-actions-oidc-cicd.md), [ADR-012](../decisions/ADR-012-postgresql-persistence-architecture.md), [ADR-013](../decisions/ADR-013-external-identity-mapping-and-user-owned-data.md), and [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md).
+See [Authentication](authentication.md), [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [ADR-009](../decisions/ADR-009-application-user-authentication.md), [ADR-010](../decisions/ADR-010-multi-cloud-ingress.md), [ADR-011](../decisions/ADR-011-github-actions-oidc-cicd.md), [ADR-012](../decisions/ADR-012-postgresql-persistence-architecture.md), [ADR-013](../decisions/ADR-013-external-identity-mapping-and-user-owned-data.md), [ADR-014](../decisions/ADR-014-cloud-postgresql-deployment-strategy.md), and [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
+
+## Cloud-hosted browser path (Phase 16)
+
+Phase 16A froze the topology. 16B/16C implemented Azure. 16D implemented AWS HTTPS hosting. 16E (Gmail → Bedrock) is next. No live Send on either cloud.
+
+| Concern | Azure (16B/16C) | AWS (16D) |
+|---|---|---|
+| SPA HTTPS | Static Web Apps `eci-web-dev` | private S3 + CloudFront OAC `E1XFNK98P7PU2W` |
+| API HTTPS | ACA managed HTTPS | CloudFront `E2IF9K4FM4A6WJ` → HTTP ALB → ECS |
+| Custom domain | not required | not required |
+| PostgreSQL | Flexible Server `eci-pg-dev-susanta` | RDS `eci-pg-dev` |
+| Credential store | Azure Key Vault | AWS Secrets Manager |
+| Browser MSAL / CORS | verified | verified |
+| Mailbox + AI | Graph → Foundry → Propose → Approve (16C) | not exercised; 16E |
+| Send | not performed | not performed |
 
 ## Observability comparison (Phase 7)
 
@@ -80,7 +95,7 @@ The persistence implementation is the same on both clouds: PostgreSQL via SQLAlc
 | Concern | Azure | AWS |
 |---|---|---|
 | Production dialect | PostgreSQL | PostgreSQL |
-| Managed database | Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` (16B) | not provisioned (16D) |
+| Managed database | Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` (16B) | Amazon RDS `eci-pg-dev` (16D) |
 | Preferred future colocated DB | Azure Database for PostgreSQL Flexible Server | Amazon RDS for PostgreSQL |
 | Phase 9 proof | GitHub Actions `postgres:16` | GitHub Actions `postgres:16` |
 

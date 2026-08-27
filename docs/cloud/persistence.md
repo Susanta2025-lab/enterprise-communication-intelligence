@@ -97,7 +97,7 @@ Later credential options:
 1. secret-managed DB credential
 2. RDS IAM database authentication where operationally appropriate
 
-IAM database authentication is not implemented. Phase 16A could not call `rds:Describe*` as `eci-developer`; the ECS task has no `DATABASE_URL`. Treat RDS as absent and required later (16D) under an explicit cost/authorization gate.
+IAM database authentication is not implemented. Phase 16D created Amazon RDS for PostgreSQL `eci-pg-dev` (PostgreSQL 16.15, database `eci`, runtime role `eci_app`, TLS required, schema head `13a0001`). `DATABASE_URL` is an ECS secret reference; plaintext is absent from the task environment. Sequential validation must still avoid leaving Azure PG and RDS both standing indefinitely (16F). See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 ## DATABASE_URL and secrets
 
@@ -110,7 +110,7 @@ Future injection, not implemented:
 - Azure: Key Vault, secret reference, or identity-based access
 - AWS: Secrets Manager, task identity, or IAM-based alternatives
 
-Phase 9D does not configure cloud `DATABASE_URL`. Current Azure Container Apps and ECS environments remain without Phase 9 database configuration. Do not deploy Phase 9 to those runtimes until a colocated database exists.
+Phase 9D does not configure cloud `DATABASE_URL`. Phase 16B configured Azure Container Apps `DATABASE_URL` as an ACA secret. Phase 16D configured ECS `DATABASE_URL` as a secret reference. Do not commit passwords.
 
 ## Runtime versus migration identity
 
@@ -151,7 +151,7 @@ Job permissions are `contents: read` only. The job does not log in to Azure or A
 
 ## Deferred production database concerns
 
-Because no managed production database exists:
+Because Phase 9 itself provisioned no managed production database, these operational concerns remain outside Phase 9 proof. 16B/16D provisioned colocated servers for browser certification; they do not certify:
 
 - managed backup and PITR
 - replication
@@ -165,4 +165,4 @@ CI PostgreSQL is not production backup, HA, or DR proof.
 
 ## Current cloud environments
 
-Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). Phase 16C persisted a Graph `ConnectorAccount` (ACTIVE) and a `WorkflowAction` (PENDING → APPROVED) on that database. Schema head remains `13a0001`. No new Alembic revision. ECS service `eci-api-dev` still has no Phase 9 database configuration (16D).
+Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). Phase 16C persisted a Graph `ConnectorAccount` (ACTIVE) and a `WorkflowAction` (PENDING → APPROVED) on that database. ECS service `eci-api-dev` runs `eci-api-dev:6` (image `0050b30`) with Amazon RDS `eci-pg-dev` (`DATABASE_URL` as an ECS secret reference). Phase 16D used that database for identity mapping and an empty owned connector-account list (`result_count=0`). Schema head remains `13a0001`. No new Alembic revision.
