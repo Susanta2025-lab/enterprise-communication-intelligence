@@ -1,11 +1,19 @@
 """Unit tests for API dependency providers."""
 
+import inspect
+from collections.abc import Callable
+from typing import Annotated, get_args, get_origin
+
 import pytest
 from fastapi import HTTPException
+from fastapi.params import Depends as DependsParam
 
 from app.api.dependencies import (
     get_ai_provider,
     get_communication_analysis_service,
+    get_connector_account_listing_service,
+    get_connector_account_oauth_service,
+    get_connector_account_service,
     get_workflow_action_service,
     require_authenticated_communications_connect,
     require_authenticated_communications_read,
@@ -20,11 +28,19 @@ from app.api.dependencies import (
     require_communications_workflow,
     require_permission,
     require_permissions,
+    require_unit_of_work_factory,
+)
+from app.api.routes.connector_accounts import (
+    disconnect_connector_account,
+    list_owned_connector_accounts,
+    reauthorize_connector_account,
 )
 from app.application.services.communication_analysis import CommunicationAnalysisService
+from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.identity import IdentityResolver
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
+from app.core.exceptions import ServiceUnavailableError
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_READ_PERMISSION,
@@ -561,3 +577,128 @@ def test_mailbox_read_http_client_closes_after_generator_exit() -> None:
     with pytest.raises(StopIteration):
         next(generator)
     assert client.is_closed is True
+
+
+def _depends_on(func: Callable[..., object], target: Callable[..., object]) -> bool:
+    seen: set[object] = set()
+    stack: list[Callable[..., object] | None] = [func]
+    while stack:
+        current = stack.pop()
+        if current is None or current in seen:
+            continue
+        seen.add(current)
+        if current is target:
+            return True
+        try:
+            signature = inspect.signature(current)
+        except (TypeError, ValueError):
+            continue
+        for parameter in signature.parameters.values():
+            candidates: list[object] = [parameter.default]
+            annotation = parameter.annotation
+            if get_origin(annotation) is Annotated:
+                candidates.extend(get_args(annotation)[1:])
+            for candidate in candidates:
+                if isinstance(candidate, DependsParam) and candidate.dependency is not None:
+                    stack.append(candidate.dependency)
+    return False
+
+
+def test_connector_account_list_depends_on_read_listing_service() -> None:
+    """GET listing is communications:read plus persistence, not connect/store."""
+    assert _depends_on(list_owned_connector_accounts, get_connector_account_listing_service)
+    assert _depends_on(list_owned_connector_accounts, require_authenticated_communications_read)
+    assert _depends_on(get_connector_account_listing_service, require_unit_of_work_factory)
+    assert not _depends_on(list_owned_connector_accounts, get_connector_account_service)
+    assert not _depends_on(
+        list_owned_connector_accounts,
+        require_authenticated_communications_connect,
+    )
+    assert not _depends_on(
+        get_connector_account_listing_service,
+        require_authenticated_communications_connect,
+    )
+    listing_source = inspect.getsource(get_connector_account_listing_service)
+    assert "require_shared_oauth_store" not in listing_source
+    assert "token_revoker" not in listing_source
+
+
+def test_connector_account_lifecycle_still_requires_connect() -> None:
+    """Disconnect and reauthorize remain communications:connect protected."""
+    assert _depends_on(disconnect_connector_account, get_connector_account_service)
+    assert _depends_on(
+        disconnect_connector_account,
+        require_authenticated_communications_connect,
+    )
+    assert not _depends_on(disconnect_connector_account, get_connector_account_listing_service)
+    assert _depends_on(reauthorize_connector_account, get_connector_account_oauth_service)
+    assert _depends_on(
+        reauthorize_connector_account,
+        require_authenticated_communications_connect,
+    )
+    assert _depends_on(
+        get_connector_account_service,
+        require_authenticated_communications_connect,
+    )
+    assert _depends_on(
+        get_connector_account_oauth_service,
+        require_authenticated_communications_connect,
+    )
+
+
+def test_get_connector_account_listing_service_is_persistence_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Listing construction does not touch the mailbox OAuth credential store."""
+
+    def _forbidden_store(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("listing must not require the shared OAuth store")
+
+    monkeypatch.setattr(
+        "app.infrastructure.oauth.runtime.require_shared_oauth_store",
+        _forbidden_store,
+    )
+
+    def _factory() -> object:
+        raise AssertionError("unit of work should not open during construction")
+
+    principal = _principal(COMMUNICATIONS_READ_PERMISSION)
+    service = get_connector_account_listing_service(principal, _factory)
+    assert isinstance(service, ConnectorAccountService)
+    assert service._credential_store is None
+    assert service._token_revokers == {}
+
+
+def test_connector_account_lifecycle_builder_requires_oauth_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Disconnect/reauthorize construction still requires the shared OAuth store."""
+    monkeypatch.setenv("AI_PROVIDER", "mock")
+    for name in (
+        "GMAIL_OAUTH_CLIENT_ID",
+        "GMAIL_OAUTH_CLIENT_SECRET",
+        "GMAIL_OAUTH_REDIRECT_URI",
+        "MICROSOFT_OAUTH_CLIENT_ID",
+        "MICROSOFT_OAUTH_CLIENT_SECRET",
+        "MICROSOFT_OAUTH_REDIRECT_URI",
+        "MICROSOFT_OAUTH_TENANT",
+        "CREDENTIAL_STORE_BACKEND",
+        "DATABASE_URL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    get_settings.cache_clear()
+
+    def _factory() -> object:
+        raise AssertionError("unit of work should not open during construction")
+
+    monkeypatch.setattr("app.api.dependencies.get_unit_of_work_factory", lambda: _factory)
+    principal = _principal(COMMUNICATIONS_CONNECT_PERMISSION)
+    with pytest.raises(ServiceUnavailableError):
+        get_connector_account_service(principal)
+    with pytest.raises(ServiceUnavailableError):
+        get_connector_account_oauth_service(principal)
+    listing = get_connector_account_listing_service(principal, _factory)
+    assert listing._credential_store is None
+    from app.api import dependencies as deps
+
+    assert "require_shared_oauth_store" in inspect.getsource(deps._build_connector_account_service)

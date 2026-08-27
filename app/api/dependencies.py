@@ -834,6 +834,22 @@ def _build_microsoft_mailbox_oauth_service() -> MicrosoftMailboxOAuthService:
     )
 
 
+def get_connector_account_listing_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> ConnectorAccountService:
+    """Build connector-account metadata listing after communications:read.
+
+    Listing uses identity mapping and persistence only. It does not construct
+    the mailbox OAuth credential store or token revokers, and it does not
+    require communications:connect.
+    """
+    return ConnectorAccountService(IdentityResolver(uow_factory), uow_factory)
+
+
 def get_connector_account_service(
     _principal: Annotated[
         AuthenticatedPrincipal,

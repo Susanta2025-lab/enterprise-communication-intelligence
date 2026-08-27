@@ -19,7 +19,7 @@ from app.application.services.connector_accounts import ConnectorAccountService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.core.config import get_settings
-from app.core.security import COMMUNICATIONS_CONNECT_PERMISSION
+from app.core.security import COMMUNICATIONS_CONNECT_PERMISSION, COMMUNICATIONS_READ_PERMISSION
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces.communication_credential_store import (
     CommunicationCredentialRecord,
@@ -311,3 +311,45 @@ def test_reauthorize_active_conflicts_and_disconnected_starts(
     stored = next(iter(unit.mailbox_authorization_session_store.values()))
     assert stored.connector_account_id == disconnected.id
     assert stored.pkce_verifier not in started.text
+
+
+def test_disconnect_rejects_read_without_connect(
+    lifecycle_app, lifecycle_client: TestClient
+) -> None:
+    """communications:read does not authorize disconnect."""
+    _application, _accounts, _gmail, _fake, unit, store, private_key = lifecycle_app
+    account = _seed_gmail_account(unit, store, status=ConnectorAccountStatus.ACTIVE)
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+    )
+    response = lifecycle_client.post(
+        _DISCONNECT_URL.format(connector_account_id=account.id),
+        headers=bearer_header(token),
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not authorized"}
+    assert unit.connector_account_store[account.id].status is ConnectorAccountStatus.ACTIVE
+    assert store.get(_LOCATOR) is not None
+
+
+def test_reauthorize_requires_connect_permission(
+    lifecycle_app, lifecycle_client: TestClient
+) -> None:
+    """Reauthorization remains communications:connect protected."""
+    _application, _accounts, _gmail, fake, unit, store, private_key = lifecycle_app
+    account = _seed_gmail_account(unit, store, status=ConnectorAccountStatus.DISCONNECTED)
+    analyze_only = encode_test_token(private_key, extra_claims={"scp": TEST_PERMISSION})
+    read_only = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+    )
+    for token in (analyze_only, read_only):
+        response = lifecycle_client.post(
+            _REAUTHORIZE_URL.format(connector_account_id=account.id),
+            headers=bearer_header(token),
+        )
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Not authorized"}
+    assert fake.last_state is None
+    assert unit.mailbox_authorization_session_store == {}

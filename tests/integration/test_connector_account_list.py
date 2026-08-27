@@ -8,16 +8,17 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies import get_connector_account_service, get_token_validator
-from app.application.services.connector_accounts import ConnectorAccountService
-from app.application.services.identity import IdentityResolver
+from app.api.dependencies import get_token_validator, get_unit_of_work_factory
 from app.core.config import get_settings
+from app.core.exceptions import ServiceUnavailableError
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_READ_PERMISSION,
+    COMMUNICATIONS_SEND_PERMISSION,
+    COMMUNICATIONS_WORKFLOW_PERMISSION,
 )
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
-from app.infrastructure.credentials.memory import InMemoryCommunicationCredentialStore
+from app.infrastructure.oauth import runtime as oauth_runtime
 from app.main import create_app
 from tests.support.in_memory_persistence import (
     InMemoryUnitOfWork,
@@ -68,6 +69,17 @@ _SETTINGS_ENV_VARS = (
     "OIDC_REQUIRED_PERMISSION",
     "DATABASE_URL",
     "FRONTEND_OAUTH_RETURN_URL",
+    "GMAIL_OAUTH_CLIENT_ID",
+    "GMAIL_OAUTH_CLIENT_SECRET",
+    "GMAIL_OAUTH_REDIRECT_URI",
+    "MICROSOFT_OAUTH_CLIENT_ID",
+    "MICROSOFT_OAUTH_CLIENT_SECRET",
+    "MICROSOFT_OAUTH_REDIRECT_URI",
+    "MICROSOFT_OAUTH_TENANT",
+    "CREDENTIAL_STORE_BACKEND",
+    "AZURE_KEY_VAULT_URL",
+    "AWS_SECRETS_MANAGER_REGION",
+    "AWS_SECRETS_MANAGER_NAMESPACE",
 )
 
 
@@ -101,28 +113,28 @@ def private_key():
     return generate_test_rsa_private_key()
 
 
+def _store_unavailable(*_args, **_kwargs):
+    raise ServiceUnavailableError("Gmail mailbox authorization is unavailable.")
+
+
 @pytest.fixture
 def list_app(monkeypatch: pytest.MonkeyPatch, private_key):
     _clear_settings_env(monkeypatch)
     _enable_oidc_env(monkeypatch)
     get_settings.cache_clear()
+    monkeypatch.setattr(oauth_runtime, "require_shared_oauth_store", _store_unavailable)
     validator = make_test_validator(private_key)
     unit = InMemoryUnitOfWork()
     factory = UnitOfWorkFactory(unit)
-    accounts = ConnectorAccountService(
-        IdentityResolver(factory),
-        factory,
-        credential_store=InMemoryCommunicationCredentialStore(),
-    )
     application = create_app()
     application.dependency_overrides[get_token_validator] = lambda: validator
-    application.dependency_overrides[get_connector_account_service] = lambda: accounts
-    return application, accounts, unit, private_key
+    application.dependency_overrides[get_unit_of_work_factory] = lambda: factory
+    return application, unit, private_key
 
 
 @pytest.fixture
 def list_client(list_app) -> Iterator[TestClient]:
-    application, _accounts, _unit, _key = list_app
+    application, _unit, _key = list_app
     with TestClient(application) as test_client:
         yield test_client
 
@@ -163,7 +175,7 @@ def test_list_requires_bearer(list_client: TestClient) -> None:
 
 
 def test_list_requires_communications_read(list_app, list_client: TestClient) -> None:
-    _application, _accounts, unit, private_key = list_app
+    _application, unit, private_key = list_app
     _seed_account(unit)
     token = encode_test_token(
         private_key,
@@ -185,7 +197,7 @@ def test_list_empty_when_principal_has_no_identity(
 
 
 def test_list_returns_only_owned_accounts(list_app, list_client: TestClient, private_key) -> None:
-    _application, _accounts, unit, _key = list_app
+    _application, unit, _key = list_app
     owned = _seed_account(unit, owner_subject=TEST_SUBJECT)
     other = _seed_account(
         unit,
@@ -211,7 +223,7 @@ def test_list_includes_lifecycle_states_and_capabilities(
     list_client: TestClient,
     private_key,
 ) -> None:
-    _application, _accounts, unit, _key = list_app
+    _application, unit, _key = list_app
     user_id = uuid4()
     unit.identities[(TEST_ISSUER, TEST_SUBJECT)] = user_id
     active = sample_connector_account(
@@ -274,7 +286,7 @@ def test_list_includes_lifecycle_states_and_capabilities(
 
 
 def test_list_pagination_bounds(list_app, list_client: TestClient, private_key) -> None:
-    _application, _accounts, unit, _key = list_app
+    _application, unit, _key = list_app
     first = _seed_account(unit, external_account_id="google-oidc-sub-page-1")
     second = _seed_account(
         unit,
@@ -298,3 +310,58 @@ def test_list_pagination_bounds(list_app, list_client: TestClient, private_key) 
     assert list_client.get(f"{_LIST_URL}?limit=0", headers=headers).status_code == 422
     assert list_client.get(f"{_LIST_URL}?limit=101", headers=headers).status_code == 422
     assert list_client.get(f"{_LIST_URL}?offset=-1", headers=headers).status_code == 422
+
+
+def test_list_does_not_require_communications_connect(
+    list_app,
+    list_client: TestClient,
+    private_key,
+) -> None:
+    """Metadata listing is authorized by communications:read alone."""
+    _application, unit, _key = list_app
+    owned = _seed_account(unit)
+    token = encode_test_token(
+        private_key,
+        extra_claims={"scp": COMMUNICATIONS_READ_PERMISSION},
+    )
+    response = list_client.get(f"{_LIST_URL}?limit=20&offset=0", headers=bearer_header(token))
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["limit"] == 20
+    assert payload["offset"] == 0
+    assert [item["id"] for item in payload["items"]] == [str(owned.id)]
+    assert payload["items"][0]["provider"] == "gmail"
+    serialized = response.text.lower()
+    for field in _FORBIDDEN_FIELDS:
+        assert field not in serialized
+
+
+def test_list_succeeds_when_mailbox_oauth_store_is_unavailable(
+    list_app,
+    list_client: TestClient,
+    private_key,
+) -> None:
+    """Former production wiring required the shared OAuth store and returned 503."""
+    _application, unit, _key = list_app
+    owned = _seed_account(unit, provider="microsoft_graph", external_account_id="tid:oid-aws-001")
+    token = encode_test_token(
+        private_key,
+        extra_claims={
+            "scp": " ".join(
+                (
+                    COMMUNICATIONS_READ_PERMISSION,
+                    TEST_PERMISSION,
+                    COMMUNICATIONS_CONNECT_PERMISSION,
+                    COMMUNICATIONS_WORKFLOW_PERMISSION,
+                    COMMUNICATIONS_SEND_PERMISSION,
+                )
+            )
+        },
+    )
+    response = list_client.get(f"{_LIST_URL}?limit=20&offset=0", headers=bearer_header(token))
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(owned.id)]
+    assert "oauth-list-locator-01" not in response.text
+    with pytest.raises(ServiceUnavailableError):
+        oauth_runtime.require_shared_oauth_store(get_settings())

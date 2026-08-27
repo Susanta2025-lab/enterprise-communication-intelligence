@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import (
+    get_connector_account_listing_service,
     get_connector_account_oauth_service,
     get_connector_account_service,
     require_authenticated_communications_connect,
@@ -86,7 +87,7 @@ def list_owned_connector_accounts(
     ],
     service: Annotated[
         ConnectorAccountService,
-        Depends(get_connector_account_service),
+        Depends(get_connector_account_listing_service),
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
