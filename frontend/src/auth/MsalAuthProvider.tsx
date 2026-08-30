@@ -1,4 +1,4 @@
-import { InteractionStatus, type IPublicClientApplication } from "@azure/msal-browser";
+import { InteractionStatus, type AccountInfo, type IPublicClientApplication } from "@azure/msal-browser";
 import { MsalProvider, useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -7,6 +7,25 @@ import { permissionsFromAccessToken } from "./accessTokenClaims";
 import { AuthContext } from "./AuthContext";
 import { buildLoginRequest } from "./msal";
 import type { EciPermission } from "./permissions";
+
+const EMPTY_PERMISSIONS: readonly EciPermission[] = [];
+
+function resolveAccount(instance: IPublicClientApplication): AccountInfo | null {
+  return instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+}
+
+function samePermissionList(
+  left: readonly EciPermission[],
+  right: readonly EciPermission[],
+): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function retainPermissionsIfUnchanged(
+  next: readonly EciPermission[],
+): (previous: readonly EciPermission[]) => readonly EciPermission[] {
+  return (previous) => (samePermissionList(previous, next) ? previous : next);
+}
 
 type MsalAuthProviderProps = {
   config: FrontendConfig;
@@ -35,35 +54,41 @@ function MsalAuthSession({
   const [permissions, setPermissions] = useState<readonly EciPermission[]>([]);
   const interactionInProgress = inProgress !== InteractionStatus.None;
 
-  const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+  const account = resolveAccount(instance);
+  const accountId = account?.homeAccountId ?? null;
   const displayName = account?.name?.trim() || account?.username?.trim() || null;
 
   useEffect(() => {
-    if (!isAuthenticated || account === null) {
-      setPermissions([]);
+    if (!isAuthenticated || accountId === null) {
+      setPermissions(retainPermissionsIfUnchanged(EMPTY_PERMISSIONS));
+      return;
+    }
+    const currentAccount = resolveAccount(instance);
+    if (currentAccount === null || currentAccount.homeAccountId !== accountId) {
+      setPermissions(retainPermissionsIfUnchanged(EMPTY_PERMISSIONS));
       return;
     }
     let cancelled = false;
     void instance
       .acquireTokenSilent({
-        account,
+        account: currentAccount,
         scopes: [...config.eciApiScopes],
       })
       .then((result) => {
         if (cancelled || !result.accessToken) {
           return;
         }
-        setPermissions(permissionsFromAccessToken(result.accessToken));
+        setPermissions(retainPermissionsIfUnchanged(permissionsFromAccessToken(result.accessToken)));
       })
       .catch(() => {
         if (!cancelled) {
-          setPermissions([]);
+          setPermissions(retainPermissionsIfUnchanged(EMPTY_PERMISSIONS));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [account, config.eciApiScopes, instance, isAuthenticated]);
+  }, [accountId, config.eciApiScopes, instance, isAuthenticated]);
 
   const login = useCallback(async () => {
     if (interactionInProgress) {
