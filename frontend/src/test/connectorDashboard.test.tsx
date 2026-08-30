@@ -10,8 +10,15 @@ import {
   GMAIL_AUTHORIZE_PATH,
   MICROSOFT_GRAPH_AUTHORIZE_PATH,
 } from "../api/errors";
-import type { ConnectorAccount } from "../api/connectorAccounts";
+import {
+  ACCOUNT_IDENTITY_UNAVAILABLE,
+  ConnectAnotherAccountUnavailableError,
+  connectAnotherAccountAvailability,
+  startConnectAnotherAccount,
+  type ConnectorAccount,
+} from "../api/connectorAccounts";
 import type { EciPermission } from "../auth/permissions";
+import { CONNECT_ANOTHER_UNAVAILABLE_COPY } from "../components/connectors/copy";
 import { ConnectorDashboardPage } from "../pages/ConnectorDashboardPage";
 import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
 
@@ -44,8 +51,10 @@ vi.mock("../navigation/external", () => ({
 }));
 
 const GMAIL_ID = "11111111-1111-4111-8111-111111111111";
+const GRAPH_ID = "22222222-2222-4222-8222-222222222222";
 const GMAIL_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth?client_id=test";
 const GRAPH_AUTH_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=test";
+const AMBIGUOUS_RECONNECT = /^Reconnect$/;
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -118,6 +127,8 @@ describe("connector dashboard", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Loading connector accounts");
     expect(await screen.findByRole("button", { name: "Connect Gmail" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Microsoft Outlook" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect another Gmail account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect another Outlook account" })).not.toBeInTheDocument();
     expect(fetchImpl).toHaveBeenCalledWith(
       expect.stringContaining(CONNECTOR_ACCOUNTS_PATH),
       expect.objectContaining({
@@ -132,13 +143,19 @@ describe("connector dashboard", () => {
     );
     renderDashboard({ fetchImpl });
     expect(await screen.findByRole("heading", { name: "Gmail" })).toBeInTheDocument();
+    expect(screen.getByTestId("connector-account-identity")).toHaveTextContent(
+      ACCOUNT_IDENTITY_UNAVAILABLE,
+    );
     expect(screen.getByTestId("connector-status")).toHaveTextContent("Active — mailbox available");
     expect(screen.getByText("mail.read")).toBeInTheDocument();
     expect(screen.getByText("mail.send")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open mailbox" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: AMBIGUOUS_RECONNECT })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Gmail" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect another Gmail account" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Connect Microsoft Outlook" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect another Outlook account" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain(GMAIL_ID);
     expect(document.body.textContent).not.toContain("credential_ref");
     expect(document.body.textContent).not.toContain("external_account_id");
@@ -155,9 +172,14 @@ describe("connector dashboard", () => {
     renderDashboard({ fetchImpl });
     expect(await screen.findByText("Reauthorization required")).toBeInTheDocument();
     expect(screen.getByText(/was not deleted/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.getByTestId("connector-account-identity")).toHaveTextContent(
+      ACCOUNT_IDENTITY_UNAVAILABLE,
+    );
+    expect(screen.getByRole("button", { name: "Reconnect same account" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: AMBIGUOUS_RECONNECT })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open mailbox" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect another Gmail account" })).toBeDisabled();
   });
 
   it("renders DISCONNECTED with reconnect", async () => {
@@ -176,9 +198,15 @@ describe("connector dashboard", () => {
     );
     renderDashboard({ fetchImpl });
     expect(await screen.findByText("Disconnected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.getByTestId("connector-account-identity")).toHaveTextContent(
+      ACCOUNT_IDENTITY_UNAVAILABLE,
+    );
+    expect(screen.getByRole("button", { name: "Reconnect same account" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: AMBIGUOUS_RECONNECT })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Gmail" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open mailbox" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect another Gmail account" })).toBeDisabled();
   });
 
   it("hides lifecycle actions without communications:connect", async () => {
@@ -190,6 +218,7 @@ describe("connector dashboard", () => {
     expect(screen.getByRole("button", { name: "Open mailbox" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Microsoft Outlook" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect another Gmail account" })).not.toBeInTheDocument();
     expect(screen.getAllByText(/communications:connect permission/i).length).toBeGreaterThan(0);
   });
 
@@ -241,6 +270,54 @@ describe("connector dashboard", () => {
       true,
     );
   });
+
+  it("renders a supplied display_identity and does not fabricate an address", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        jsonResponse(
+          200,
+          listBody([account({ id: GMAIL_ID, display_identity: "  ops.mailbox@contoso.example  " })]),
+        ),
+    );
+    renderDashboard({ fetchImpl });
+    expect(await screen.findByTestId("connector-account-identity")).toHaveTextContent(
+      "ops.mailbox@contoso.example",
+    );
+    expect(screen.queryByText(ACCOUNT_IDENTITY_UNAVAILABLE)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(GMAIL_ID);
+  });
+
+  it("treats blank display_identity as unavailable", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => jsonResponse(200, listBody([account({ display_identity: "   " })])),
+    );
+    renderDashboard({ fetchImpl });
+    expect(await screen.findByTestId("connector-account-identity")).toHaveTextContent(
+      ACCOUNT_IDENTITY_UNAVAILABLE,
+    );
+  });
+
+  it("shows provider-level connect-another for an existing Outlook connector", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        jsonResponse(
+          200,
+          listBody([
+            account({
+              id: GRAPH_ID,
+              provider: "microsoft_graph",
+              status: "active",
+            }),
+          ]),
+        ),
+    );
+    renderDashboard({ fetchImpl });
+    expect(await screen.findByRole("heading", { name: "Microsoft Outlook" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect another Outlook account" })).toBeDisabled();
+    expect(screen.getByText(CONNECT_ANOTHER_UNAVAILABLE_COPY)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect Gmail" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Microsoft Outlook" })).not.toBeInTheDocument();
+  });
 });
 
 describe("connector oauth actions", () => {
@@ -283,7 +360,7 @@ describe("connector oauth actions", () => {
       return jsonResponse(200, listBody([account({ id: GMAIL_ID, status: "reauth_required" })]));
     });
     renderDashboard({ fetchImpl });
-    await user.click(await screen.findByRole("button", { name: "Reconnect" }));
+    await user.click(await screen.findByRole("button", { name: "Reconnect same account" }));
     await waitFor(() => expect(assignBrowserLocation).toHaveBeenCalledWith(GMAIL_AUTH_URL));
     expect(fetchImpl.mock.calls.some(([url]) => String(url).includes(`/${GMAIL_ID}/reauthorize`))).toBe(
       true,
@@ -381,5 +458,42 @@ describe("oauth return handling", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
     expect(fetchImpl.mock.calls[0]?.[0]).toEqual(expect.stringContaining(CONNECTOR_ACCOUNTS_PATH));
     expect(window.location.search).toBe("");
+  });
+});
+
+describe("connect-another account boundary", () => {
+  it("does not start current OAuth from the connect-another affordance", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => jsonResponse(200, listBody([account({ id: GMAIL_ID, status: "active" })])),
+    );
+    renderDashboard({ fetchImpl });
+    const action = await screen.findByRole("button", { name: "Connect another Gmail account" });
+    expect(action).toBeDisabled();
+    expect(screen.getByTestId("connect-another-gmail")).toHaveTextContent(
+      CONNECT_ANOTHER_UNAVAILABLE_COPY,
+    );
+    await user.click(action);
+    expect(assignBrowserLocation).not.toHaveBeenCalled();
+    expect(
+      fetchImpl.mock.calls.some(([url]) => {
+        const value = String(url);
+        return value.includes("/authorize") || value.includes("/reauthorize");
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the future connect-another call site from using current OAuth endpoints", () => {
+    expect(connectAnotherAccountAvailability("gmail").supported).toBe(false);
+    expect(connectAnotherAccountAvailability("microsoft_graph").supported).toBe(false);
+    expect(() =>
+      startConnectAnotherAccount({ provider: "gmail", intent: "connect_another_account" }),
+    ).toThrow(ConnectAnotherAccountUnavailableError);
+    expect(() =>
+      startConnectAnotherAccount({
+        provider: "microsoft_graph",
+        intent: "connect_another_account",
+      }),
+    ).toThrow(ConnectAnotherAccountUnavailableError);
   });
 });

@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import type { ConnectorAccount } from "../../api/connectorAccounts";
 import { mailboxWorkspacePath } from "../../navigation/paths";
 import { Button } from "../ui/button";
+import { AccountIdentity } from "./AccountIdentity";
 import { CapabilityBadge } from "./CapabilityBadge";
 import { ConnectorStatus } from "./ConnectorStatus";
-import { providerLabel } from "./copy";
+import { providerLabel, RECONNECT_SAME_ACCOUNT_LABEL } from "./copy";
 import { PermissionGate } from "./PermissionGate";
 
 type ConnectorCardProps = {
@@ -32,7 +33,10 @@ export function ConnectorCard({
     <article className="flex min-w-0 flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="min-w-0">
         <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
-        <ConnectorStatus status={account.status} />
+        <AccountIdentity account={account} />
+        <div className="mt-3">
+          <ConnectorStatus status={account.status} />
+        </div>
       </div>
       {capabilities.length > 0 ? (
         <ul className="flex flex-wrap gap-2" aria-label={`${label} capabilities`}>
@@ -66,7 +70,7 @@ export function ConnectorCard({
                 onClick={() => onReconnect(account)}
                 disabled={connectBusy}
               >
-                Reconnect
+                {RECONNECT_SAME_ACCOUNT_LABEL}
               </Button>
             ) : null}
             {canDisconnect ? (

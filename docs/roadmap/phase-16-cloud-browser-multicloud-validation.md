@@ -22,14 +22,15 @@ Baseline commit (Phase 15 closure): `b1267c440279c9804e27c2d2b747c6c7caf408a2`.
 
 ## Status
 
-Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed**. Phase 16D is **COMPLETE / PASS**. Phase 16E is **Next** (not started). Phase 16F is **Not started**.
+Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed**. Phase 16D is **COMPLETE / PASS**. Phase 16E is **Next** (not started). Phase 16F-A1 is **Completed**. Remaining 16F is **Not started**.
 
 - **16A is Completed:** authenticated read-only Azure and AWS inventory; topology freeze; ADR-026; configuration/cost/authorization matrices; offline regression. No cloud mutation.
 - **16B is Completed:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
 - **16C is Completed:** Azure Graph delegated OAuth → Key Vault durability across ACA recycle → one MicrosoftFoundryProvider selected-message Analyze → explicit Propose (PENDING) → explicit Approve (APPROVED). STOP before Send.
 - **16D is COMPLETE / PASS:** AWS HTTPS SPA/API, RDS, Secrets Manager backend, Entra/MSAL, CORS, and protected browser APIs. Corrective connector-list 503 resolved. No Gmail, Graph mailbox, Bedrock inference, or Send.
 - **16E is Next (not started):** AWS live mailbox → Amazon Bedrock validation.
-- **16F is Not started:** cross-cloud parity, security/cost hardening, temporary IAM cleanup, final documentation.
+- **16F-A1 is Completed:** Connected Mailboxes frontend semantics distinguish reconnect-same-account from connect-another. No backend, OAuth, or schema change.
+- **16F remaining is Not started:** cross-cloud parity, security/cost hardening, temporary IAM cleanup, final documentation.
 
 Architecture: [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
 
@@ -566,6 +567,32 @@ Controlled live path; credentials survive task restart without normal reauthoriz
 ### Exit criteria
 
 Same product path as 16C with Gmail + Bedrock. Stop before Send.
+
+---
+
+## 16F-A1 — Connector UX Redesign
+
+**Status: Completed.**
+
+Frontend-only Connected Mailboxes semantics. No backend, OAuth parameter, database schema, or API route change. No Azure, AWS, or live provider authentication.
+
+### Result
+
+Each connector card is one mailbox account.
+
+- ACTIVE: provider, account identity, status, capabilities, Open mailbox, Disconnect.
+- DISCONNECTED / REAUTH_REQUIRED: provider, account identity, status, **Reconnect same account** (exact-account reauthorize). Generic **Reconnect** is not used.
+- Account identity reads optional `display_identity` when the API later supplies it. Until then the UI shows `Account identity unavailable`. It does not show `external_account_id`, Google `sub`, Microsoft `tid`/`oid`, credential references, tokens, or fabricated email addresses.
+- Provider-level **Connect another Gmail account** / **Connect another Outlook account** is visible when that provider already has a connector row. The control is disabled and is not wired to `POST .../gmail/authorize`, `POST .../microsoft_graph/authorize`, or exact-account reauthorize. First-connect **Connect Gmail** / **Connect Microsoft Outlook** remains for a provider with no rows.
+
+### Backend contract still required (16F-A2)
+
+- Safe optional `display_identity` on the connector-account API (human-readable mailbox identity only).
+- A connect-another authorization start that can select a different account and will not silently reuse the current signed-in mailbox.
+
+### Expected tests
+
+Frontend dashboard, identity helper, typecheck, lint, and production build. Offline only.
 
 ---
 

@@ -5,6 +5,7 @@ import type { ConnectorAccount } from "../api/connectorAccounts";
 import { useAuth } from "../auth/AuthContext";
 import { hasPermission } from "../auth/permissions";
 import { ConfirmDialog } from "../components/connectors/ConfirmDialog";
+import { ConnectAnotherAccount } from "../components/connectors/ConnectAnotherAccount";
 import { ConnectorCard } from "../components/connectors/ConnectorCard";
 import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
 import { OAuthReturnNotice } from "../components/connectors/OAuthReturnNotice";
@@ -66,7 +67,9 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
             Connected mailboxes
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Connect Gmail or Microsoft Outlook. Open an active mailbox to browse recent messages.
+            Each card is one mailbox account. Disconnect removes its active authorization. Reconnect
+            same account restores that same mailbox. Connecting a different account is a separate
+            operation.
           </p>
         </div>
         <Button
@@ -130,10 +133,17 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
         </div>
       ) : null}
 
+      {query.isSuccess && canConnect && (hasGmail || hasGraph) ? (
+        <div className="flex flex-col gap-3">
+          {hasGmail ? <ConnectAnotherAccount provider="gmail" /> : null}
+          {hasGraph ? <ConnectAnotherAccount provider="microsoft_graph" /> : null}
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={pendingDisconnect !== null}
         title={pendingDisconnect ? `Disconnect ${providerLabel(pendingDisconnect.provider)}?` : "Disconnect mailbox?"}
-        description="This removes ECI's active mailbox authorization for this connection. You can reconnect later."
+        description="This removes ECI's active mailbox authorization for this mailbox account. Reconnect same account restores this same mailbox later."
         confirmLabel="Disconnect"
         onCancel={() => setPendingDisconnect(null)}
         onConfirm={() => {
