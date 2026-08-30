@@ -77,6 +77,43 @@ def start_microsoft_authorization(
     )
 
 
+@router.post(
+    "/connector-accounts/microsoft_graph/authorize/another",
+    response_model=MicrosoftAuthorizationStartResponse,
+    summary="Start Microsoft mailbox OAuth for a different account",
+    description=(
+        "Starts a server-side Microsoft mailbox consent session that asks the "
+        "identity platform to let the user choose an account. Requires "
+        "communications:connect. This does not bind or mutate an existing "
+        "connector row. Reconnect remains exact-account only. Callers cannot "
+        "supply scopes, redirect URIs, or credential locators. This is not ECI login."
+    ),
+    responses={
+        **_CONNECT_AUTH_RESPONSES,
+        400: {
+            "model": ErrorResponse,
+            "description": "Mailbox authorization could not be started.",
+        },
+    },
+)
+def start_microsoft_connect_another_authorization(
+    principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+    service: Annotated[
+        MicrosoftMailboxOAuthService,
+        Depends(get_microsoft_mailbox_oauth_service),
+    ],
+) -> MicrosoftAuthorizationStartResponse:
+    """Return the Microsoft authorization URL for connecting a different Outlook account."""
+    result = service.start_connect_another(principal)
+    return MicrosoftAuthorizationStartResponse(
+        authorization_url=result.authorization_url,
+        expires_at=result.expires_at,
+    )
+
+
 @router.get(
     "/oauth/callbacks/microsoft_graph",
     response_model=MicrosoftAuthorizationCallbackResponse,
@@ -134,7 +171,6 @@ def complete_microsoft_authorization(
     return MicrosoftAuthorizationCallbackResponse(
         provider=result.provider,
         connector_account_id=result.connector_account_id,
-        external_account_id=result.external_account_id,
         status=result.status,
         granted_capabilities=result.granted_capabilities,
     )

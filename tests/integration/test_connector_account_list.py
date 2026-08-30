@@ -151,6 +151,7 @@ def _seed_account(
         CommunicationCapability.MAIL_READ,
         CommunicationCapability.MAIL_SEND,
     ),
+    display_identity: str | None = None,
 ):
     user_id = unit.identities.get((TEST_ISSUER, owner_subject))
     if user_id is None:
@@ -163,6 +164,7 @@ def _seed_account(
         credential_ref=credential_ref,
         status=status,
         granted_capabilities=granted_capabilities,
+        display_identity=display_identity,
     )
     unit.connector_account_store[account.id] = account
     return account
@@ -276,6 +278,7 @@ def test_list_includes_lifecycle_states_and_capabilities(
             "granted_capabilities",
             "created_at",
             "updated_at",
+            "display_identity",
         }
     serialized = response.text.lower()
     for field in _FORBIDDEN_FIELDS:
@@ -365,3 +368,39 @@ def test_list_succeeds_when_mailbox_oauth_store_is_unavailable(
     assert "oauth-list-locator-01" not in response.text
     with pytest.raises(ServiceUnavailableError):
         oauth_runtime.require_shared_oauth_store(get_settings())
+
+
+def test_list_serializes_display_identity_without_durable_ids(
+    list_app,
+    list_client: TestClient,
+    private_key,
+) -> None:
+    _application, unit, _key = list_app
+    labeled = _seed_account(
+        unit,
+        external_account_id="google-oidc-sub-labeled",
+        credential_ref="oauth-labeled-locator",
+        display_identity="  ops.mailbox@contoso.example  ",
+    )
+    blank = _seed_account(
+        unit,
+        provider="microsoft_graph",
+        external_account_id="tid:oid-blank-display",
+        credential_ref="oauth-blank-locator",
+        display_identity=None,
+    )
+    response = list_client.get(_LIST_URL, headers=_read_header(private_key))
+    assert response.status_code == 200
+    payload = response.json()
+    by_id = {item["id"]: item for item in payload["items"]}
+    assert by_id[str(labeled.id)]["display_identity"] == "  ops.mailbox@contoso.example  "
+    assert by_id[str(blank.id)]["display_identity"] is None
+    serialized = response.text
+    assert "ops.mailbox@contoso.example" in serialized
+    assert "google-oidc-sub-labeled" not in serialized
+    assert "tid:oid-blank-display" not in serialized
+    assert "oauth-labeled-locator" not in serialized
+    assert "credential_ref" not in serialized
+    assert "external_account_id" not in serialized
+    assert "refresh_token" not in serialized
+    assert "id_token" not in serialized

@@ -46,6 +46,12 @@ DEFAULT_MAILBOX_AUTHORIZATION_CAPABILITIES: tuple[CommunicationCapability, ...] 
     CommunicationCapability.MAIL_READ,
     CommunicationCapability.MAIL_SEND,
 )
+_UNBOUND_PURPOSES = frozenset(
+    {
+        MailboxAuthorizationPurpose.CONNECT,
+        MailboxAuthorizationPurpose.CONNECT_ANOTHER,
+    }
+)
 _REACTIVATABLE_PURPOSES = frozenset({MailboxAuthorizationPurpose.REAUTHORIZE})
 
 
@@ -249,7 +255,7 @@ class MailboxAuthorizationSessionService:
         connector_account_id: UUID | None,
         started_at: float,
     ) -> UUID | None:
-        if purpose is MailboxAuthorizationPurpose.CONNECT:
+        if purpose in _UNBOUND_PURPOSES:
             if connector_account_id is not None:
                 raise MailboxAuthorizationSessionInvalidError()
             return None

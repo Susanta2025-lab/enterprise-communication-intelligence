@@ -69,6 +69,7 @@ class FakeMailboxOAuthClient:
         self.last_challenge: str | None = None
         self.last_verifier: str | None = None
         self.last_code: str | None = None
+        self.last_account_selection: bool | None = None
         self.exchange_error = exchange_error
         self.result = result or _authorization_result()
 
@@ -78,10 +79,12 @@ class FakeMailboxOAuthClient:
         state: str,
         code_challenge: str,
         code_challenge_method: str,
+        account_selection: bool = False,
     ) -> str:
         self.build_calls += 1
         self.last_state = state
         self.last_challenge = code_challenge
+        self.last_account_selection = account_selection
         return (
             "https://accounts.google.com/o/oauth2/auth"
             f"?state={state}&code_challenge={code_challenge}"
@@ -110,6 +113,7 @@ def _authorization_result(
         CommunicationCapability.MAIL_SEND,
     ),
     scopes: tuple[str, ...] = (GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE),
+    display_identity: str | None = None,
 ) -> MailboxOAuthAuthorizationResult:
     return MailboxOAuthAuthorizationResult(
         external_account_id=subject,
@@ -119,6 +123,7 @@ def _authorization_result(
             scopes=scopes,
             subject=subject,
         ),
+        display_identity=display_identity,
     )
 
 

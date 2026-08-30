@@ -71,6 +71,36 @@ def test_authorization_url_uses_exact_state_pkce_and_redirect() -> None:
     assert "client_secret" not in parsed.query
 
 
+def test_account_selection_url_uses_select_account_without_new_scopes() -> None:
+    state = generate_oauth_state()
+    verifier = PkceS256.generate_code_verifier()
+    challenge = PkceS256.code_challenge(verifier)
+    url = _client().build_authorization_url(
+        state=state,
+        code_challenge=challenge,
+        code_challenge_method="S256",
+        account_selection=True,
+    )
+    params = parse_qs(urlparse(url).query)
+    assert params["prompt"] == ["select_account"]
+    scopes = unquote(params["scope"][0]).split()
+    assert scopes == [
+        OPENID_SCOPE,
+        PROFILE_SCOPE,
+        OFFLINE_ACCESS_SCOPE,
+        GRAPH_MAIL_READ_SCOPE,
+        GRAPH_MAIL_SEND_SCOPE,
+    ]
+    assert "User.Read" not in scopes
+    assert "email" not in scopes
+    reconnect = _client().build_authorization_url(
+        state=state,
+        code_challenge=challenge,
+        code_challenge_method="S256",
+    )
+    assert parse_qs(urlparse(reconnect).query)["prompt"] == ["consent"]
+
+
 def test_authorization_url_embeds_configured_tenant() -> None:
     tenant = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     url = _client(tenant=tenant).build_authorization_url(

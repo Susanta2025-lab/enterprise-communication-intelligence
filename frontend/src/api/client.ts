@@ -3,8 +3,10 @@ import { InteractionRequiredError } from "../auth/tokenProvider";
 import {
   connectorAccountDisconnectPath,
   connectorAccountReauthorizePath,
+  connectAnotherAccountAuthorizePath,
   type AuthorizationStartResponse,
   type ConnectorAccountListResponse,
+  type ConnectorProvider,
   type ListConnectorAccountsQuery,
 } from "./connectorAccounts";
 import {
@@ -80,6 +82,15 @@ export class EciApiClient {
 
   async startMicrosoftGraphAuthorization(): Promise<AuthorizationStartResponse> {
     return this.requestJson<AuthorizationStartResponse>("POST", MICROSOFT_GRAPH_AUTHORIZE_PATH);
+  }
+
+  async startConnectAnotherAccountAuthorization(
+    provider: ConnectorProvider,
+  ): Promise<AuthorizationStartResponse> {
+    return this.requestJson<AuthorizationStartResponse>(
+      "POST",
+      connectAnotherAccountAuthorizePath(provider),
+    );
   }
 
   async reauthorizeConnectorAccount(connectorAccountId: string): Promise<AuthorizationStartResponse> {

@@ -50,6 +50,10 @@ Durable rules:
 - Raw state is never persisted. SHA-256(hex) is persisted and is unique.
 - State is single-use. Consume is a conditional `UPDATE ... RETURNING` compare-and-set: matching `state_hash`, provider, `consumed_at IS NULL`, and `expires_at > now`. Concurrent consume yields at most one success. The losing statement does not receive the PKCE verifier.
 - The session is bound to the internal ECI `user_id` and mailbox provider (`gmail` or `microsoft_graph`).
+- Session purpose is one of:
+  - `connect` — unbound. `connector_account_id` **must be NULL**. First mailbox connection.
+  - `connect_another` — unbound. `connector_account_id` **must be NULL**. Distinct account-selection flow. It must not bind or repurpose a different existing connector row.
+  - `reauthorize` — bound to an owned `connector_account_id`. Exact-account only; see [ADR-023](ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 - The provider callback does not require or expect an ECI bearer token. Ownership comes from the session.
 - PKCE method is S256 only. `plain` is not supported.
 - Clients do not control the redirect target, requested capabilities, or `credential_ref`.

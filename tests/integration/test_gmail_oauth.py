@@ -18,7 +18,11 @@ from app.application.services.identity import IdentityResolver
 from app.core.config import get_settings
 from app.core.exceptions import MailboxOAuthAuthorizationFailedError
 from app.core.security import COMMUNICATIONS_CONNECT_PERMISSION
-from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
+from app.domain.enums import (
+    CommunicationCapability,
+    ConnectorAccountStatus,
+    MailboxAuthorizationPurpose,
+)
 from app.domain.interfaces.communication_credential_store import CommunicationCredentialRecord
 from app.infrastructure.credentials.locators import create_communication_credential
 from app.infrastructure.credentials.memory import InMemoryCommunicationCredentialStore
@@ -34,9 +38,10 @@ from tests.support.jwt_tokens import (
     generate_test_rsa_private_key,
     make_test_validator,
 )
-from tests.unit.application.test_gmail_mailbox_oauth import FakeMailboxOAuthClient
+from tests.unit.application.test_gmail_mailbox_oauth import _GOOGLE_SUB, FakeMailboxOAuthClient
 
 _AUTHORIZE_URL = "/api/v1/connector-accounts/gmail/authorize"
+_AUTHORIZE_ANOTHER_URL = "/api/v1/connector-accounts/gmail/authorize/another"
 _CALLBACK_URL = "/api/v1/oauth/callbacks/gmail"
 _SETTINGS_ENV_VARS = (
     "APP_NAME",
@@ -177,6 +182,25 @@ def test_authorize_returns_url_without_secrets(
     assert "code_challenge" not in payload
     stored = next(iter(unit.mailbox_authorization_session_store.values()))
     assert stored.pkce_verifier not in response.text
+    assert fake.last_account_selection is False
+
+
+def test_authorize_another_returns_url_without_binding_existing_account(
+    oauth_app,
+    oauth_client: TestClient,
+) -> None:
+    _application, _service, fake, unit, private_key = oauth_app
+    response = oauth_client.post(_AUTHORIZE_ANOTHER_URL, headers=_connect_header(private_key))
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"authorization_url", "expires_at"}
+    stored = next(iter(unit.mailbox_authorization_session_store.values()))
+    assert stored.purpose is MailboxAuthorizationPurpose.CONNECT_ANOTHER
+    assert stored.connector_account_id is None
+    assert fake.last_account_selection is True
+    assert fake.last_state not in ("state",)
+    assert "state" not in payload
+    assert stored.pkce_verifier not in response.text
 
 
 def test_callback_does_not_require_eci_bearer(
@@ -211,6 +235,8 @@ def test_callback_success_without_bearer(
         CommunicationCapability.MAIL_SEND.value,
     ]
     assert "credential_ref" not in payload
+    assert "external_account_id" not in payload
+    assert _GOOGLE_SUB not in response.text
     assert "refresh_token" not in payload
     assert "access_token" not in response.text
     assert fake.exchange_calls == 1

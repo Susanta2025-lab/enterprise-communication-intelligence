@@ -40,6 +40,8 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
   const connectBusy =
     mutations.gmailConnect.isPending ||
     mutations.microsoftConnect.isPending ||
+    mutations.gmailConnectAnother.isPending ||
+    mutations.microsoftConnectAnother.isPending ||
     mutations.reauthorize.isPending ||
     mutations.disconnect.isPending;
 
@@ -135,8 +137,24 @@ export function ConnectorDashboardPage({ apiClient }: ConnectorDashboardPageProp
 
       {query.isSuccess && canConnect && (hasGmail || hasGraph) ? (
         <div className="flex flex-col gap-3">
-          {hasGmail ? <ConnectAnotherAccount provider="gmail" /> : null}
-          {hasGraph ? <ConnectAnotherAccount provider="microsoft_graph" /> : null}
+          {hasGmail ? (
+            <ConnectAnotherAccount
+              provider="gmail"
+              busy={connectBusy}
+              onConnect={() => {
+                void runLifecycle(() => mutations.gmailConnectAnother.mutateAsync());
+              }}
+            />
+          ) : null}
+          {hasGraph ? (
+            <ConnectAnotherAccount
+              provider="microsoft_graph"
+              busy={connectBusy}
+              onConnect={() => {
+                void runLifecycle(() => mutations.microsoftConnectAnother.mutateAsync());
+              }}
+            />
+          ) : null}
         </div>
       ) : null}
 

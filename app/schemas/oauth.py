@@ -18,13 +18,12 @@ class GmailAuthorizationStartResponse(BaseModel):
 
 
 class GmailAuthorizationCallbackResponse(BaseModel):
-    """Sanitized Gmail connection result. Omits tokens and credential locators."""
+    """Sanitized Gmail connection result. Omits durable identity, tokens, and locators."""
 
     model_config = ConfigDict(extra="forbid")
 
     provider: str
     connector_account_id: UUID
-    external_account_id: str
     status: ConnectorAccountStatus
     granted_capabilities: tuple[CommunicationCapability, ...]
 
@@ -39,25 +38,23 @@ class MicrosoftAuthorizationStartResponse(BaseModel):
 
 
 class MicrosoftAuthorizationCallbackResponse(BaseModel):
-    """Sanitized Microsoft connection result. Omits tokens and credential locators."""
+    """Sanitized Microsoft connection result. Omits durable identity, tokens, and locators."""
 
     model_config = ConfigDict(extra="forbid")
 
     provider: str
     connector_account_id: UUID
-    external_account_id: str
     status: ConnectorAccountStatus
     granted_capabilities: tuple[CommunicationCapability, ...]
 
 
 class ConnectorAccountResponse(BaseModel):
-    """Safe connector-account metadata. Omits locators and tokens."""
+    """Safe connector-account metadata. Omits durable identity, locators, and tokens."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
     provider: str
-    external_account_id: str
     status: ConnectorAccountStatus
     granted_capabilities: tuple[CommunicationCapability, ...] | None
     created_at: datetime

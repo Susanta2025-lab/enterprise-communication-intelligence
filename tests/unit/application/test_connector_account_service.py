@@ -328,6 +328,7 @@ def test_application_result_omits_credential_ref_and_user_id() -> None:
         "granted_capabilities",
         "created_at",
         "updated_at",
+        "display_identity",
     }
     assert payload["granted_capabilities"] is None
     assert _CREDENTIAL_REF not in str(payload.values())

@@ -134,6 +134,17 @@ class GmailMailboxOAuthService:
             connector_account_id=connector_account_id,
         )
 
+    def start_connect_another(
+        self,
+        principal: AuthenticatedPrincipal,
+    ) -> GmailMailboxAuthorizationStartResult:
+        """Create a connect-another session that requests Google account selection."""
+        return self._start_authorization(
+            principal,
+            purpose=MailboxAuthorizationPurpose.CONNECT_ANOTHER.value,
+            connector_account_id=None,
+        )
+
     def _start_authorization(
         self,
         principal: AuthenticatedPrincipal,
@@ -153,6 +164,7 @@ class GmailMailboxOAuthService:
                 state=session.state,
                 code_challenge=session.code_challenge,
                 code_challenge_method=session.code_challenge_method,
+                account_selection=purpose == MailboxAuthorizationPurpose.CONNECT_ANOTHER.value,
             )
         except (MailboxOAuthAuthorizationFailedError, ServiceUnavailableError):
             raise
@@ -198,7 +210,10 @@ class GmailMailboxOAuthService:
                 code=code,
                 started_at=started_at,
             )
-        if consumed.purpose is not MailboxAuthorizationPurpose.CONNECT:
+        if consumed.purpose not in {
+            MailboxAuthorizationPurpose.CONNECT,
+            MailboxAuthorizationPurpose.CONNECT_ANOTHER,
+        }:
             raise MailboxOAuthAuthorizationFailedError()
         try:
             exchanged = self._oauth_client.exchange_authorization_code(
@@ -229,6 +244,7 @@ class GmailMailboxOAuthService:
                 external_account_id=exchanged.external_account_id,
                 credential_ref=stored.credential_ref,
                 granted_capabilities=exchanged.granted_capabilities,
+                display_identity=exchanged.display_identity,
             )
         except Exception as exc:
             self._compensate_stored_credential(stored.credential_ref, started_at)
@@ -312,6 +328,7 @@ class GmailMailboxOAuthService:
                 credential_ref=stored.credential_ref,
                 granted_capabilities=exchanged.granted_capabilities,
                 unavailable_message=_UNAVAILABLE,
+                display_identity=exchanged.display_identity,
             )
         except Exception as exc:
             self._compensate_stored_credential(stored.credential_ref, started_at)
@@ -389,6 +406,7 @@ class GmailMailboxOAuthService:
         external_account_id: str,
         credential_ref: str,
         granted_capabilities: tuple[CommunicationCapability, ...],
+        display_identity: str | None,
     ) -> tuple[ConnectorAccountRecord, bool]:
         try:
             with self._unit_of_work_factory() as uow:
@@ -405,6 +423,7 @@ class GmailMailboxOAuthService:
                             external_account_id=external_account_id,
                             credential_ref=credential_ref,
                             granted_capabilities=granted_capabilities,
+                            display_identity=display_identity,
                         )
                     )
                     uow.commit()
@@ -421,6 +440,8 @@ class GmailMailboxOAuthService:
                         credential_ref,
                         granted_capabilities=granted_capabilities,
                         replace_granted_capabilities=True,
+                        display_identity=display_identity,
+                        replace_display_identity=display_identity is not None,
                     )
                     if reactivated is None:
                         raise PersistenceError("Could not persist connector account.")

@@ -17,6 +17,7 @@ class NewConnectorAccount:
     external_account_id: str
     credential_ref: str | None = None
     granted_capabilities: tuple[CommunicationCapability, ...] | None = None
+    display_identity: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,7 @@ class ConnectorAccountRecord:
     created_at: datetime
     updated_at: datetime
     granted_capabilities: tuple[CommunicationCapability, ...] | None = None
+    display_identity: str | None = None
 
 
 class ConnectorAccountRepository(ABC):
@@ -85,7 +87,8 @@ class ConnectorAccountRepository(ABC):
         Repeated disconnect of an owned row remains disconnected with a null
         locator and unknown (``NULL``) ``granted_capabilities``. Capability
         metadata must not describe a grant after the credential is removed.
-        Implementations may update ``updated_at`` on each owned write.
+        ``display_identity`` is presentation-only and is preserved. Implementations
+        may update ``updated_at`` on each owned write.
 
         Returns:
             The updated record when the id is owned by ``user_id``. None when the
@@ -119,9 +122,12 @@ class ConnectorAccountRepository(ABC):
         *,
         granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
         replace_granted_capabilities: bool = False,
+        display_identity: str | None = None,
+        replace_display_identity: bool = False,
     ) -> ConnectorAccountRecord | None:
         """Reactivate an owned disconnected or reauth-required account.
 
         Replaces ``credential_ref``. ``granted_capabilities`` stay unchanged
-        unless ``replace_granted_capabilities`` is true.
+        unless ``replace_granted_capabilities`` is true. ``display_identity``
+        stays unchanged unless ``replace_display_identity`` is true.
         """

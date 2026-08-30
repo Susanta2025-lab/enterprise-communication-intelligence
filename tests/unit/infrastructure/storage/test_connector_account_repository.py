@@ -43,6 +43,7 @@ def _new_account(
     external_account_id: str = _ACCOUNT_A,
     credential_ref: str | None = _CREDENTIAL_REF,
     granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
+    display_identity: str | None = None,
 ) -> NewConnectorAccount:
     return NewConnectorAccount(
         user_id=user_id,
@@ -50,6 +51,7 @@ def _new_account(
         external_account_id=external_account_id,
         credential_ref=credential_ref,
         granted_capabilities=granted_capabilities,
+        display_identity=display_identity,
     )
 
 
@@ -229,6 +231,28 @@ def test_disconnect_clears_credential_ref_and_is_idempotent(
         assert _aware(again.updated_at) >= _aware(disconnected.updated_at)
         assert repository.disconnect_owned(account_id, user_b) is None
         assert repository.disconnect_owned(uuid4(), user_a) is None
+
+
+def test_disconnect_preserves_display_identity(session_factory: sessionmaker) -> None:
+    user_a, _user_b = _create_users(session_factory)
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        owned = repository.create(
+            _new_account(user_a, display_identity="ops.mailbox@contoso.example")
+        )
+        session.commit()
+        account_id = owned.id
+        assert owned.display_identity == "ops.mailbox@contoso.example"
+
+    with session_factory() as session:
+        repository = SqlAlchemyConnectorAccountRepository(session)
+        disconnected = repository.disconnect_owned(account_id, user_a)
+        session.commit()
+
+    assert disconnected is not None
+    assert disconnected.status is ConnectorAccountStatus.DISCONNECTED
+    assert disconnected.credential_ref is None
+    assert disconnected.display_identity == "ops.mailbox@contoso.example"
 
 
 def test_mark_reauth_required_preserves_locator_and_capabilities(

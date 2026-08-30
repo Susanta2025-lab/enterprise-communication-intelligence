@@ -29,6 +29,7 @@ from app.core.exceptions import (
     UnsupportedCommunicationCredentialProviderError,
 )
 from app.core.logging import get_logger
+from app.core.mailbox_display_identity import sanitize_mailbox_display_identity
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import CommunicationCapability
 from app.domain.interfaces.mailbox_oauth_client import (
@@ -127,6 +128,7 @@ class MicrosoftMailboxOAuthClient(MailboxOAuthClient):
         state: str,
         code_challenge: str,
         code_challenge_method: str,
+        account_selection: bool = False,
     ) -> str:
         """Build a Microsoft v2 authorization URL using Phase 13A state and PKCE."""
         started_at = time.perf_counter()
@@ -139,6 +141,7 @@ class MicrosoftMailboxOAuthClient(MailboxOAuthClient):
                 redirect_uri=self._redirect_uri,
                 state=state,
                 code_challenge=code_challenge,
+                account_selection=account_selection,
             )
         except MailboxOAuthAuthorizationFailedError:
             raise
@@ -157,6 +160,7 @@ class MicrosoftMailboxOAuthClient(MailboxOAuthClient):
             code_challenge=code_challenge,
             redirect_uri=self._redirect_uri,
             client_id=self._client_id,
+            account_selection=account_selection,
         ):
             logger.warning(
                 "microsoft_oauth_authorization_url_rejected",
@@ -203,6 +207,11 @@ class MicrosoftMailboxOAuthClient(MailboxOAuthClient):
                 tenant_id=tenant_id,
                 object_id=object_id,
             )
+            display_identity = _microsoft_display_identity(
+                claims,
+                tenant_id=tenant_id,
+                object_id=object_id,
+            )
         except MailboxOAuthAuthorizationFailedError:
             logger.warning(
                 "microsoft_oauth_code_exchange_failed",
@@ -244,6 +253,7 @@ class MicrosoftMailboxOAuthClient(MailboxOAuthClient):
             external_account_id=f"{tenant_id}:{object_id}",
             granted_capabilities=capabilities,
             secret_material=material,
+            display_identity=display_identity,
         )
 
     def _fetch_token_response(self, code: str, code_verifier: str) -> Mapping[str, Any]:
@@ -515,6 +525,7 @@ def _authorization_url(
     redirect_uri: str,
     state: str,
     code_challenge: str,
+    account_selection: bool = False,
 ) -> str:
     query = urlencode(
         {
@@ -526,7 +537,7 @@ def _authorization_url(
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": _CODE_CHALLENGE_METHOD,
-            "prompt": "consent",
+            "prompt": "select_account" if account_selection else "consent",
         },
         quote_via=quote,
     )
@@ -541,6 +552,7 @@ def _url_matches_session(
     code_challenge: str,
     redirect_uri: str,
     client_id: str,
+    account_selection: bool = False,
 ) -> bool:
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname != MICROSOFT_LOGIN_HOST:
@@ -561,7 +573,8 @@ def _url_matches_session(
         return False
     if params.get("response_type") != ["code"]:
         return False
-    if params.get("prompt") != ["consent"]:
+    expected_prompt = "select_account" if account_selection else "consent"
+    if params.get("prompt") != [expected_prompt]:
         return False
     if params.get("response_mode") != ["query"]:
         return False
@@ -654,6 +667,28 @@ def _durable_microsoft_identity(claims: Mapping[str, Any]) -> tuple[str, str]:
     if not isinstance(object_id, str) or not _is_guid(object_id):
         raise MailboxOAuthAuthorizationFailedError()
     return tenant_id.lower(), object_id.lower()
+
+
+def _microsoft_display_identity(
+    claims: Mapping[str, Any],
+    *,
+    tenant_id: str,
+    object_id: str,
+) -> str | None:
+    """Return a presentation claim from the verified ID token, if any.
+
+    Uses ``preferred_username`` only. Email, UPN, oid, tid, and sub are not
+    used. This value is mutable and is never the authorization identity.
+    """
+    return sanitize_mailbox_display_identity(
+        claims.get("preferred_username"),
+        forbidden=(
+            f"{tenant_id}:{object_id}",
+            tenant_id,
+            object_id,
+            str(claims.get("sub") or ""),
+        ),
+    )
 
 
 def _require_issuer_matches_tenant(claims: Mapping[str, Any], configured_tenant: str) -> None:

@@ -57,6 +57,33 @@ def test_authorization_url_uses_exact_state_pkce_and_redirect() -> None:
     assert _CLIENT_SECRET not in url
 
 
+def test_account_selection_url_keeps_offline_access_and_consent() -> None:
+    state = generate_oauth_state()
+    verifier = PkceS256.generate_code_verifier()
+    challenge = PkceS256.code_challenge(verifier)
+    url = _client().build_authorization_url(
+        state=state,
+        code_challenge=challenge,
+        code_challenge_method="S256",
+        account_selection=True,
+    )
+    params = parse_qs(urlparse(url).query)
+    assert params["prompt"] == ["select_account consent"]
+    assert params["access_type"] == ["offline"]
+    assert params["include_granted_scopes"] == ["true"]
+    scopes = params["scope"][0].split()
+    assert scopes == [OPENID_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE]
+    assert "email" not in scopes
+    reconnect = _client().build_authorization_url(
+        state=state,
+        code_challenge=challenge,
+        code_challenge_method="S256",
+        account_selection=False,
+    )
+    assert parse_qs(urlparse(reconnect).query)["prompt"] == ["consent"]
+    assert "select_account" not in parse_qs(urlparse(reconnect).query)["prompt"][0]
+
+
 def test_authorization_url_does_not_expose_client_secret_in_repr() -> None:
     client = _client()
     assert _CLIENT_SECRET not in repr(client)

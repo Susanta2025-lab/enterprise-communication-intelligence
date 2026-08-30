@@ -72,6 +72,7 @@ class FakeMailboxOAuthClient:
         self.last_challenge: str | None = None
         self.last_verifier: str | None = None
         self.last_code: str | None = None
+        self.last_account_selection: bool | None = None
         self.exchange_error = exchange_error
         self.result = result or _authorization_result()
 
@@ -81,10 +82,12 @@ class FakeMailboxOAuthClient:
         state: str,
         code_challenge: str,
         code_challenge_method: str,
+        account_selection: bool = False,
     ) -> str:
         self.build_calls += 1
         self.last_state = state
         self.last_challenge = code_challenge
+        self.last_account_selection = account_selection
         return (
             "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
             f"?state={state}&code_challenge={code_challenge}"
@@ -114,6 +117,7 @@ def _authorization_result(
     ),
     scopes: tuple[str, ...] = (GRAPH_MAIL_READ_SCOPE, GRAPH_MAIL_SEND_SCOPE),
     object_id: str = _OID,
+    display_identity: str | None = None,
 ) -> MailboxOAuthAuthorizationResult:
     return MailboxOAuthAuthorizationResult(
         external_account_id=external_account_id,
@@ -124,6 +128,7 @@ def _authorization_result(
             tenant_id=MSA_TENANT_ID,
             object_id=object_id,
         ),
+        display_identity=display_identity,
     )
 
 

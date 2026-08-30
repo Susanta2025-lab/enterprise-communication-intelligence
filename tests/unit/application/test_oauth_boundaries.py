@@ -135,6 +135,7 @@ def test_gmail_and_microsoft_oauth_routes_exist() -> None:
     """13C/13D publish Gmail and Microsoft mailbox OAuth HTTP."""
     gmail_route = (_ROOT / "app" / "api" / "routes" / "gmail_oauth.py").read_text(encoding="utf-8")
     assert "/connector-accounts/gmail/authorize" in gmail_route
+    assert "/connector-accounts/gmail/authorize/another" in gmail_route
     assert "/oauth/callbacks/gmail" in gmail_route
     assert "require_authenticated_communications_connect" in gmail_route
     assert "get_gmail_mailbox_oauth_callback_service" in gmail_route
@@ -143,6 +144,7 @@ def test_gmail_and_microsoft_oauth_routes_exist() -> None:
         encoding="utf-8"
     )
     assert "/connector-accounts/microsoft_graph/authorize" in microsoft_route
+    assert "/connector-accounts/microsoft_graph/authorize/another" in microsoft_route
     assert "/oauth/callbacks/microsoft_graph" in microsoft_route
     assert "require_authenticated_communications_connect" in microsoft_route
     assert "get_microsoft_mailbox_oauth_callback_service" in microsoft_route
@@ -171,3 +173,4 @@ def test_future_oauth_contracts_reject_client_supplied_credential_ref() -> None:
         assert "credential_ref" not in source
         assert "refresh_token" not in source
         assert "access_token" not in source
+        assert "external_account_id" not in source

@@ -246,7 +246,7 @@ Total count is omitted.
 
 ## `GmailAuthorizationStartResponse` (`app/schemas/oauth.py`)
 
-Returned by `POST /api/v1/connector-accounts/gmail/authorize`. Extra fields are forbidden.
+Returned by `POST /api/v1/connector-accounts/gmail/authorize` and `POST /api/v1/connector-accounts/gmail/authorize/another`. Extra fields are forbidden.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -263,15 +263,14 @@ Returned by `GET /api/v1/oauth/callbacks/gmail` after a successful Google redire
 |---|---|---|
 | `provider` | `str` | Always `gmail` |
 | `connector_account_id` | `UUID` | Owned connector-account id |
-| `external_account_id` | `str` | Verified Google OIDC `sub`, never email |
 | `status` | `ConnectorAccountStatus` | Serialized lowercase (`active`, ...) |
 | `granted_capabilities` | `tuple[CommunicationCapability, ...]` | Explicit grants from accepted Gmail scopes |
 
-The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
+The response omits `external_account_id`, tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
 
 ## `MicrosoftAuthorizationStartResponse` (`app/schemas/oauth.py`)
 
-Returned by `POST /api/v1/connector-accounts/microsoft_graph/authorize`. Extra fields are forbidden.
+Returned by `POST /api/v1/connector-accounts/microsoft_graph/authorize` and `POST /api/v1/connector-accounts/microsoft_graph/authorize/another`. Extra fields are forbidden.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -288,11 +287,10 @@ Returned by `GET /api/v1/oauth/callbacks/microsoft_graph` after a successful Mic
 |---|---|---|
 | `provider` | `str` | Always `microsoft_graph` |
 | `connector_account_id` | `UUID` | Owned connector-account id |
-| `external_account_id` | `str` | Verified Microsoft `{tid}:{oid}`, never email |
 | `status` | `ConnectorAccountStatus` | Serialized lowercase (`active`, ...) |
 | `granted_capabilities` | `tuple[CommunicationCapability, ...]` | Explicit grants from accepted Graph scopes |
 
-The response omits tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
+The response omits `external_account_id`, tokens, refresh tokens, ID tokens, `credential_ref`, client secret, and PKCE material.
 
 ## `OwnedConnectorAccountItem` (`app/schemas/connector_accounts.py`)
 
@@ -306,6 +304,7 @@ Returned inside `GET /api/v1/connector-accounts`. Extra fields are forbidden. Th
 | `granted_capabilities` | `tuple[CommunicationCapability, ...] \| None` | Explicit grants, or `null` when unknown/cleared |
 | `created_at` | `datetime` | Created timestamp |
 | `updated_at` | `datetime` | Updated timestamp |
+| `display_identity` | `str \| None` | Optional presentation-only mailbox identity. May be null. Never the durable provider identity. |
 
 The item omits `external_account_id`, `credential_ref`, locators, tokens, and provider subject/object IDs.
 
@@ -329,13 +328,12 @@ Returned by `POST /api/v1/connector-accounts/{connector_account_id}/disconnect`.
 |---|---|---|
 | `id` | `UUID` | Connector-account id |
 | `provider` | `str` | Stored provider (`gmail` or `microsoft_graph`) |
-| `external_account_id` | `str` | Provider mailbox identity |
 | `status` | `ConnectorAccountStatus` | After success, `disconnected` |
 | `granted_capabilities` | `tuple[CommunicationCapability, ...] \| None` | After success, `null` |
 | `created_at` | `datetime` | Created timestamp |
 | `updated_at` | `datetime` | Updated timestamp |
 
-The response omits `credential_ref`, tokens, user id, and provider error bodies.
+The response omits `external_account_id`, `credential_ref`, tokens, user id, and provider error bodies.
 
 ## `ConnectorAccountReauthorizeResponse` (`app/schemas/oauth.py`)
 

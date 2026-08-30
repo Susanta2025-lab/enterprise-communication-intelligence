@@ -236,6 +236,8 @@ def test_disconnect_owned_account_clears_secret_and_omits_locator(
     assert payload["granted_capabilities"] is None
     assert payload["id"] == str(account.id)
     assert "credential_ref" not in payload
+    assert "external_account_id" not in payload
+    assert _GOOGLE_SUB not in response.text
     assert _LOCATOR not in response.text
     assert _REFRESH not in response.text
     assert store.get(_LOCATOR) is None

@@ -70,7 +70,8 @@ _CONNECT_AUTH_RESPONSES = {
         "Returns a bounded page of connector accounts owned by the authenticated "
         "caller. Requires communications:read. Callers without an identity mapping "
         "receive an empty page. Unknown and cross-user accounts are not included. "
-        "Locator, token, and provider identity internals are never returned."
+        "Locator, token, and provider identity internals are never returned. "
+        "display_identity is presentation-only and may be null."
     ),
     responses={
         **_READ_AUTH_RESPONSES,
@@ -103,6 +104,7 @@ def list_owned_connector_accounts(
                 granted_capabilities=record.granted_capabilities,
                 created_at=record.created_at,
                 updated_at=record.updated_at,
+                display_identity=record.display_identity,
             )
             for record in records
         ],
@@ -147,7 +149,6 @@ def disconnect_connector_account(
     return ConnectorAccountResponse(
         id=result.id,
         provider=result.provider,
-        external_account_id=result.external_account_id,
         status=result.status,
         granted_capabilities=result.granted_capabilities,
         created_at=result.created_at,

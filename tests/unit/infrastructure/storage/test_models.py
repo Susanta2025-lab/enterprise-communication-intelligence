@@ -175,6 +175,7 @@ def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
         "credential_ref",
         "status",
         "granted_capabilities",
+        "display_identity",
         "created_at",
         "updated_at",
     }

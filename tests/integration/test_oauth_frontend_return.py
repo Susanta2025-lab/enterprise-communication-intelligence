@@ -283,6 +283,7 @@ def test_gmail_unconfigured_callback_remains_json(gmail_json_client) -> None:
     assert payload["provider"] == "gmail"
     assert payload["status"] == ConnectorAccountStatus.ACTIVE.value
     assert "credential_ref" not in payload
+    assert "external_account_id" not in payload
     assert fake.exchange_calls == 1
 
 
@@ -300,6 +301,7 @@ def test_graph_unconfigured_callback_remains_json(graph_json_client) -> None:
     assert payload["provider"] == "microsoft_graph"
     assert payload["status"] == ConnectorAccountStatus.ACTIVE.value
     assert "credential_ref" not in payload
+    assert "external_account_id" not in payload
     assert fake.exchange_calls == 1
 
 

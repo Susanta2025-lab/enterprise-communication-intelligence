@@ -72,10 +72,17 @@ class MailboxAuthorizationProvider(StrEnum):
 
 
 class MailboxAuthorizationPurpose(StrEnum):
-    """Why a mailbox authorization session exists. This is not ECI login."""
+    """Why a mailbox authorization session exists. This is not ECI login.
+
+    ``CONNECT`` is first-time mailbox authorization for a provider.
+    ``REAUTHORIZE`` restores the exact same durable mailbox on an existing
+    connector row. ``CONNECT_ANOTHER`` starts a distinct account-selection
+    flow and persists a different provider account as its own row.
+    """
 
     CONNECT = "connect"
     REAUTHORIZE = "reauthorize"
+    CONNECT_ANOTHER = "connect_another"
 
 
 class WorkflowActionType(StrEnum):

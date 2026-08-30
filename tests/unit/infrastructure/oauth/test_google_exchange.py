@@ -31,6 +31,8 @@ def _client(
     claims: dict | None = None,
     verify_error: Exception | None = None,
     captured: dict | None = None,
+    profile_payload: object | None = None,
+    profile_error: Exception | None = None,
 ) -> GoogleMailboxOAuthClient:
     holder = captured if captured is not None else {}
 
@@ -47,13 +49,22 @@ def _client(
             raise verify_error
         return claims or {"sub": _SUB, "iss": "https://accounts.google.com", "aud": _CLIENT_ID}
 
-    return GoogleMailboxOAuthClient(
-        client_id=_CLIENT_ID,
-        client_secret=_CLIENT_SECRET,
-        redirect_uri=_REDIRECT,
-        token_fetcher=fetch,
-        id_token_verifier=verify,
-    )
+    def profile(access_token: str) -> object:
+        holder["profile_access_token"] = access_token
+        if profile_error is not None:
+            raise profile_error
+        return profile_payload
+
+    kwargs: dict[str, object] = {
+        "client_id": _CLIENT_ID,
+        "client_secret": _CLIENT_SECRET,
+        "redirect_uri": _REDIRECT,
+        "token_fetcher": fetch,
+        "id_token_verifier": verify,
+    }
+    if profile_payload is not None or profile_error is not None:
+        kwargs["profile_fetcher"] = profile
+    return GoogleMailboxOAuthClient(**kwargs)  # type: ignore[arg-type]
 
 
 def _success_response(**overrides: object) -> dict:
@@ -88,6 +99,47 @@ def test_exchange_uses_consumed_verifier_and_verified_sub() -> None:
     assert _ID_TOKEN.encode() not in result.secret_material
     assert _CODE.encode() not in result.secret_material
     assert _CLIENT_SECRET.encode() not in result.secret_material
+    assert result.display_identity is None
+
+
+def test_gmail_profile_email_is_display_only() -> None:
+    captured: dict[str, str] = {}
+    client = _client(
+        token_response=_success_response(),
+        captured=captured,
+        profile_payload={"emailAddress": "ops.mailbox@contoso.example"},
+    )
+    result = client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    assert captured["profile_access_token"] == _ACCESS
+    assert result.external_account_id == _SUB
+    assert result.display_identity == "ops.mailbox@contoso.example"
+    assert result.external_account_id != result.display_identity
+    assert b"ops.mailbox@contoso.example" not in result.secret_material
+
+
+def test_gmail_profile_failure_keeps_display_identity_null() -> None:
+    client = _client(
+        token_response=_success_response(),
+        profile_error=RuntimeError("profile down"),
+    )
+    result = client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    assert result.external_account_id == _SUB
+    assert result.display_identity is None
+
+
+def test_gmail_email_claim_is_not_used_as_display_identity() -> None:
+    client = _client(
+        token_response=_success_response(),
+        claims={
+            "sub": _SUB,
+            "email": "mailbox@example.com",
+            "iss": "https://accounts.google.com",
+            "aud": _CLIENT_ID,
+        },
+    )
+    result = client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    assert result.external_account_id == _SUB
+    assert result.display_identity is None
 
 
 def test_invalid_id_token_is_rejected() -> None:
@@ -171,6 +223,7 @@ def test_email_claim_is_not_used_as_identity() -> None:
     assert result.external_account_id == _SUB
     assert result.external_account_id != "mailbox@example.com"
     assert b"mailbox@example.com" not in result.secret_material
+    assert result.display_identity is None
 
 
 def _exchange_failure_event(log_events: list[dict]) -> dict:

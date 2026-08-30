@@ -3,8 +3,12 @@ import { SESSION_UNUSABLE_COPY } from "../errors/copy";
 export const PROTECTED_ANALYSES_SMOKE_PATH = "/api/v1/analyses?limit=1";
 export const CONNECTOR_ACCOUNTS_PATH = "/api/v1/connector-accounts";
 export const GMAIL_AUTHORIZE_PATH = "/api/v1/connector-accounts/gmail/authorize";
+export const GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH =
+  "/api/v1/connector-accounts/gmail/authorize/another";
 export const MICROSOFT_GRAPH_AUTHORIZE_PATH =
   "/api/v1/connector-accounts/microsoft_graph/authorize";
+export const MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH =
+  "/api/v1/connector-accounts/microsoft_graph/authorize/another";
 
 export type AnalysisListResponse = {
   items: readonly unknown[];

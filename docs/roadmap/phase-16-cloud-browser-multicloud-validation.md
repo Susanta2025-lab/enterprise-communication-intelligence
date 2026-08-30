@@ -22,7 +22,7 @@ Baseline commit (Phase 15 closure): `b1267c440279c9804e27c2d2b747c6c7caf408a2`.
 
 ## Status
 
-Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed**. Phase 16D is **COMPLETE / PASS**. Phase 16E is **Next** (not started). Phase 16F-A1 is **Completed**. Remaining 16F is **Not started**.
+Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed**. Phase 16D is **COMPLETE / PASS**. Phase 16E is **Next** (not started). Phase 16F-A1 is **Completed**. Phase 16F-A2 is **Completed**. Remaining 16F is **Not started**.
 
 - **16A is Completed:** authenticated read-only Azure and AWS inventory; topology freeze; ADR-026; configuration/cost/authorization matrices; offline regression. No cloud mutation.
 - **16B is Completed:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
@@ -30,6 +30,7 @@ Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed
 - **16D is COMPLETE / PASS:** AWS HTTPS SPA/API, RDS, Secrets Manager backend, Entra/MSAL, CORS, and protected browser APIs. Corrective connector-list 503 resolved. No Gmail, Graph mailbox, Bedrock inference, or Send.
 - **16E is Next (not started):** AWS live mailbox → Amazon Bedrock validation.
 - **16F-A1 is Completed:** Connected Mailboxes frontend semantics distinguish reconnect-same-account from connect-another. No backend, OAuth, or schema change.
+- **16F-A2 is Completed:** optional presentation-only `display_identity`; `CONNECT_ANOTHER` authorization with explicit account selection; reconnect remains exact-account. Durable `external_account_id` is unchanged and is not exposed on the dashboard list.
 - **16F remaining is Not started:** cross-cloud parity, security/cost hardening, temporary IAM cleanup, final documentation.
 
 Architecture: [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
@@ -583,16 +584,31 @@ Each connector card is one mailbox account.
 - ACTIVE: provider, account identity, status, capabilities, Open mailbox, Disconnect.
 - DISCONNECTED / REAUTH_REQUIRED: provider, account identity, status, **Reconnect same account** (exact-account reauthorize). Generic **Reconnect** is not used.
 - Account identity reads optional `display_identity` when the API later supplies it. Until then the UI shows `Account identity unavailable`. It does not show `external_account_id`, Google `sub`, Microsoft `tid`/`oid`, credential references, tokens, or fabricated email addresses.
-- Provider-level **Connect another Gmail account** / **Connect another Outlook account** is visible when that provider already has a connector row. The control is disabled and is not wired to `POST .../gmail/authorize`, `POST .../microsoft_graph/authorize`, or exact-account reauthorize. First-connect **Connect Gmail** / **Connect Microsoft Outlook** remains for a provider with no rows.
-
-### Backend contract still required (16F-A2)
-
-- Safe optional `display_identity` on the connector-account API (human-readable mailbox identity only).
-- A connect-another authorization start that can select a different account and will not silently reuse the current signed-in mailbox.
+- Provider-level **Connect another Gmail account** / **Connect another Outlook account** is visible when that provider already has a connector row. In 16F-A1 the control is disabled and is not wired to first-connect or exact-account reauthorize. First-connect **Connect Gmail** / **Connect Microsoft Outlook** remains for a provider with no rows.
 
 ### Expected tests
 
 Frontend dashboard, identity helper, typecheck, lint, and production build. Offline only.
+
+---
+
+## 16F-A2 — Safe Mailbox Identity and Connect-Another Backend Contract
+
+**Status: Completed.**
+
+Backend/API contract for the 16F-A1 connector UX. No Azure, AWS, live OAuth, or cloud mutation.
+
+### Result
+
+- **Reconnect = same account.** `POST .../{id}/reauthorize` stays exact-account: same connector id, same provider, same durable `external_account_id` (Gmail verified Google `sub`; Microsoft verified `{tid}:{oid}`). Identity mismatch is rejected. Reconnect authorization URLs do not request account selection.
+- **Connect another = distinct account selection.** `POST .../gmail/authorize/another` and `POST .../microsoft_graph/authorize/another` start unbound `CONNECT_ANOTHER` sessions. They do not bind or repurpose an existing connector row. Gmail uses `prompt=select_account consent` while keeping `access_type=offline` and existing Gmail scopes. Microsoft uses `prompt=select_account` with existing Graph scopes (`User.Read` and `email` are not added; Graph `/me` is not called). A different durable identity persists as its own connector row; the same ACTIVE identity reuses the existing row without mutation.
+- **Display identity is presentation-only.** `GET /api/v1/connector-accounts` may return `display_identity: string | null`. It is never the security key. Durable provider identity remains `external_account_id` and is not serialized on the dashboard list. Tokens, `credential_ref`, Google `sub`, Microsoft `tid`/`oid`, and other locators remain omitted.
+- Gmail display source: Gmail `users/me/profile` `emailAddress` under already-granted `gmail.readonly`. No new Google scopes. Profile failure yields `null`.
+- Microsoft display source: verified ID-token `preferred_username` only. Missing claim yields `null`.
+
+### Expected tests
+
+Backend unit/integration coverage for display identity, reconnect, and connect-another; frontend dashboard/API tests; typecheck, lint, and production build. Offline only.
 
 ---
 

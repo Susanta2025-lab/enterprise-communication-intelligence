@@ -26,6 +26,7 @@ _GENERIC_FAILURE = "Could not persist mailbox authorization session."
 _REACTIVATABLE = (
     MailboxAuthorizationPurpose.CONNECT.value,
     MailboxAuthorizationPurpose.REAUTHORIZE.value,
+    MailboxAuthorizationPurpose.CONNECT_ANOTHER.value,
 )
 
 

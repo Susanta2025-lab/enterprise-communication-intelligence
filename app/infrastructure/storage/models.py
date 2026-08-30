@@ -181,6 +181,7 @@ class ConnectorAccount(Base):
         PORTABLE_JSON,
         nullable=True,
     )
+    display_identity: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -212,11 +213,11 @@ class MailboxAuthorizationSession(Base):
             name="ck_mailbox_authorization_sessions_provider",
         ),
         CheckConstraint(
-            "purpose IN ('connect', 'reauthorize')",
+            "purpose IN ('connect', 'reauthorize', 'connect_another')",
             name="ck_mailbox_authorization_sessions_purpose",
         ),
         CheckConstraint(
-            "(purpose = 'connect' AND connector_account_id IS NULL) OR "
+            "(purpose IN ('connect', 'connect_another') AND connector_account_id IS NULL) OR "
             "(purpose = 'reauthorize' AND connector_account_id IS NOT NULL)",
             name="ck_mailbox_authorization_sessions_purpose_account",
         ),

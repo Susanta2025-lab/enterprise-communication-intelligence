@@ -5,7 +5,9 @@ import {
   CONNECTOR_ACCOUNTS_PATH,
   EciApiError,
   GMAIL_AUTHORIZE_PATH,
+  GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH,
   MICROSOFT_GRAPH_AUTHORIZE_PATH,
+  MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH,
   PROTECTED_ANALYSES_SMOKE_PATH,
 } from "../api/errors";
 import {
@@ -109,6 +111,48 @@ describe("ECI API client", () => {
     );
     expect(JSON.stringify(log.mock.calls)).not.toContain("accounts.google.com");
     log.mockRestore();
+  });
+
+  it("starts connect-another authorization without using first-connect or reauthorize", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.includes(GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH)) {
+        return jsonResponse(200, {
+          authorization_url: "https://accounts.google.com/o/oauth2/v2/auth",
+          expires_at: "2026-08-25T00:00:00Z",
+        });
+      }
+      if (url.includes(MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH)) {
+        return jsonResponse(200, {
+          authorization_url: "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
+          expires_at: "2026-08-25T00:00:00Z",
+        });
+      }
+      throw new Error(`unexpected path: ${url}`);
+    });
+    const client = new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+    });
+    await client.startConnectAnotherAccountAuthorization("gmail");
+    await client.startConnectAnotherAccountAuthorization("microsoft_graph");
+    expect(fetchImpl.mock.calls[0]?.[0]).toEqual(
+      expect.stringContaining(GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH),
+    );
+    expect(fetchImpl.mock.calls[1]?.[0]).toEqual(
+      expect.stringContaining(MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH),
+    );
+    expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("/reauthorize"))).toBe(false);
+    expect(
+      fetchImpl.mock.calls.some(([url]) => {
+        const value = String(url);
+        return (
+          (value.includes(GMAIL_AUTHORIZE_PATH) && !value.includes("authorize/another")) ||
+          (value.includes(MICROSOFT_GRAPH_AUTHORIZE_PATH) && !value.includes("authorize/another"))
+        );
+      }),
+    ).toBe(false);
   });
 
   it.each([

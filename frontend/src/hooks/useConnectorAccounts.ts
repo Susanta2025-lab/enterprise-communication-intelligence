@@ -50,5 +50,26 @@ export function useConnectorAccountMutations(apiClient: EciApiClient) {
     },
   });
 
-  return { gmailConnect, microsoftConnect, reauthorize, disconnect };
+  const gmailConnectAnother = useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.startConnectAnotherAccountAuthorization("gmail");
+      await startAuthorization(result.authorization_url);
+    },
+  });
+
+  const microsoftConnectAnother = useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.startConnectAnotherAccountAuthorization("microsoft_graph");
+      await startAuthorization(result.authorization_url);
+    },
+  });
+
+  return {
+    gmailConnect,
+    microsoftConnect,
+    reauthorize,
+    disconnect,
+    gmailConnectAnother,
+    microsoftConnectAnother,
+  };
 }

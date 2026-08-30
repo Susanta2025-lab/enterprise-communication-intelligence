@@ -45,6 +45,7 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
             credential_ref=account.credential_ref,
             status=ConnectorAccountStatus.ACTIVE.value,
             granted_capabilities=granted,
+            display_identity=account.display_identity,
         )
         try:
             with self._session.begin_nested():
@@ -171,6 +172,8 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
         *,
         granted_capabilities: tuple[CommunicationCapability, ...] | None = None,
         replace_granted_capabilities: bool = False,
+        display_identity: str | None = None,
+        replace_display_identity: bool = False,
     ) -> ConnectorAccountRecord | None:
         """Reactivate an owned disconnected or reauth-required account."""
         values: dict[str, object] = {
@@ -185,6 +188,8 @@ class SqlAlchemyConnectorAccountRepository(ConnectorAccountRepository):
                 )
             except ValueError as exc:
                 raise PersistenceError(_GENERIC_FAILURE) from exc
+        if replace_display_identity:
+            values["display_identity"] = display_identity
         statement = (
             update(ConnectorAccount)
             .where(
@@ -220,6 +225,7 @@ def _to_record(row: ConnectorAccount) -> ConnectorAccountRecord:
         created_at=row.created_at,
         updated_at=row.updated_at,
         granted_capabilities=granted,
+        display_identity=row.display_identity,
     )
 
 

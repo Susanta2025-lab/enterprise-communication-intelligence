@@ -114,6 +114,8 @@ def test_exchange_uses_consumed_verifier_and_tid_oid() -> None:
     assert _CLIENT_SECRET.encode() not in result.secret_material
     assert b"mailbox@outlook.com" not in result.secret_material
     assert b"pairwise-sub" not in result.secret_material
+    assert result.display_identity == "mailbox@outlook.com"
+    assert result.external_account_id != result.display_identity
 
 
 def test_email_and_sub_are_not_used_as_identity() -> None:
@@ -122,6 +124,21 @@ def test_email_and_sub_are_not_used_as_identity() -> None:
     assert result.external_account_id == _EXTERNAL
     assert result.external_account_id != "mailbox@outlook.com"
     assert result.external_account_id != "pairwise-sub-must-not-be-used"
+    assert result.display_identity == "mailbox@outlook.com"
+
+
+def test_preferred_username_missing_keeps_display_identity_null() -> None:
+    client = _client(
+        token_response=_success_response(),
+        claims=_claims(
+            preferred_username="  ",
+            email="mailbox@outlook.com",
+            upn="mailbox@outlook.com",
+        ),
+    )
+    result = client.exchange_authorization_code(code=_CODE, code_verifier=_VERIFIER)
+    assert result.external_account_id == _EXTERNAL
+    assert result.display_identity is None
 
 
 def test_invalid_id_token_is_rejected() -> None:

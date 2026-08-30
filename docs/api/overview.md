@@ -89,8 +89,10 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 - `POST /api/v1/workflow-actions/{action_id}/execute` (`communications:send`)
 - `GET /api/v1/connector-accounts` (`communications:read`)
 - `POST /api/v1/connector-accounts/gmail/authorize` (`communications:connect`)
+- `POST /api/v1/connector-accounts/gmail/authorize/another` (`communications:connect`)
 - `GET /api/v1/oauth/callbacks/gmail` (no ECI bearer; ownership from the authorization session)
 - `POST /api/v1/connector-accounts/microsoft_graph/authorize` (`communications:connect`)
+- `POST /api/v1/connector-accounts/microsoft_graph/authorize/another` (`communications:connect`)
 - `GET /api/v1/oauth/callbacks/microsoft_graph` (no ECI bearer; ownership from the authorization session)
 - `POST /api/v1/connector-accounts/{connector_account_id}/disconnect` (`communications:connect`)
 - `POST /api/v1/connector-accounts/{connector_account_id}/reauthorize` (`communications:connect`)
@@ -99,7 +101,7 @@ Always require an authenticated principal (including `AUTH_MODE=disabled`, which
 
 Mailbox-backed analyze and bounded mailbox listing always require an authenticated principal (`AUTH_MODE=disabled` returns `401`). Direct-text `POST /api/v1/communications/analyze` still requires only `communications:analyze` and does not use connector accounts. Listing requires `communications:read` and does not require `communications:analyze`.
 
-`GET /api/v1/oauth/callbacks/gmail` and `GET /api/v1/oauth/callbacks/microsoft_graph` are provider redirect targets and do not use the ECI bearer token. CONNECT versus REAUTHORIZE is taken from the consumed authorization session. Reauthorization requires the verified mailbox identity to match the bound account. When `FRONTEND_OAUTH_RETURN_URL` is configured, the callback returns HTTP 302 to that fixed location after server-side completion, with only `oauth` and `provider` query values. When unset, the previous sanitized JSON response is preserved. The return target is never taken from callback query input.
+`GET /api/v1/oauth/callbacks/gmail` and `GET /api/v1/oauth/callbacks/microsoft_graph` are provider redirect targets and do not use the ECI bearer token. CONNECT versus REAUTHORIZE versus CONNECT_ANOTHER is taken from the consumed authorization session. Reauthorization requires the verified mailbox identity to match the bound account. CONNECT_ANOTHER is unbound, requests provider account selection, and persists a distinct connector row when the durable identity differs. When `FRONTEND_OAUTH_RETURN_URL` is configured, the callback returns HTTP 302 to that fixed location after server-side completion, with only `oauth` and `provider` query values. When unset, the previous sanitized JSON response is preserved. The return target is never taken from callback query input.
 
 Missing or invalid tokens return `401` with `WWW-Authenticate: Bearer`. A valid token without the route permission returns `403`. History routes reuse `communications:analyze`. Workflow proposal/approval routes require `communications:workflow`. Execute requires `communications:send`. Mailbox authorize, disconnect, and reauthorize require `communications:connect`. Owned connector-account listing requires `communications:read`. Mailbox-backed analyze requires `communications:read` and `communications:analyze`. Bounded mailbox listing requires `communications:read`. Analyze, workflow, send, connect, and read do not imply each other. Direct-text analyze does not require `communications:read`. Unknown and cross-user analysis, workflow, or connector-account resources return `404`, not `403`. History, workflow, and mailbox-OAuth routes without `DATABASE_URL` return `503`.
 
@@ -129,7 +131,7 @@ FastAPI route (app/api/routes/*)
   ├── ConnectedMailboxAnalysisService (mailbox-backed analyze)
   ├── WorkflowActionService (workflow proposal and approval)
   ├── WorkflowActionExecutionService (execute)
-  └── mailbox OAuth services (Gmail/Microsoft connect/callback; disconnect; reauthorize)
+  └── mailbox OAuth services (Gmail/Microsoft connect/callback; connect-another; disconnect; reauthorize)
 ```
 
 Routes validate the incoming request via Pydantic, resolve a workflow, execution, mailbox-list, mailbox-analyze, or mailbox-OAuth service through FastAPI dependencies, and return the result. Phase 14 mounts bounded mailbox listing and mailbox-backed analyze. Phase 13 adds mailbox OAuth lifecycle HTTP. Phase 12E reaches Graph and Gmail writers only through `POST /api/v1/workflow-actions/{action_id}/execute`. See [Endpoints](endpoints.md) for the concrete routes, [Persistence](../architecture/persistence.md) for ownership and failure semantics, and [Sequence Diagrams](../architecture/sequence-diagrams.md) for a step-by-step walkthrough.

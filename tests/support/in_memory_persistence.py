@@ -133,6 +133,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             created_at=now,
             updated_at=now,
             granted_capabilities=account.granted_capabilities,
+            display_identity=account.display_identity,
         )
         self._accounts[record.id] = record
         return record
@@ -185,6 +186,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
             granted_capabilities=None,
+            display_identity=record.display_identity,
         )
         self._accounts[record.id] = updated
         return updated
@@ -207,6 +209,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
             granted_capabilities=record.granted_capabilities,
+            display_identity=record.display_identity,
         )
         self._accounts[record.id] = updated
         return updated
@@ -219,6 +222,8 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
         *,
         granted_capabilities: tuple | None = None,
         replace_granted_capabilities: bool = False,
+        display_identity: str | None = None,
+        replace_display_identity: bool = False,
     ) -> ConnectorAccountRecord | None:
         record = self.get_owned(connector_account_id, user_id)
         if record is None:
@@ -233,6 +238,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             if replace_granted_capabilities
             else record.granted_capabilities
         )
+        identity = display_identity if replace_display_identity else record.display_identity
         updated = ConnectorAccountRecord(
             id=record.id,
             user_id=record.user_id,
@@ -243,6 +249,7 @@ class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
             created_at=record.created_at,
             updated_at=datetime.now(UTC),
             granted_capabilities=capabilities,
+            display_identity=identity,
         )
         self._accounts[record.id] = updated
         return updated
@@ -579,6 +586,7 @@ def sample_connector_account(
     credential_ref: str | None = "credential-ref-001",
     status: ConnectorAccountStatus = ConnectorAccountStatus.ACTIVE,
     granted_capabilities: tuple | None = None,
+    display_identity: str | None = None,
 ) -> ConnectorAccountRecord:
     """Build a synthetic connector account for execution-target tests."""
     now = datetime.now(UTC)
@@ -592,4 +600,5 @@ def sample_connector_account(
         created_at=now,
         updated_at=now,
         granted_capabilities=granted_capabilities,
+        display_identity=display_identity,
     )

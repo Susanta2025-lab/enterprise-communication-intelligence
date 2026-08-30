@@ -83,6 +83,22 @@ Concurrent reauthorization compare-and-set yields at most one winner. A loser co
 
 If a `REAUTH_REQUIRED` account still references old invalid credential material, that stale locator is deleted before attaching the new locator. Delete-old failure is fail-closed and retryable by starting reauthorization again. `DISCONNECTED` accounts normally have no old locator because disconnect cleared it.
 
+### Connect-another is a distinct lifecycle
+
+`CONNECT_ANOTHER` is not reconnect. It starts an unbound authorization session (`connector_account_id` IS NULL) and asks the provider for account selection. It does not bind or swap mailbox identity onto a different existing connector row.
+
+Completion follows durable uniqueness `(user_id, provider, external_account_id)`:
+
+- a new durable identity creates a new connector row
+- the same **ACTIVE** identity reuses that row without mutation
+- the same **DISCONNECTED** or **REAUTH_REQUIRED** identity reactivates **that** row
+
+Reconnect remains exact-account only. `CONNECT_ANOTHER` does not weaken identity matching on `REAUTHORIZE`.
+
+### Display identity is presentation-only
+
+`display_identity` is an optional, nullable, human-readable mailbox label. It is never used for authorization, uniqueness, or reconnect matching. Durable provider identity remains `external_account_id` (Gmail verified Google `sub`; Microsoft verified `{tid}:{oid}`). Public connector-list, disconnect, and OAuth-callback JSON omit `external_account_id`.
+
 ### Permanent refresh failure becomes `REAUTH_REQUIRED`
 
 `OAuthCommunicationCredentialResolver` continues to distinguish `CommunicationCredentialReauthorizationRequiredError` (confirmed `invalid_grant`) from temporary `CommunicationCredentialUnavailableError`. The resolver does not own connector-account persistence.

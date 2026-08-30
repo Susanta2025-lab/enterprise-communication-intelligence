@@ -80,6 +80,7 @@ def test_connector_account_column_types(postgres_engine: Engine) -> None:
     assert columns["status"] is False
     assert columns["external_account_id"] is False
     assert columns["granted_capabilities"] is True
+    assert columns["display_identity"] is True
     forbidden = {
         "access_token",
         "refresh_token",

@@ -5,16 +5,27 @@ import {
   type ConnectorProvider,
 } from "../../api/connectorAccounts";
 import { Button } from "../ui/button";
-import { CONNECT_ANOTHER_UNAVAILABLE_COPY, connectAnotherAccountActionLabel } from "./copy";
+import {
+  CONNECT_ANOTHER_AVAILABLE_COPY,
+  CONNECT_ANOTHER_UNAVAILABLE_COPY,
+  connectAnotherAccountActionLabel,
+} from "./copy";
 
 type ConnectAnotherAccountProps = {
   provider: ConnectorProvider;
+  busy?: boolean;
+  onConnect?: () => void;
 };
 
-export function ConnectAnotherAccount({ provider }: ConnectAnotherAccountProps) {
+export function ConnectAnotherAccount({
+  provider,
+  busy = false,
+  onConnect,
+}: ConnectAnotherAccountProps) {
   const descriptionId = useId();
   const availability = connectAnotherAccountAvailability(provider);
   const label = connectAnotherAccountActionLabel(provider);
+  const enabled = availability.supported && onConnect !== undefined && !busy;
 
   return (
     <aside
@@ -23,13 +34,14 @@ export function ConnectAnotherAccount({ provider }: ConnectAnotherAccountProps) 
     >
       <Button
         className="w-full sm:w-auto"
-        disabled={!availability.supported}
+        disabled={!enabled}
         aria-describedby={descriptionId}
+        onClick={enabled ? onConnect : undefined}
       >
         {label}
       </Button>
       <p id={descriptionId} className="mt-2 text-sm text-slate-600">
-        {CONNECT_ANOTHER_UNAVAILABLE_COPY}
+        {availability.supported ? CONNECT_ANOTHER_AVAILABLE_COPY : CONNECT_ANOTHER_UNAVAILABLE_COPY}
       </p>
     </aside>
   );

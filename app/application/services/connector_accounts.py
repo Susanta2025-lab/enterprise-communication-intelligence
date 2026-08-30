@@ -57,6 +57,7 @@ class ConnectorAccountResult:
     granted_capabilities: tuple[CommunicationCapability, ...] | None
     created_at: datetime
     updated_at: datetime
+    display_identity: str | None = None
 
 
 class ConnectorAccountService:
@@ -404,6 +405,7 @@ def _to_result(record: ConnectorAccountRecord) -> ConnectorAccountResult:
         created_at=record.created_at,
         updated_at=record.updated_at,
         granted_capabilities=record.granted_capabilities,
+        display_identity=record.display_identity,
     )
 
 

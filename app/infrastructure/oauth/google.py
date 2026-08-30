@@ -22,6 +22,7 @@ from app.core.exceptions import (
     UnsupportedCommunicationCredentialProviderError,
 )
 from app.core.logging import get_logger
+from app.core.mailbox_display_identity import sanitize_mailbox_display_identity
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import CommunicationCapability
 from app.domain.interfaces.mailbox_oauth_client import (
@@ -37,6 +38,7 @@ logger = get_logger(__name__)
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URI = "https://oauth2.googleapis.com/revoke"
+GMAIL_PROFILE_URI = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
 _SAFE_OAUTH_ERRORS = frozenset(
     {
         "access_denied",
@@ -79,6 +81,7 @@ _CODE_CHALLENGE_METHOD = "S256"
 
 TokenFetcher = Callable[[str, str], Mapping[str, Any]]
 IdTokenVerifier = Callable[[str], Mapping[str, Any]]
+ProfileFetcher = Callable[[str], Mapping[str, Any] | str | None]
 RefreshTransportFactory = Callable[[], Any]
 RevokeTransport = Callable[[str], None]
 
@@ -111,12 +114,14 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
         redirect_uri: str,
         token_fetcher: TokenFetcher | None = None,
         id_token_verifier: IdTokenVerifier | None = None,
+        profile_fetcher: ProfileFetcher | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
         self._redirect_uri = redirect_uri
         self._token_fetcher = token_fetcher
         self._id_token_verifier = id_token_verifier
+        self._profile_fetcher = profile_fetcher
 
     def __repr__(self) -> str:
         return "GoogleMailboxOAuthClient()"
@@ -127,11 +132,13 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
         state: str,
         code_challenge: str,
         code_challenge_method: str,
+        account_selection: bool = False,
     ) -> str:
         """Build a Google authorization URL using the Phase 13A state and PKCE."""
         started_at = time.perf_counter()
         if not state or not code_challenge or code_challenge_method != _CODE_CHALLENGE_METHOD:
             raise MailboxOAuthAuthorizationFailedError()
+        prompt = "select_account consent" if account_selection else "consent"
         try:
             flow = self._new_flow()
             url, returned_state = flow.authorization_url(
@@ -139,7 +146,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
                 code_challenge=code_challenge,
                 code_challenge_method=_CODE_CHALLENGE_METHOD,
                 access_type="offline",
-                prompt="consent",
+                prompt=prompt,
                 include_granted_scopes="true",
             )
         except MailboxOAuthAuthorizationFailedError:
@@ -158,6 +165,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             code_challenge=code_challenge,
             redirect_uri=self._redirect_uri,
             client_id=self._client_id,
+            account_selection=account_selection,
         ):
             logger.warning(
                 "gmail_oauth_authorization_url_rejected",
@@ -218,6 +226,10 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
                 scopes=granted_scopes,
                 subject=subject.strip(),
             )
+            display_identity = self._display_identity(
+                token_response.get("access_token"),
+                subject=subject.strip(),
+            )
         except MailboxOAuthAuthorizationFailedError:
             _log_code_exchange_failed(
                 started_at=started_at,
@@ -257,6 +269,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             external_account_id=subject.strip(),
             granted_capabilities=capabilities,
             secret_material=material,
+            display_identity=display_identity,
         )
 
     def _new_flow(self) -> Any:
@@ -362,6 +375,23 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             Request(),
             audience=self._client_id,
         )
+
+    def _display_identity(self, access_token: object, *, subject: str) -> str | None:
+        if not isinstance(access_token, str) or not access_token.strip():
+            return None
+        try:
+            payload = self._profile_payload(access_token.strip())
+        except Exception:
+            return None
+        email_address = payload.get("emailAddress") if isinstance(payload, Mapping) else payload
+        return sanitize_mailbox_display_identity(email_address, forbidden=(subject,))
+
+    def _profile_payload(self, access_token: str) -> Mapping[str, Any] | str | None:
+        if self._profile_fetcher is not None:
+            return self._profile_fetcher(access_token)
+        if self._token_fetcher is not None:
+            return None
+        return _fetch_gmail_profile(access_token)
 
 
 class GoogleMailboxTokenRevoker(MailboxTokenRevoker):
@@ -541,6 +571,39 @@ def deserialize_google_mailbox_secret(secret_material: bytes) -> _GoogleMailboxS
         scopes=tuple(scopes_value),
         subject=subject.strip(),
     )
+
+
+def _fetch_gmail_profile(access_token: str) -> Mapping[str, Any] | None:
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        GMAIL_PROFILE_URI,
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            status = int(getattr(response, "status", 200))
+            body = response.read()
+    except TimeoutError:
+        return None
+    except urllib.error.HTTPError:
+        return None
+    except urllib.error.URLError:
+        return None
+    if status < 200 or status >= 300 or not body:
+        return None
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if isinstance(payload, dict):
+        return payload
+    return None
 
 
 def _post_google_revoke(refresh_token: str) -> None:
@@ -771,6 +834,7 @@ def _url_matches_session(
     code_challenge: str,
     redirect_uri: str,
     client_id: str,
+    account_selection: bool = False,
 ) -> bool:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -788,7 +852,8 @@ def _url_matches_session(
         return False
     if params.get("access_type") != ["offline"]:
         return False
-    if params.get("prompt") != ["consent"]:
+    expected_prompt = "select_account consent" if account_selection else "consent"
+    if params.get("prompt") != [expected_prompt]:
         return False
     if params.get("include_granted_scopes") != ["true"]:
         return False

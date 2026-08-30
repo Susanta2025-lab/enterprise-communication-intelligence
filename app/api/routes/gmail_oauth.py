@@ -77,6 +77,43 @@ def start_gmail_authorization(
     )
 
 
+@router.post(
+    "/connector-accounts/gmail/authorize/another",
+    response_model=GmailAuthorizationStartResponse,
+    summary="Start Gmail mailbox OAuth for a different account",
+    description=(
+        "Starts a server-side Gmail mailbox consent session that asks Google to "
+        "let the user choose an account. Requires communications:connect. This "
+        "does not bind or mutate an existing connector row. Reconnect remains "
+        "exact-account only. Callers cannot supply scopes, redirect URIs, or "
+        "credential locators. This is not ECI login."
+    ),
+    responses={
+        **_CONNECT_AUTH_RESPONSES,
+        400: {
+            "model": ErrorResponse,
+            "description": "Mailbox authorization could not be started.",
+        },
+    },
+)
+def start_gmail_connect_another_authorization(
+    principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_connect),
+    ],
+    service: Annotated[
+        GmailMailboxOAuthService,
+        Depends(get_gmail_mailbox_oauth_service),
+    ],
+) -> GmailAuthorizationStartResponse:
+    """Return the Google authorization URL for connecting a different Gmail account."""
+    result = service.start_connect_another(principal)
+    return GmailAuthorizationStartResponse(
+        authorization_url=result.authorization_url,
+        expires_at=result.expires_at,
+    )
+
+
 @router.get(
     "/oauth/callbacks/gmail",
     response_model=GmailAuthorizationCallbackResponse,
@@ -134,7 +171,6 @@ def complete_gmail_authorization(
     return GmailAuthorizationCallbackResponse(
         provider=result.provider,
         connector_account_id=result.connector_account_id,
-        external_account_id=result.external_account_id,
         status=result.status,
         granted_capabilities=result.granted_capabilities,
     )

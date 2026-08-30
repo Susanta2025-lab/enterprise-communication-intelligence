@@ -69,8 +69,10 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "/api/v1/workflow-actions/{action_id}/reject" in schema["paths"]
     assert "/api/v1/workflow-actions/{action_id}/execute" in schema["paths"]
     assert "/api/v1/connector-accounts/gmail/authorize" in schema["paths"]
+    assert "/api/v1/connector-accounts/gmail/authorize/another" in schema["paths"]
     assert "/api/v1/oauth/callbacks/gmail" in schema["paths"]
     assert "/api/v1/connector-accounts/microsoft_graph/authorize" in schema["paths"]
+    assert "/api/v1/connector-accounts/microsoft_graph/authorize/another" in schema["paths"]
     assert "/api/v1/oauth/callbacks/microsoft_graph" in schema["paths"]
     assert "/api/v1/connector-accounts" in schema["paths"]
     owned_list = schema["paths"]["/api/v1/connector-accounts"]["get"]
@@ -87,13 +89,23 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "limit" in param_names
     assert "offset" in param_names
     authorize = schema["paths"]["/api/v1/connector-accounts/gmail/authorize"]["post"]
+    authorize_another = schema["paths"][
+        "/api/v1/connector-accounts/gmail/authorize/another"
+    ]["post"]
     callback = schema["paths"]["/api/v1/oauth/callbacks/gmail"]["get"]
     ms_authorize = schema["paths"]["/api/v1/connector-accounts/microsoft_graph/authorize"]["post"]
+    ms_authorize_another = schema["paths"][
+        "/api/v1/connector-accounts/microsoft_graph/authorize/another"
+    ]["post"]
     ms_callback = schema["paths"]["/api/v1/oauth/callbacks/microsoft_graph"]["get"]
     assert "requestBody" not in authorize
     assert authorize.get("security") == [{"HTTPBearer": []}]
     assert "401" in authorize["responses"]
     assert "403" in authorize["responses"]
+    assert "requestBody" not in authorize_another
+    assert authorize_another.get("security") == [{"HTTPBearer": []}]
+    assert "401" in authorize_another["responses"]
+    assert "403" in authorize_another["responses"]
     assert callback.get("security") in (None, [])
     assert "401" not in callback["responses"]
     assert "302" in callback["responses"]
@@ -101,6 +113,10 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert ms_authorize.get("security") == [{"HTTPBearer": []}]
     assert "401" in ms_authorize["responses"]
     assert "403" in ms_authorize["responses"]
+    assert "requestBody" not in ms_authorize_another
+    assert ms_authorize_another.get("security") == [{"HTTPBearer": []}]
+    assert "401" in ms_authorize_another["responses"]
+    assert "403" in ms_authorize_another["responses"]
     assert ms_callback.get("security") in (None, [])
     assert "401" not in ms_callback["responses"]
     assert "302" in ms_callback["responses"]
@@ -126,6 +142,9 @@ def test_openapi_schema_available(client: TestClient) -> None:
     serialized_lifecycle = repr(disconnect) + repr(reauthorize)
     assert "credential_ref" not in serialized_lifecycle
     assert "refresh_token" not in serialized_lifecycle
+    assert "external_account_id" not in serialized_lifecycle
+    serialized_callbacks = repr(callback) + repr(ms_callback)
+    assert "external_account_id" not in serialized_callbacks
     assert "/api/v1/connector-accounts/{connector_account_id}/messages" in schema["paths"]
     mailbox_list = schema["paths"][
         "/api/v1/connector-accounts/{connector_account_id}/messages"

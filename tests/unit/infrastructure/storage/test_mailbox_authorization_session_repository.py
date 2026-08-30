@@ -404,3 +404,38 @@ def test_purpose_account_check_rejects_reauthorize_without_account(
         with pytest.raises(PersistenceError):
             repository.create(payload)
             session.flush()
+
+
+def test_purpose_account_check_rejects_connect_another_with_account(
+    session_factory: sessionmaker,
+) -> None:
+    """Connect-another sessions cannot store a connector_account_id."""
+    from app.core.exceptions import PersistenceError
+    from app.domain.interfaces.connector_account_repository import NewConnectorAccount
+    from app.infrastructure.storage.repositories.connector_account import (
+        SqlAlchemyConnectorAccountRepository,
+    )
+
+    user_id = _create_user(session_factory)
+    with session_factory() as session:
+        accounts = SqlAlchemyConnectorAccountRepository(session)
+        account = accounts.create(
+            NewConnectorAccount(
+                user_id=user_id,
+                provider="gmail",
+                external_account_id="mailbox-001",
+            )
+        )
+        session.commit()
+        account_id = account.id
+
+    payload, _state = _new_session(
+        user_id,
+        purpose=MailboxAuthorizationPurpose.CONNECT_ANOTHER,
+        connector_account_id=account_id,
+    )
+    with session_factory() as session:
+        repository = SqlAlchemyMailboxAuthorizationSessionRepository(session)
+        with pytest.raises(PersistenceError):
+            repository.create(payload)
+            session.flush()

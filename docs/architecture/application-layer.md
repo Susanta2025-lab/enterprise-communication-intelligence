@@ -184,6 +184,14 @@ communications:connect
 
 Durable mailbox identity is verified `{tid}:{oid}`. Microsoft HTTP never runs while a database unit of work is open. Tokens are never returned.
 
+## Connect another account
+
+`GmailMailboxOAuthService.start_connect_another` and `MicrosoftMailboxOAuthService.start_connect_another` start unbound `purpose=CONNECT_ANOTHER` sessions. They do not bind an existing connector id. Provider authorization URLs request account selection (Gmail `prompt=select_account consent`; Microsoft `prompt=select_account`). First-connect and reconnect keep `prompt=consent`. Completion persists a new connector row when the verified durable identity is new, or reuses the existing ACTIVE row for the same identity without mutation. Reconnect identity matching is unchanged.
+
+## Display identity
+
+`display_identity` is an optional presentation label persisted beside `external_account_id`. It is never used for uniqueness or reconnect matching. The dashboard list may return it; durable IDs, locators, and tokens remain omitted. Disconnect keeps the stored label. Reconnect updates it only when a new non-null value is obtained.
+
 ## Reauthorization
 
 `ConnectorAccountOAuthService.start_reauthorization` is the application entry for an existing owned account. `ACTIVE` is a conflict. `DISCONNECTED` and `REAUTH_REQUIRED` start a `purpose=REAUTHORIZE` session bound to the exact account id. The callback consumes that session before provider token HTTP, then `persist_reauthorized_connector_account` requires the verified mailbox identity to equal the existing `external_account_id`. A different mailbox selection is rejected and newly stored secret material is compensated. Concurrent completion yields one winner; a loser deletes any credential it cannot attach.

@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of completed Phase 15. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize). Phase 14 adds bounded mailbox listing and selected-message analyze. Phase 15 consumes these endpoints from the browser SPA but adds no new HTTP routes. There is no mailbox sync, search, attachment, bulk, webhook, or worker route.
+All HTTP endpoints implemented in the repository as of completed Phase 16F-A2. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize). Phase 14 adds bounded mailbox listing and selected-message analyze. Phase 15 consumes these endpoints from the browser SPA but adds no new HTTP routes. Phase 16F-A2 adds connect-another authorize starts and optional `display_identity` on the owned connector list. There is no mailbox sync, search, attachment, bulk, webhook, or worker route.
 
 ## `GET /health`
 
@@ -297,8 +297,9 @@ Unauthorized and forbidden requests do not open an execution unit of work, resol
 - **Query:** `limit` (default 20, maximum 100) and `offset` (default 0)
 - **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:read`. Listing uses PostgreSQL persistence only. It does not require mailbox OAuth provider settings or the credential store.
 - **Response model:** `OwnedConnectorAccountListResponse` (`items`, `limit`, `offset`)
-- **Item fields:** `id`, `provider`, `status`, `granted_capabilities`, `created_at`, `updated_at`
+- **Item fields:** `id`, `provider`, `status`, `granted_capabilities`, `created_at`, `updated_at`, `display_identity`
 - **Not returned:** `credential_ref`, `external_account_id`, locators, tokens, refresh state, or provider subject/object IDs
+- `display_identity` is presentation-only and may be `null`. It is never the durable provider identity used for uniqueness or reconnect matching.
 - **Status codes:**
   - `200 OK` — bounded owned page. Callers without an identity mapping receive `{ "items": [], "limit": ..., "offset": ... }`
   - `401` / `403` — authentication/authorization failure
@@ -328,6 +329,21 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 
 ---
 
+## `POST /api/v1/connector-accounts/gmail/authorize/another`
+
+**Purpose:** Start a server-side Gmail mailbox consent session that asks Google to let the user choose an account. This creates or reuses a connector row according to durable identity uniqueness. It does not bind or mutate a different existing connector.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/gmail/authorize/another`
+- **Request body:** none. Callers cannot supply scopes, redirect URI, state, PKCE, or `credential_ref`.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `GmailAuthorizationStartResponse` (`authorization_url`, `expires_at`)
+- **Status codes:** same as first-connect Gmail authorize
+
+The authorization URL uses Google account selection (`prompt=select_account consent`) while keeping offline access and existing Gmail scopes. This is not reconnect. Reconnect remains `POST .../{connector_account_id}/reauthorize` and exact-account only.
+
+---
+
 ## `GET /api/v1/oauth/callbacks/gmail`
 
 **Purpose:** Google redirect target for Gmail mailbox consent. Ownership comes from the Phase 13A authorization session.
@@ -336,7 +352,7 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 - **Path:** `/api/v1/oauth/callbacks/gmail`
 - **Query:** `code`, `state`, and `error` when Google supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
 - **Authentication:** none. This is not an ECI bearer-token route.
-- **Response model:** `GmailAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
+- **Response model:** `GmailAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
 - **Status codes:**
   - `200 OK` — Gmail connector account created, reactivated, or reused (JSON; return URL unset)
   - `302` — redirect to the configured frontend return URL after server-side completion (`FRONTEND_OAUTH_RETURN_URL` set). Query is only `oauth` and `provider`.
@@ -366,6 +382,21 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 
 ---
 
+## `POST /api/v1/connector-accounts/microsoft_graph/authorize/another`
+
+**Purpose:** Start a server-side Microsoft mailbox consent session that asks the identity platform to let the user choose an account. This creates or reuses a connector row according to durable `{tid}:{oid}` uniqueness. It does not bind or mutate a different existing connector.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/connector-accounts/microsoft_graph/authorize/another`
+- **Request body:** none. Callers cannot supply scopes, redirect URI, state, PKCE, or `credential_ref`.
+- **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
+- **Response model:** `MicrosoftAuthorizationStartResponse` (`authorization_url`, `expires_at`)
+- **Status codes:** same as first-connect Microsoft authorize
+
+The authorization URL uses `prompt=select_account`. Graph scopes are unchanged (`User.Read` and `email` are not added). This is not reconnect.
+
+---
+
 ## `GET /api/v1/oauth/callbacks/microsoft_graph`
 
 **Purpose:** Microsoft redirect target for Graph mailbox consent. Ownership comes from the Phase 13A authorization session.
@@ -374,7 +405,7 @@ Authorization runs before unit-of-work, OAuth adapter, and credential-store cons
 - **Path:** `/api/v1/oauth/callbacks/microsoft_graph`
 - **Query:** `code`, `state`, and `error` when Microsoft supplies them. `user_id`, email, `credential_ref`, and scopes are ignored even if present.
 - **Authentication:** none. This is not an ECI bearer-token route.
-- **Response model:** `MicrosoftAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `external_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
+- **Response model:** `MicrosoftAuthorizationCallbackResponse` (`provider`, `connector_account_id`, `status`, `granted_capabilities`) when `FRONTEND_OAUTH_RETURN_URL` is unset
 - **Status codes:**
   - `200 OK` — Microsoft Graph connector account created, reactivated, or reused (JSON; return URL unset)
   - `302` — redirect to the configured frontend return URL after server-side completion (`FRONTEND_OAUTH_RETURN_URL` set). Query is only `oauth` and `provider`.
@@ -393,7 +424,7 @@ Invalid state does not call Microsoft. Consent denial consumes the session and d
 - **Path:** `/api/v1/connector-accounts/{connector_account_id}/disconnect`
 - **Request body:** none
 - **Authentication:** always required. `AUTH_MODE=disabled` returns `401`. When `AUTH_MODE=oidc`, permission `communications:connect`.
-- **Response model:** `ConnectorAccountResponse` (`id`, `provider`, `external_account_id`, `status`, `granted_capabilities`, `created_at`, `updated_at`)
+- **Response model:** `ConnectorAccountResponse` (`id`, `provider`, `status`, `granted_capabilities`, `created_at`, `updated_at`)
 - **Status codes:**
   - `200 OK` — account is `disconnected`; locator and grants are null
   - `401` / `403` — authentication/authorization failure
@@ -421,7 +452,7 @@ Ownership is verified before secret-store operations. Repeated disconnect is ide
   - `400` — mailbox reauthorization could not be started
   - `503` — provider OAuth or persistence unavailable
 
-`DISCONNECTED` and `REAUTH_REQUIRED` are accepted. The callback remains unauthenticated. Successful reauthorization reactivates the exact bound account to `ACTIVE` with a new opaque locator and freshly granted capabilities. Selecting a different mailbox at consent is rejected.
+`DISCONNECTED` and `REAUTH_REQUIRED` are accepted. The callback remains unauthenticated. Successful reauthorization reactivates the exact bound account to `ACTIVE` with a new opaque locator and freshly granted capabilities. Selecting a different mailbox at consent is rejected. Reauthorize does not request provider account selection.
 
 ---
 

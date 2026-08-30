@@ -40,14 +40,15 @@ def test_alembic_revision_graph_is_valid() -> None:
     config = Config(str(_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
     revisions = {revision.revision: revision for revision in script.walk_revisions()}
-    assert set(revisions) == {"9a0001", "10b0001", "11b0001", "12a0001", "13a0001"}
+    assert set(revisions) == {"9a0001", "10b0001", "11b0001", "12a0001", "13a0001", "16f0001"}
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
     assert revisions["11b0001"].down_revision == "10b0001"
     assert revisions["12a0001"].down_revision == "11b0001"
     assert revisions["13a0001"].down_revision == "12a0001"
-    assert script.get_heads() == ["13a0001"]
-    assert script.get_current_head() == "13a0001"
+    assert revisions["16f0001"].down_revision == "13a0001"
+    assert script.get_heads() == ["16f0001"]
+    assert script.get_current_head() == "16f0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -135,6 +136,8 @@ def test_offline_upgrade_sql_compiles_without_oidc_or_connection(
     assert "ck_workflow_actions_execution_target" in sql
     assert "CREATE TABLE mailbox_authorization_sessions" in sql
     assert "granted_capabilities" in sql
+    assert "display_identity" in sql
+    assert "connect_another" in sql
     assert "reauth_required" in sql
     assert "CREATE TABLE workflows" not in sql
     assert secret not in sql
@@ -229,6 +232,28 @@ def test_mailbox_authorization_session_migration_creates_expected_schema() -> No
     assert "authorization_code" not in migration
     assert "client_secret" not in migration
     assert "UniqueConstraint(\n            \"credential_ref\"" not in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
+
+
+def test_display_identity_connect_another_migration_creates_expected_schema() -> None:
+    """The 16F-A2 migration adds presentation identity and connect_another purpose."""
+    migration = (
+        _ROOT / "alembic" / "versions" / "16f0001_display_identity_connect_another.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "16f0001"' in migration
+    assert 'down_revision: str | None = "13a0001"' in migration
+    assert "display_identity" in migration
+    assert "connect_another" in migration
+    assert "DELETE FROM mailbox_authorization_sessions WHERE purpose = 'connect_another'" in (
+        migration
+    )
+    assert "DELETE FROM connector_accounts" not in migration
+    assert "access_token" not in migration
+    assert "refresh_token" not in migration
+    assert "authorization_code" not in migration
+    assert "client_secret" not in migration
+    assert "User.Read" not in migration
     for forbidden in _FORBIDDEN_TABLES:
         assert f'"{forbidden}"' not in migration
 

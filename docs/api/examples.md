@@ -297,7 +297,7 @@ curl -sS -X POST http://localhost:8000/api/v1/connector-accounts/<connector-acco
   -H "Authorization: Bearer <access-token-with-communications:connect>"
 ```
 
-The JSON includes `id`, `provider`, `external_account_id`, `status`, `granted_capabilities`, and timestamps. It omits `credential_ref` and tokens.
+The JSON includes `id`, `provider`, `status`, `granted_capabilities`, and timestamps. It omits `credential_ref`, `external_account_id`, and tokens.
 
 ## Reauthorize (requires OIDC)
 

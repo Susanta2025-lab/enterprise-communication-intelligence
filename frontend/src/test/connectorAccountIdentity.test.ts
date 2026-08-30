@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   ACCOUNT_IDENTITY_UNAVAILABLE,
-  CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON,
   ConnectAnotherAccountUnavailableError,
   connectAnotherAccountAvailability,
+  connectAnotherAccountAuthorizePath,
+  connectorAccountReauthorizePath,
   connectorDisplayIdentity,
   startConnectAnotherAccount,
 } from "../api/connectorAccounts";
@@ -25,13 +26,30 @@ describe("connector account identity", () => {
 });
 
 describe("connect-another account contract", () => {
-  it("is unavailable until a backend account-selection contract exists", () => {
-    expect(connectAnotherAccountAvailability("gmail")).toEqual({
-      supported: false,
-      reason: CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON,
-    });
+  it("is enabled through the account-selection backend contract", () => {
+    expect(connectAnotherAccountAvailability("gmail")).toEqual({ supported: true });
+    expect(connectAnotherAccountAvailability("microsoft_graph")).toEqual({ supported: true });
+    expect(startConnectAnotherAccount({ provider: "gmail", intent: "connect_another_account" })).toEqual(
+      { path: "/api/v1/connector-accounts/gmail/authorize/another" },
+    );
+    expect(
+      startConnectAnotherAccount({
+        provider: "microsoft_graph",
+        intent: "connect_another_account",
+      }),
+    ).toEqual({ path: "/api/v1/connector-accounts/microsoft_graph/authorize/another" });
+    expect(connectAnotherAccountAuthorizePath("gmail")).not.toContain("/reauthorize");
+    expect(connectAnotherAccountAuthorizePath("gmail")).not.toBe(
+      "/api/v1/connector-accounts/gmail/authorize",
+    );
+    expect(connectorAccountReauthorizePath("11111111-1111-4111-8111-111111111111")).toContain(
+      "/reauthorize",
+    );
     expect(() =>
-      startConnectAnotherAccount({ provider: "gmail", intent: "connect_another_account" }),
-    ).toThrow(ConnectAnotherAccountUnavailableError);
+      startConnectAnotherAccount({
+        provider: "gmail",
+        intent: "connect_another_account",
+      }),
+    ).not.toThrow(ConnectAnotherAccountUnavailableError);
   });
 });

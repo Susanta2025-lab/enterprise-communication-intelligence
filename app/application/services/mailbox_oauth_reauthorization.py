@@ -74,6 +74,7 @@ def persist_reauthorized_connector_account(
     credential_ref: str,
     granted_capabilities: tuple[CommunicationCapability, ...],
     unavailable_message: str,
+    display_identity: str | None = None,
 ) -> ConnectorAccountRecord:
     """Attach a new locator to the exact bound account.
 
@@ -100,6 +101,8 @@ def persist_reauthorized_connector_account(
                 credential_ref,
                 granted_capabilities=granted_capabilities,
                 replace_granted_capabilities=True,
+                display_identity=display_identity,
+                replace_display_identity=display_identity is not None,
             )
             if reactivated is None:
                 raise ConnectorAccountConflictError()

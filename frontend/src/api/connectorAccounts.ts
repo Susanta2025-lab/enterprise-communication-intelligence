@@ -1,3 +1,8 @@
+import {
+  GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH,
+  MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH,
+} from "./errors";
+
 export type ConnectorProvider = "gmail" | "microsoft_graph";
 
 export type ConnectorAccountStatus = "active" | "disconnected" | "reauth_required";
@@ -11,7 +16,7 @@ export type ConnectorAccount = {
   granted_capabilities: readonly string[] | null;
   created_at: string;
   updated_at: string;
-  /** Optional safe mailbox identity from a future backend contract. Never an internal locator. */
+  /** Optional safe mailbox identity. Never an internal locator. */
   display_identity?: string | null;
 };
 
@@ -20,10 +25,9 @@ export const ACCOUNT_IDENTITY_UNAVAILABLE = "Account identity unavailable";
 export const CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON =
   "account_selection_not_available" as const;
 
-export type ConnectAnotherAccountAvailability = {
-  supported: false;
-  reason: typeof CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON;
-};
+export type ConnectAnotherAccountAvailability =
+  | { supported: true }
+  | { supported: false; reason: typeof CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON };
 
 export type ConnectAnotherAccountRequest = {
   provider: ConnectorProvider;
@@ -54,20 +58,35 @@ export function connectorDisplayIdentity(
 export function connectAnotherAccountAvailability(
   provider: ConnectorProvider,
 ): ConnectAnotherAccountAvailability {
-  void provider;
+  if (provider === "gmail" || provider === "microsoft_graph") {
+    return { supported: true };
+  }
   return {
     supported: false,
     reason: CONNECT_ANOTHER_ACCOUNT_UNAVAILABLE_REASON,
   };
 }
 
+export function connectAnotherAccountAuthorizePath(provider: ConnectorProvider): string {
+  if (provider === "gmail") {
+    return GMAIL_CONNECT_ANOTHER_AUTHORIZE_PATH;
+  }
+  return MICROSOFT_GRAPH_CONNECT_ANOTHER_AUTHORIZE_PATH;
+}
+
 /**
- * Future call site for connecting a different mailbox account.
- * Must not start the current first-connect or exact-account reauthorize OAuth flows.
+ * Typed connect-another start contract. Must not use first-connect or reauthorize paths.
  */
-export function startConnectAnotherAccount(request: ConnectAnotherAccountRequest): never {
-  void request;
-  throw new ConnectAnotherAccountUnavailableError();
+export function startConnectAnotherAccount(
+  request: ConnectAnotherAccountRequest,
+): { path: string } {
+  if (request.intent !== "connect_another_account") {
+    throw new ConnectAnotherAccountUnavailableError();
+  }
+  if (!connectAnotherAccountAvailability(request.provider).supported) {
+    throw new ConnectAnotherAccountUnavailableError();
+  }
+  return { path: connectAnotherAccountAuthorizePath(request.provider) };
 }
 
 export type ConnectorAccountListResponse = {

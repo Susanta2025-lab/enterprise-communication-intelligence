@@ -3,6 +3,8 @@ export const CONNECT_ANOTHER_GMAIL_LABEL = "Connect another Gmail account";
 export const CONNECT_ANOTHER_OUTLOOK_LABEL = "Connect another Outlook account";
 export const CONNECT_ANOTHER_UNAVAILABLE_COPY =
   "Connecting a different account is not available yet. The current authorization flow cannot guarantee a different mailbox and must not be used for this action.";
+export const CONNECT_ANOTHER_AVAILABLE_COPY =
+  "This starts a new authorization so you can choose a different mailbox. It does not replace a mailbox that is already connected.";
 
 export function providerLabel(provider: string): string {
   if (provider === "gmail") {
