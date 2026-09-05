@@ -78,6 +78,15 @@ _MATERIAL_VERSION = 1
 _PROVIDER = "gmail"
 _UNAVAILABLE = "Gmail mailbox authorization is unavailable."
 _CODE_CHALLENGE_METHOD = "S256"
+# google-auth defaults to 0s iat/exp leeway. WSL/local clocks commonly drift
+# by tens of seconds; this is library-supported skew, not skipped verification.
+ID_TOKEN_VERIFY_CLOCK_SKEW_SECONDS = 60
+_INVALID_VALUE_REASONS = (
+    ("used too early", "token_used_too_early"),
+    ("token expired", "token_expired"),
+    ("wrong audience", "wrong_audience"),
+    ("unsupported signature algorithm", "unsupported_algorithm"),
+)
 
 TokenFetcher = Callable[[str, str], Mapping[str, Any]]
 IdTokenVerifier = Callable[[str], Mapping[str, Any]]
@@ -352,6 +361,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
                 diagnostics=diagnostics,
                 verify_error_class=error_class(exc),
                 subject_present=False,
+                verify_error_reason=_id_token_verify_error_reason(exc),
             )
             raise MailboxOAuthAuthorizationFailedError() from None
         if not isinstance(claims, Mapping):
@@ -374,6 +384,7 @@ class GoogleMailboxOAuthClient(MailboxOAuthClient):
             token,
             Request(),
             audience=self._client_id,
+            clock_skew_in_seconds=ID_TOKEN_VERIFY_CLOCK_SKEW_SECONDS,
         )
 
     def _display_identity(self, access_token: object, *, subject: str) -> str | None:
@@ -729,6 +740,18 @@ def _log_code_exchange_failed(
     )
 
 
+def _id_token_verify_error_reason(exc: BaseException) -> str | None:
+    from google.auth.exceptions import InvalidValue
+
+    if not isinstance(exc, InvalidValue):
+        return None
+    text = str(exc).casefold()
+    for needle, reason in _INVALID_VALUE_REASONS:
+        if needle in text:
+            return reason
+    return "invalid_value"
+
+
 def _log_id_token_verify_failed(
     *,
     started_at: float,
@@ -737,6 +760,7 @@ def _log_id_token_verify_failed(
     subject_present: bool,
     issuer_present: bool | None = None,
     audience_present: bool | None = None,
+    verify_error_reason: str | None = None,
 ) -> None:
     fields: dict[str, object] = {
         "provider": _PROVIDER,
@@ -752,6 +776,8 @@ def _log_id_token_verify_failed(
         fields["issuer_present"] = issuer_present
     if audience_present is not None:
         fields["audience_present"] = audience_present
+    if verify_error_reason is not None:
+        fields["verify_error_reason"] = verify_error_reason
     logger.warning("gmail_oauth_id_token_verify_failed", **fields)
 
 

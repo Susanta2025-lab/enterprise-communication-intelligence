@@ -366,6 +366,7 @@ def test_callback_id_token_verify_failure_is_sanitized_400(
     assert verify_failed[0]["provider"] == "gmail"
     assert verify_failed[0]["operation"] == "verify_id_token"
     assert verify_failed[0]["verify_error_class"] == "ValueError"
+    assert "verify_error_reason" not in verify_failed[0]
     assert verify_failed[0]["subject_present"] is False
     blob = repr(log_events) + text
     assert id_token not in blob

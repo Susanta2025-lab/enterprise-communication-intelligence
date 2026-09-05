@@ -17,7 +17,9 @@ from app.core.exceptions import MailboxOAuthAuthorizationFailedError, ServiceUna
 from app.infrastructure.oauth.google import (
     GMAIL_READONLY_SCOPE,
     GMAIL_SEND_SCOPE,
+    ID_TOKEN_VERIFY_CLOCK_SKEW_SECONDS,
     GoogleMailboxOAuthClient,
+    _id_token_verify_error_reason,
     deserialize_google_mailbox_secret,
 )
 
@@ -206,7 +208,7 @@ def test_verify_oauth2_token_uses_client_id_audience_and_cert_request(
     )
     assert result.external_account_id == _SUB
     assert captured["audience"] == _CLIENT_ID
-    assert captured["clock_skew"] == "unset"
+    assert captured["clock_skew"] == ID_TOKEN_VERIFY_CLOCK_SKEW_SECONDS
     assert cert_urls
     assert all("oauth2/v1/certs" in url for url in cert_urls)
 
@@ -225,6 +227,7 @@ def test_wrong_audience_fails_and_logs_invalid_value(
         )
     event = _verify_failure_event(log_events)
     assert event["verify_error_class"] == InvalidValue.__name__
+    assert event["verify_error_reason"] == "wrong_audience"
     assert event["subject_present"] is False
     assert "issuer_present" not in event
     assert "audience_present" not in event
@@ -245,6 +248,7 @@ def test_wrong_issuer_fails_and_logs_google_auth_error(
         )
     event = _verify_failure_event(log_events)
     assert event["verify_error_class"] == GoogleAuthError.__name__
+    assert "verify_error_reason" not in event
     assert event["subject_present"] is False
     assert "issuer_present" not in event
     _assert_logs_omit_secrets(log_events, token, "https://evil.example.invalid")
@@ -265,6 +269,7 @@ def test_invalid_signature_fails_and_logs_malformed_error(
         )
     event = _verify_failure_event(log_events)
     assert event["verify_error_class"] == MalformedError.__name__
+    assert "verify_error_reason" not in event
     assert event["subject_present"] is False
     _assert_logs_omit_secrets(log_events, token)
 
@@ -287,6 +292,47 @@ def test_expired_token_fails_and_logs_invalid_value(
         )
     event = _verify_failure_event(log_events)
     assert event["verify_error_class"] == InvalidValue.__name__
+    assert event["verify_error_reason"] == "token_expired"
+    assert event["subject_present"] is False
+    _assert_logs_omit_secrets(log_events, token)
+
+
+def test_token_issued_within_clock_skew_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+    log_events: list[dict],
+) -> None:
+    private_pem = _private_key_pem()
+    token = _sign_id_token(private_pem, issued_offset_seconds=30)
+    _install_cert_request(monkeypatch, _public_pem_from_private(private_pem))
+    result = _client(id_token=token).exchange_authorization_code(
+        code=_CODE,
+        code_verifier=_VERIFIER,
+    )
+    assert result.external_account_id == _SUB
+    verify_failed = [
+        event
+        for event in log_events
+        if event.get("event") == "gmail_oauth_id_token_verify_failed"
+    ]
+    assert verify_failed == []
+    _assert_logs_omit_secrets(log_events, token)
+
+
+def test_token_used_too_early_beyond_clock_skew_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    log_events: list[dict],
+) -> None:
+    private_pem = _private_key_pem()
+    token = _sign_id_token(private_pem, issued_offset_seconds=120)
+    _install_cert_request(monkeypatch, _public_pem_from_private(private_pem))
+    with pytest.raises(MailboxOAuthAuthorizationFailedError):
+        _client(id_token=token).exchange_authorization_code(
+            code=_CODE,
+            code_verifier=_VERIFIER,
+        )
+    event = _verify_failure_event(log_events)
+    assert event["verify_error_class"] == InvalidValue.__name__
+    assert event["verify_error_reason"] == "token_used_too_early"
     assert event["subject_present"] is False
     _assert_logs_omit_secrets(log_events, token)
 
@@ -305,10 +351,41 @@ def test_verified_token_missing_sub_logs_presence_flags(
         )
     event = _verify_failure_event(log_events)
     assert event["verify_error_class"] == "MailboxOAuthAuthorizationFailedError"
+    assert "verify_error_reason" not in event
     assert event["subject_present"] is False
     assert event["issuer_present"] is True
     assert event["audience_present"] is True
     _assert_logs_omit_secrets(log_events, token)
+
+
+def test_id_token_verify_error_reason_is_allowlisted() -> None:
+    secret = "ID_TOKEN_REASON_SENTINEL_should_never_appear"
+    cases = (
+        (InvalidValue(f"Token used too early, 1 < 2 {secret}"), "token_used_too_early"),
+        (InvalidValue(f"Token expired, 1 < 2 {secret}"), "token_expired"),
+        (
+            InvalidValue(f"Token has wrong audience {secret}, expected one of x"),
+            "wrong_audience",
+        ),
+        (
+            InvalidValue(f"Unsupported signature algorithm HS256 {secret}"),
+            "unsupported_algorithm",
+        ),
+        (InvalidValue(f"some other invalid value {secret}"), "invalid_value"),
+        (ValueError(f"Token used too early {secret}"), None),
+    )
+    for exc, expected in cases:
+        reason = _id_token_verify_error_reason(exc)
+        assert reason == expected
+        if reason is not None:
+            assert secret not in reason
+            assert reason in {
+                "token_used_too_early",
+                "token_expired",
+                "wrong_audience",
+                "unsupported_algorithm",
+                "invalid_value",
+            }
 
 
 def test_transport_failure_during_cert_fetch_is_unavailable(

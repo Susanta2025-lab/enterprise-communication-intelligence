@@ -337,6 +337,7 @@ def test_verification_exception_class_is_logged_safely(log_events: list[dict]) -
     assert event["provider"] == "gmail"
     assert event["operation"] == "verify_id_token"
     assert event["verify_error_class"] == "ValueError"
+    assert "verify_error_reason" not in event
     assert event["subject_present"] is False
     assert "issuer_present" not in event
     assert "audience_present" not in event

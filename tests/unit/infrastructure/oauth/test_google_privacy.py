@@ -257,6 +257,7 @@ def test_id_token_verify_failure_omits_token_claims_and_secrets(
     assert len(verify_failed) == 1
     event = verify_failed[0]
     assert event["verify_error_class"] == "ValueError"
+    assert event.get("verify_error_reason") is None
     assert event["subject_present"] is False
     assert "issuer_present" not in event
     assert event.get("id_token") is None
