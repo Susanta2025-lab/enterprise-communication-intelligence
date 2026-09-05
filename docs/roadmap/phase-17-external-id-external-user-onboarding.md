@@ -27,14 +27,14 @@ Architecture: [ADR-027](../decisions/ADR-027-microsoft-entra-external-id-custome
 
 ## Status
 
-Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
+Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS**. Phase 17B-D is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
 
 - **17A is Completed / PASS:** read-only External ID readiness assessment. No tenant, app registration, code, or documentation mutation in that slice.
 - **17B-A is Completed / PASS:** ADR-027 and this roadmap lock the approved architecture. No authentication code, tenant, app registration, or migration.
 - **17B-B is Completed / PASS:** frontend External ID / MSAL configuration uses explicit `VITE_ENTRA_AUTHORITY` and derived `knownAuthorities`. No live tenant.
 - **17B-C is Completed / PASS:** backend External ID JWT / configuration. Existing single-issuer `TokenValidator` retained; CIAM-shaped offline tests added. No live tenant.
-- **17B-D:** offline authentication regression.
-- **17B-E:** External ID operator setup, only after separate explicit authorization.
+- **17B-D is Completed / PASS:** offline authentication, ownership, and mailbox-login-separation regression. No live IdP.
+- **17B-E is Next:** External ID operator setup, only after separate explicit authorization.
 - **17C:** not started. Controlled owner-account validation after 17B.
 - **17D:** not started. Sally external verification starts only after 17C PASS.
 
@@ -109,7 +109,7 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-C — Backend External ID JWT / Configuration
 
-**CURRENT SLICE. Completed / PASS.**
+**Completed / PASS.**
 
 - single-issuer `TokenValidator` unchanged: exact `iss`/`aud`, RS256, JWKS, `(iss, sub)`
 - OIDC contract remains `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` and accepts CIAM-shaped values
@@ -119,17 +119,17 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-D — Offline Authentication Regression
 
-Next implementation slice.
+**CURRENT SLICE. Completed / PASS.**
 
-- frontend tests
-- backend tests
-- ownership isolation regression
-- mailbox-login separation regression
-- no live IdP dependency in CI
+- frontend CIAM authority / MSAL / scope regression holds
+- backend exact-issuer JWT / `(iss, sub)` / permission regression holds
+- ownership isolation and mailbox-login separation unchanged
+- CI after 17B-C (`6425ed9`, run `33952384102`) passed the full offline matrix
+- no live External ID, discovery, JWKS, Gmail, Outlook, Azure, or AWS dependency
 
 ### 17B-E — External ID Operator Setup
 
-Operator/configuration slice. Do not perform it without a separate explicit authorization.
+Next slice. Operator/configuration work. Do not perform it without a separate explicit authorization.
 
 Expected later work:
 
