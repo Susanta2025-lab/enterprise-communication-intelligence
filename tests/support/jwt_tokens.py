@@ -19,6 +19,17 @@ TEST_JWKS_URL = "https://example.invalid/.well-known/jwks.json"
 TEST_KID = "eci-test-key"
 TEST_PERMISSION = "communications:analyze"
 TEST_SUBJECT = "eci-test-subject"
+CIAM_TEST_ISSUER = (
+    "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111/v2.0"
+)
+CIAM_TEST_AUDIENCE = "22222222-2222-2222-2222-222222222222"
+CIAM_TEST_JWKS_URL = (
+    "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111"
+    "/discovery/v2.0/keys"
+)
+WORKFORCE_LOOKING_ISSUER = (
+    "https://login.microsoftonline.com/99999999-9999-9999-9999-999999999999/v2.0"
+)
 
 
 def generate_test_rsa_private_key() -> RSAPrivateKey:

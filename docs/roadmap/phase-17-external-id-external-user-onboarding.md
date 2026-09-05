@@ -27,12 +27,12 @@ Architecture: [ADR-027](../decisions/ADR-027-microsoft-entra-external-id-custome
 
 ## Status
 
-Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
+Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
 
 - **17A is Completed / PASS:** read-only External ID readiness assessment. No tenant, app registration, code, or documentation mutation in that slice.
 - **17B-A is Completed / PASS:** ADR-027 and this roadmap lock the approved architecture. No authentication code, tenant, app registration, or migration.
 - **17B-B is Completed / PASS:** frontend External ID / MSAL configuration uses explicit `VITE_ENTRA_AUTHORITY` and derived `knownAuthorities`. No live tenant.
-- **17B-C is Next:** backend External ID JWT / configuration.
+- **17B-C is Completed / PASS:** backend External ID JWT / configuration. Existing single-issuer `TokenValidator` retained; CIAM-shaped offline tests added. No live tenant.
 - **17B-D:** offline authentication regression.
 - **17B-E:** External ID operator setup, only after separate explicit authorization.
 - **17C:** not started. Controlled owner-account validation after 17B.
@@ -97,7 +97,7 @@ Out of scope:
 
 ### 17B-B — Frontend External ID / MSAL Configuration
 
-**CURRENT SLICE. Completed / PASS.**
+**Completed / PASS.**
 
 - explicit `VITE_ENTRA_AUTHORITY` is the complete public MSAL authority
 - `knownAuthorities` is derived from the authority hostname
@@ -109,15 +109,17 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-C — Backend External ID JWT / Configuration
 
-Next implementation slice.
+**CURRENT SLICE. Completed / PASS.**
 
-- retain the single-issuer `TokenValidator`
-- document and accept an External ID configuration contract (`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`)
-- add CIAM-shaped offline JWT tests
-- no schema migration
-- no dual-issuer validator
+- single-issuer `TokenValidator` unchanged: exact `iss`/`aud`, RS256, JWKS, `(iss, sub)`
+- OIDC contract remains `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` and accepts CIAM-shaped values
+- `.env.example` uses External ID placeholders; no real tenant values
+- offline CIAM-shaped JWT tests added; no live discovery/JWKS contact
+- no schema migration; mailbox OAuth unchanged
 
 ### 17B-D — Offline Authentication Regression
+
+Next implementation slice.
 
 - frontend tests
 - backend tests
