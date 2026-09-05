@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { FrontendConfig } from "../config/env";
 import { permissionsFromAccessToken } from "./accessTokenClaims";
 import { AuthContext } from "./AuthContext";
+import { resolveDisplayName } from "./displayName";
 import { buildLoginRequest, buildLogoutRequest } from "./msal";
 import type { EciPermission } from "./permissions";
 
@@ -56,7 +57,7 @@ function MsalAuthSession({
 
   const account = resolveAccount(instance);
   const accountId = account?.homeAccountId ?? null;
-  const displayName = account?.name?.trim() || account?.username?.trim() || null;
+  const displayName = resolveDisplayName(account);
 
   useEffect(() => {
     if (!isAuthenticated || accountId === null) {

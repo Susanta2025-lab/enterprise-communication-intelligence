@@ -8,3 +8,8 @@ export const RECONNECT_LABEL = "Reconnect";
 
 export const SESSION_UNUSABLE_COPY =
   "Your ECI session is no longer usable. Sign in again.";
+
+export const TEST_PRIVACY_NOTICE_TITLE = "Development and test notice";
+
+export const TEST_PRIVACY_NOTICE_COPY =
+  "ECI is a development/test system. Mailbox access occurs only after you explicitly connect a mailbox. If you use Analyze, the selected message content may be processed by the configured AI provider. Use a test or non-sensitive mailbox and message for validation.";

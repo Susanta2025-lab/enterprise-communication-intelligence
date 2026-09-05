@@ -6,6 +6,8 @@ import {
   REFRESH_MAILBOX_LABEL,
   REFRESH_STATUS_LABEL,
   SIGN_IN_LABEL,
+  TEST_PRIVACY_NOTICE_COPY,
+  TEST_PRIVACY_NOTICE_TITLE,
   TRY_AGAIN_LABEL,
 } from "../errors/copy";
 import { presentProductError } from "../errors/presentProductError";
@@ -99,5 +101,13 @@ describe("presentProductError", () => {
     expect(TRY_AGAIN_LABEL).toBe("Try again");
     expect(BACK_TO_DASHBOARD_LABEL).toBe("Back to dashboard");
     expect(REFRESH_STATUS_LABEL).toBe("Refresh status");
+  });
+
+  it("keeps the sign-in test privacy notice short and non-legal", () => {
+    expect(TEST_PRIVACY_NOTICE_TITLE).toBe("Development and test notice");
+    expect(TEST_PRIVACY_NOTICE_COPY).toContain("development/test system");
+    expect(TEST_PRIVACY_NOTICE_COPY).toContain("explicitly connect a mailbox");
+    expect(TEST_PRIVACY_NOTICE_COPY).toContain("configured AI provider");
+    expect(TEST_PRIVACY_NOTICE_COPY).toContain("test or non-sensitive mailbox");
   });
 });

@@ -1,5 +1,5 @@
 import { useAuth } from "../auth/AuthContext";
-import { SIGN_IN_LABEL } from "../errors/copy";
+import { SIGN_IN_LABEL, TEST_PRIVACY_NOTICE_COPY, TEST_PRIVACY_NOTICE_TITLE } from "../errors/copy";
 import { Button } from "./ui/button";
 
 export function SignInPanel() {
@@ -14,6 +14,13 @@ export function SignInPanel() {
         <h1 className="text-3xl font-semibold text-slate-900">ECI Platform</h1>
         <p className="text-slate-600">Sign in with your ECI identity to continue.</p>
       </div>
+      <aside
+        className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
+        data-testid="test-privacy-notice"
+      >
+        <h2 className="font-semibold text-slate-900">{TEST_PRIVACY_NOTICE_TITLE}</h2>
+        <p className="mt-2 leading-relaxed">{TEST_PRIVACY_NOTICE_COPY}</p>
+      </aside>
       <div>
         <Button className="w-full sm:w-auto" onClick={() => void login()} disabled={interactionInProgress}>
           {SIGN_IN_LABEL}

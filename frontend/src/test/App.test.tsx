@@ -64,6 +64,16 @@ describe("authentication shell", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("shows a short test privacy notice before sign-in", () => {
+    renderApp({ isAuthenticated: false });
+    const notice = screen.getByTestId("test-privacy-notice");
+    expect(notice).toHaveTextContent("Development and test notice");
+    expect(notice).toHaveTextContent("development/test system");
+    expect(notice).toHaveTextContent("explicitly connect a mailbox");
+    expect(notice).toHaveTextContent("processed by the configured AI provider");
+    expect(notice).toHaveTextContent("test or non-sensitive mailbox");
+  });
+
   it("wires the sign-in action", async () => {
     const user = userEvent.setup();
     const { login } = renderApp({ isAuthenticated: false });
