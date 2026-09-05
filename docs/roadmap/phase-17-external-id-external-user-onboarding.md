@@ -27,7 +27,7 @@ Architecture: [ADR-027](../decisions/ADR-027-microsoft-entra-external-id-custome
 
 ## Status
 
-Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS**. Phase 17B-D is **Completed / PASS**. Phase 17B-E is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
+Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS**. Phase 17B-D is **Completed / PASS**. Phase 17B-E is **Completed / PASS**. Phase 17C is **Completed / PASS**. Phase 17C-G is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
 
 - **17A is Completed / PASS:** read-only External ID readiness assessment. No tenant, app registration, code, or documentation mutation in that slice.
 - **17B-A is Completed / PASS:** ADR-027 and this roadmap lock the approved architecture. No authentication code, tenant, app registration, or migration.
@@ -35,7 +35,8 @@ Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17
 - **17B-C is Completed / PASS:** backend External ID JWT / configuration. Existing single-issuer `TokenValidator` retained; CIAM-shaped offline tests added. No live tenant.
 - **17B-D is Completed / PASS:** offline authentication, ownership, and mailbox-login-separation regression. No live IdP.
 - **17B-E is Completed / PASS:** External ID development tenant, email OTP user flow, SPA/API registrations, five delegated scopes, and local ignored environment configuration. No Phase 17C product validation.
-- **17C:** not started. Controlled owner-account validation after 17B.
+- **17C is Completed / PASS:** local External ID customer signup/sign-in, isolated internal user, one Outlook mailbox connect, bounded list, one Analyze, one Propose, one Approve. Send was not executed.
+- **17C-G is Completed / PASS:** Gmail OAuth ID-token verification failed in 17C with `InvalidValue` after successful Google consent. Root cause was `google-auth` `verify_oauth2_token` default `clock_skew_in_seconds=0` against a drifting local/WSL clock, not Phase 17 identity architecture. A 60-second library leeway plus allowlisted `verify_error_reason` restored Gmail connect for the same External ID user. Send was not executed.
 - **17D:** not started. Sally external verification starts only after 17C PASS.
 
 Phase 16 remains **Completed**.
@@ -129,7 +130,7 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-E — External ID Operator Setup
 
-**CURRENT SLICE. Completed / PASS.**
+**Completed / PASS.**
 
 Created the minimum development External ID identity environment on the existing ECI-Development subscription. No application source change. No schema migration. No mailbox OAuth change. Azure/AWS application runtimes were not resumed or deployed.
 
@@ -153,34 +154,59 @@ Do not treat email as the ECI durable identity. Recreating the API registration 
 
 ## 17C — Controlled External-User Validation
 
-Not started.
+**Completed / PASS.**
 
-Use an account controlled by the owner. Do not start Sally testing.
+Validated locally (Vite + FastAPI + existing local PostgreSQL) with an owner-controlled External ID customer account. No hosted Azure/AWS application runtime was resumed. Send was not authorized and was not executed.
 
-Expected path:
+Proven:
 
 ```text
-signup
-→ sign in
-→ ECI dashboard
-→ independently connect Gmail or Outlook
-→ mailbox list
-→ Analyze
-→ Propose
-→ Approve
-→ optional separately authorized Send
+External ID signup/sign-in (email OTP)
+→ authenticated dashboard
+→ new internal users.id for the CIAM (iss, sub)
+→ one Microsoft Outlook mailbox connect
+→ bounded first-page list
+→ one synthetic/test message Analyze (MockAIProvider)
+→ Propose (PENDING)
+→ Approve (APPROVED)
+→ STOP BEFORE SEND
 ```
 
-Must verify:
+Safe validation facts:
 
-- ECI application identity != mailbox identity
-- user / connector isolation
+- product login used External ID CIAM; FastAPI accepted the exact CIAM issuer/audience
+- no workforce-product-login fallback
+- External ID user could not see prior workforce-owned connectors
+- mailbox OAuth remained independent of ECI application login
+- Gmail consent completed twice but ID-token verification failed (`InvalidValue`); verification was not weakened; Outlook was used instead
+- approval did not send; Send remained a distinct unactivated control
+- local ignored `.env` files were not committed
+
+The sign-in experience now includes a short development/test privacy notice. External ID OTP placeholder display names such as `unknown` are ignored so the existing username fallback can be used.
+
+Do not start Sally testing from this slice.
 
 ### 17C privacy boundary
 
-Before 17C live external-user testing, ECI should provide a short, plain-language test privacy/data-use notice.
+The required short, plain-language test privacy/data-use notice is present on the ECI sign-in page.
 
 This is a product/test prerequisite, not a full legal or compliance review. Do not write Sally-specific material in this phase.
+
+## 17C-G — Gmail OAuth ID-Token Regression
+
+**Completed / PASS.**
+
+17C core validation remained PASS on Outlook. This slice investigated the Gmail callback failure after two successful Google consents.
+
+Exact failure location: `GoogleMailboxOAuthClient._id_token_claims` → `google.oauth2.id_token.verify_oauth2_token` (google-auth 2.56.3). Token exchange had already succeeded (`id_token` and refresh token present). Verification stayed strict (signature, Google issuer, audience = Gmail OAuth client ID, expiry). Phase 17 application authentication did not change this path.
+
+Root cause: library/runtime clock skew (`C`), not Phase 17 identity coupling. `verify_oauth2_token` used `clock_skew_in_seconds=0`. `InvalidValue` is the class google-auth raises for `iat`/`exp` leeway failures. The local WSL clock was observed 21 seconds off Google’s certs `Date` header. Gmail OAuth client ID, secret, localhost callback, requested scopes (`openid`, `gmail.readonly`, `gmail.send`), and in-memory credential store matched the Phase 16 contract. Verification was not weakened: no unverified decode, no email-as-identity, no audience bypass.
+
+Fix: pass the documented 60-second `clock_skew_in_seconds` leeway and log an allowlisted `verify_error_reason` (`token_used_too_early`, `token_expired`, `wrong_audience`, `unsupported_algorithm`, `invalid_value`) without exception text or tokens.
+
+Live retry on the same External ID session: Gmail callback succeeded; connector `2b61f24e-…` is `ACTIVE` with presentation-only display identity; durable Google `sub` is stored and not exposed publicly; connector belongs to CIAM user `f05c1ada-…`; workforce Gmail/Outlook connectors remained invisible (`result_count=2`); bounded Gmail first page (`maxResults=10`) returned 200. Outlook connector remained `ACTIVE`. Analyze / Propose / Approve were not repeated. Send was not executed.
+
+Do not start Sally testing from this slice.
 
 ## 17D — Sally External Verification
 
