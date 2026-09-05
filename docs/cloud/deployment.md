@@ -4,7 +4,7 @@ Phase 6C deploys one provider-independent Docker image to local Docker, Azure Co
 
 Phase 8 adds application-user OIDC, Azure managed HTTPS confirmation, AWS ALB verification then teardown, and GitHub Actions CI/CD with OIDC federation. Operator `/32` ingress restriction is network access control, not a substitute for API authentication. Production clouds use `AUTH_MODE=oidc`.
 
-Phase 13 adds delegated mailbox OAuth and durable Azure Key Vault / AWS Secrets Manager credential stores in application code. Local Google/Microsoft consent and live store validation are recorded on the Phase 13 roadmap. Phase 14 adds bounded mailbox listing and selected-message analyze in application code; local-runtime live proof used real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider`. Phase 16B redeployed ACA as current `master` with Azure PostgreSQL and Key Vault selected. Phase 16C live-certified the Azure Graph mailbox OAuth → Key Vault durability → Foundry analyze → Propose → Approve path on that runtime and stopped before Send. Phase 16D redeployed ECS as current `master` (`eci-api-dev:6`, image `0050b30`) behind CloudFront HTTPS → HTTP ALB, with Amazon RDS and Secrets Manager selected. That AWS path proved hosting, Entra/MSAL, CORS, persistence, and connector-list reads. It did not certify Gmail, Graph mailbox, Bedrock mailbox inference, or Send. Key Vault and Secrets Manager are mailbox OAuth backends, not `DATABASE_URL` injection. ECS supplies `DATABASE_URL` as a secret reference.
+Phase 13 adds delegated mailbox OAuth and durable Azure Key Vault / AWS Secrets Manager credential stores in application code. Local Google/Microsoft consent and live store validation are recorded on the Phase 13 roadmap. Phase 14 adds bounded mailbox listing and selected-message analyze in application code; local-runtime live proof used real Entra OIDC, real Gmail/Graph mailboxes, local PostgreSQL, and `MockAIProvider`. Phase 16B redeployed ACA as then-current `master` (historical image `eci-api:7518360`) with Azure PostgreSQL and Key Vault selected. Phase 16C live-certified the Azure Graph mailbox OAuth → Key Vault durability → Foundry analyze → Propose → Approve path on that runtime and stopped before Send. Phase 16D redeployed ECS as then-current `master` (historical task definition `eci-api-dev:6`, image `0050b30`) behind CloudFront HTTPS → HTTP ALB, with Amazon RDS and Secrets Manager selected. That 16D path proved hosting, Entra/MSAL, CORS, persistence, and connector-list reads only. Phase 16E certified AWS Gmail → Bedrock, including one historical Send. Phase 16F redeployed both clouds as `3fa3412` (AWS task definition `eci-api-dev:8`, schema `16f0001`), re-validated the crossed mailbox→AI paths, and stopped before Send. Current retained compute is scaled to zero; both managed databases are Stopped; ALB remains retained. Key Vault and Secrets Manager are mailbox OAuth backends, not `DATABASE_URL` injection. ECS supplies `DATABASE_URL` as a secret reference.
 
 ## Same image
 
@@ -68,7 +68,7 @@ ECI Docker image
 
 Runtime: `AI_PROVIDER=microsoft_foundry`, `APP_ENV=production`, `AUTH_MODE=oidc`.
 
-Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, Log Analytics workspace `eci-law-dev`, SWA `eci-web-dev`, PostgreSQL `eci-pg-dev-susanta`, current image `eci-api:7518360`, revision `eci-api-dev--0000004`). Historical tags `dd55327`, `phase6c`, and `phase7a-5f4f5f8` remain in ACR.
+Foundry remains in `rg-eci-dev`. Deployment resources are in `rg-eci-deploy-dev` (ACR `eciacrdev6c`, identity `eci-ca-identity-dev`, environment `eci-ca-env-dev`, app `eci-api-dev`, Log Analytics workspace `eci-law-dev`, SWA `eci-web-dev`, PostgreSQL `eci-pg-dev-susanta` currently **Stopped**, current retained image `3fa3412`). Historical 16B image `eci-api:7518360` / revision `eci-api-dev--0000004` remains in ACR with tags `dd55327`, `phase6c`, and `phase7a-5f4f5f8`. ACA is scaled to zero.
 
 Verified security controls:
 
@@ -101,11 +101,11 @@ ECI Docker image
 → EU Claude Haiku 4.5 inference profile
 ```
 
-Runtime: `AI_PROVIDER=amazon_bedrock`, `APP_ENV=production`, `AUTH_MODE=oidc`, `BEDROCK_REGION=eu-south-2`, `BEDROCK_MODEL_ID=eu.anthropic.claude-haiku-4-5-20251001-v1:0`. Current task definition is `eci-api-dev:6` (immutable image tag `0050b30`).
+Runtime: `AI_PROVIDER=amazon_bedrock`, `APP_ENV=production`, `AUTH_MODE=oidc`, `BEDROCK_REGION=eu-south-2`, `BEDROCK_MODEL_ID=eu.anthropic.claude-haiku-4-5-20251001-v1:0`. Current retained task definition is `eci-api-dev:8` (image `3fa3412`). Historical 16D task definition was `eci-api-dev:6` (image `0050b30`). ECS is paused at desired/running/pending `0/0/0`. RDS `eci-pg-dev` is **Stopped**. ALB `eci-alb-dev` remains retained.
 
 Default VPC reused for Fargate networking.
 
-Phase 16D browser path (ADR-026):
+Phase 16D introduced the browser path (ADR-026). Current retained path:
 
 ```text
 SPA CloudFront HTTPS (E1XFNK98P7PU2W)
@@ -113,8 +113,8 @@ SPA CloudFront HTTPS (E1XFNK98P7PU2W)
 
 API CloudFront HTTPS (E2IF9K4FM4A6WJ)
 → ALB HTTP:80 (eci-alb-dev)
-→ ECS/Fargate :8000 (eci-api-dev:6)
-→ Amazon RDS PostgreSQL (eci-pg-dev)
+→ ECS/Fargate :8000 (retained task definition eci-api-dev:8)
+→ Amazon RDS PostgreSQL (eci-pg-dev, currently Stopped)
 → AWS Secrets Manager mailbox credential backend
 ```
 
@@ -130,7 +130,7 @@ Verified security controls:
 - no NAT Gateway
 - Phase 8B verified HTTPS domain/ACM → ALB → Fargate, then tore down that ALB for cost control; Phase 16D created a new HTTP ALB as the CloudFront origin
 
-Earlier live analysis (Phase 6B/6C, before application-user OIDC) returned `provider=amazon_bedrock`. Health and readiness returned HTTP 200. Phase 8D did not invoke Bedrock: `AUTH_MODE=oidc` was live, missing-token analyze returned 401, and a fake unknown-kid JWT returned 401 (JWKS fail-closed). No real bearer token was sent over HTTP. Phase 16D accepted a real Entra bearer over CloudFront HTTPS for protected `GET /api/v1/analyses?limit=1` and `GET /api/v1/connector-accounts`. Bedrock was **not** invoked. Direct task-IP HTTP remains verification-only. Never send a real application-user bearer token over that HTTP path. ALB-native HTTPS still requires a custom domain and ACM (ADR-010). Phase 16 uses CloudFront default HTTPS in front of HTTP ALB instead. See [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) and [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
+Earlier live analysis (Phase 6B/6C, before application-user OIDC) returned `provider=amazon_bedrock`. Health and readiness returned HTTP 200. Phase 8D did not invoke Bedrock: `AUTH_MODE=oidc` was live, missing-token analyze returned 401, and a fake unknown-kid JWT returned 401 (JWKS fail-closed). No real bearer token was sent over HTTP. Phase 16D accepted a real Entra bearer over CloudFront HTTPS for protected `GET /api/v1/analyses?limit=1` and `GET /api/v1/connector-accounts` and did **not** invoke Bedrock. Phase 16E certified Gmail → Bedrock including one historical Send. Phase 16F re-validated Gmail → Bedrock Analyze → Propose → Approve and stopped before Send. Direct task-IP HTTP remains verification-only. Never send a real application-user bearer token over that HTTP path. ALB-native HTTPS still requires a custom domain and ACM (ADR-010). Phase 16 uses CloudFront default HTTPS in front of HTTP ALB instead. See [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) and [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 Do not publish AWS account ID, role ARNs, VPC IDs, subnet IDs, security-group IDs, ENI IDs, task ARNs, or public IPs.
 
@@ -190,7 +190,7 @@ AWS environment: `AWS_REGION` (`eu-south-2`), `AWS_ROLE_ARN`, `AWS_ECR_REPOSITOR
 
 GitHub Environments `azure` and `aws` exist with the non-secret identifier variables listed above. Do not store Azure client secrets or AWS access keys in GitHub.
 
-Phase 8D executed Deploy after live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` were configured. Run `dd55327` used `target=both`. GitHub OIDC token exchange succeeded on Azure and AWS. The workflow built once and tagged `dd55327` and `stable`. ACR and ECR received the same digest `sha256:0590bf6f7b2ae5614dd35af0307763cb0303e98948531bab2352258e6773ed70`. Azure currently runs `eci-api:7518360` (Phase 16B). AWS currently uses task definition `eci-api-dev:6` (Phase 16D; image `0050b30`). CD remains `workflow_dispatch` only. Azure frontend SWA deploy is an optional dispatch input.
+Phase 8D executed Deploy after live `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` were configured. Run `dd55327` used `target=both`. GitHub OIDC token exchange succeeded on Azure and AWS. The workflow built once and tagged `dd55327` and `stable`. ACR and ECR received the same digest `sha256:0590bf6f7b2ae5614dd35af0307763cb0303e98948531bab2352258e6773ed70`. Current retained application lineage on both clouds is `3fa3412` (AWS task definition `eci-api-dev:8`). Historical 16B Azure image was `eci-api:7518360`. Historical 16D AWS task definition was `eci-api-dev:6` (image `0050b30`). CD remains `workflow_dispatch` only. Azure frontend SWA deploy is an optional dispatch input.
 
 Phase 9C verified PostgreSQL on GitHub Actions run `32336909759` (Lint and test success; PostgreSQL integration success; 34 tests; Alembic round-trip to revision `9a0001`). That job does not deploy and does not use a managed cloud database. Phase 9D does not run `deploy.yml`. Azure now has Flexible Server `DATABASE_URL` (16B). AWS now has RDS `DATABASE_URL` as an ECS secret reference (16D).
 
@@ -257,15 +257,15 @@ AWS verified, not retained (Phase 8B): HTTPS domain + ACM → ALB → ECS. Recre
 | Public health | verified HTTPS | verified controlled HTTP |
 | Missing-token auth | verified | verified |
 | JWKS/OIDC runtime | verified | verified (fake unknown-kid 401; no real bearer) |
-| Real bearer authorized request | verified | verified over CloudFront HTTPS in 16D (analyses + connector-list; no Bedrock) |
-| AI inference after auth | Foundry verified once | deferred until 16E mailbox → Bedrock |
+| Real bearer authorized request | verified | verified over CloudFront HTTPS in 16D; mailbox path in 16E/16F |
+| AI inference after auth | Foundry verified (16C + 16F) | Gmail → Bedrock verified (16E + 16F; 16F stopped before Send) |
 | Production TLS | ACA managed TLS | CloudFront default HTTPS (no custom domain) |
 
 ## Cost controls
 
 Azure: ACR Basic; Container Apps Consumption; min replicas 0; max replicas 1; Log Analytics 30-day retention; no Application Insights; no custom metrics; no dashboards/alerts. ACR Basic and Log Analytics ingestion/retention can incur charges.
 
-AWS: one Fargate task 0.5 vCPU / 1 GiB during 16D (`desiredCount=1`); ALB standing hourly cost while retained; RDS `eci-pg-dev` material; CloudFront/S3 usage; CloudWatch Logs retention 1 day; Container Insights disabled. Retained ECR image storage and CloudWatch Logs storage/usage may incur charges. Scale-to-zero and optional ALB teardown remain 16F.
+AWS: Fargate 0.5 vCPU / 1 GiB when running; current retained service is `desiredCount=0`. ALB standing hourly cost while retained; RDS `eci-pg-dev` **Stopped** (storage may still bill; provider may auto-restart after the temporary-stop interval, currently 7 days); CloudFront/S3 usage; CloudWatch Logs retention 1 day; Container Insights disabled. Retained ECR image storage and CloudWatch Logs storage/usage may incur charges. Optional ALB teardown remains later cost hardening, not open Phase 16 work.
 
 This is not a zero-cost deployment.
 
@@ -275,7 +275,7 @@ Phase 7 is implemented. The same image writes structured JSON to stdout on both 
 
 Azure: Container Apps environment `eci-ca-env-dev` sends logs to Log Analytics workspace `eci-law-dev` (30 days). Native Container Apps metrics (`Requests`, `ResponseTime`, `Replicas`, `CpuPercentage`, `MemoryPercentage`, `RestartCount`) were verified. Use Log Analytics for historical inspection. `az containerapp logs show` can wake a scale-to-zero replica and is for active diagnostics only.
 
-AWS: current task definition is `eci-api-dev:6` (`0050b30`). CloudWatch log group `/ecs/eci-api-dev` retains logs for 1 day via awslogs. Standard AWS/ECS `CPUUtilization` and `MemoryUtilization` were verified in Phase 7. Container Insights remains disabled. 16D left the service at `desiredCount=1` for the live environment; scale-to-zero remains 16F.
+AWS: current retained task definition is `eci-api-dev:8` (`3fa3412`). CloudWatch log group `/ecs/eci-api-dev` retains logs for 1 day via awslogs. Standard AWS/ECS `CPUUtilization` and `MemoryUtilization` were verified in Phase 7. Container Insights remains disabled. 16F left the service at `desiredCount=0`.
 
 Phase 7 does not include distributed tracing, custom metrics, alerts, dashboards, or a full production SRE/SLO stack.
 
@@ -292,7 +292,7 @@ See [GitHub Actions](#github-actions).
 - AWS persistent HTTPS / custom domain (ALB-native TLS still needs ACM/domain; Phase 16D uses CloudFront default HTTPS instead)
 - automatic (push/tag) cloud deployment
 - Phase 8B temporary IAM policy cleanup (`ECIPhase8BIngressVerificationPolicy`), if still attached — IAM-admin follow-up
-- Phase 16D temporary operator IAM cleanup — deferred to 16F
+- Phase 16D temporary operator IAM cleanup — optional later hardening; not a Phase 16 functional gap
 - Key Vault / Secrets Manager injection of `DATABASE_URL` as an application mailbox-store feature (ECS supplies `DATABASE_URL` as a platform secret reference)
 - Entra or RDS IAM database authentication
 - automatic schema migration from application startup or from every replica

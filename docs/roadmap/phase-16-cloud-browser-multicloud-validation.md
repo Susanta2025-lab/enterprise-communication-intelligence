@@ -22,18 +22,61 @@ Baseline commit (Phase 15 closure): `b1267c440279c9804e27c2d2b747c6c7caf408a2`.
 
 ## Status
 
-Phase 16A is **Completed**. Phase 16B is **Completed**. Phase 16C is **Completed**. Phase 16D is **COMPLETE / PASS**. Phase 16E is **Next** (not started). Phase 16F-A1 is **Completed**. Phase 16F-A2 is **Completed**. Remaining 16F is **Not started**.
+Phase 16A–16F are **Completed**. Phase 16 overall is **Completed**.
 
 - **16A is Completed:** authenticated read-only Azure and AWS inventory; topology freeze; ADR-026; configuration/cost/authorization matrices; offline regression. No cloud mutation.
-- **16B is Completed:** Azure SWA + current-master ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. No mailbox live proof. No Foundry inference. No Send.
+- **16B is Completed:** Azure SWA + then-current `master` ACA + PostgreSQL 16 + Key Vault backend + Entra/MSAL browser smoke. Historical image `eci-api:7518360`. No mailbox live proof in that slice. No Foundry inference. No Send.
 - **16C is Completed:** Azure Graph delegated OAuth → Key Vault durability across ACA recycle → one MicrosoftFoundryProvider selected-message Analyze → explicit Propose (PENDING) → explicit Approve (APPROVED). STOP before Send.
-- **16D is COMPLETE / PASS:** AWS HTTPS SPA/API, RDS, Secrets Manager backend, Entra/MSAL, CORS, and protected browser APIs. Corrective connector-list 503 resolved. No Gmail, Graph mailbox, Bedrock inference, or Send.
-- **16E is Next (not started):** AWS live mailbox → Amazon Bedrock validation.
+- **16D is COMPLETE / PASS:** AWS HTTPS SPA/API, RDS, Secrets Manager backend, Entra/MSAL, CORS, and protected browser APIs. Corrective connector-list 503 resolved. Historical image `0050b30` / task definition `eci-api-dev:6`. That slice did not call Gmail, Graph mailbox, Bedrock, or Send.
+- **16E is Completed:** AWS Gmail → Amazon Bedrock Analyze → Propose → Approve. Historical 16E included one manual Send. That Send proof is not part of 16F.
 - **16F-A1 is Completed:** Connected Mailboxes frontend semantics distinguish reconnect-same-account from connect-another. No backend, OAuth, or schema change.
 - **16F-A2 is Completed:** optional presentation-only `display_identity`; `CONNECT_ANOTHER` authorization with explicit account selection; reconnect remains exact-account. Durable `external_account_id` is unchanged and is not exposed on the dashboard list.
-- **16F remaining is Not started:** cross-cloud parity, security/cost hardening, temporary IAM cleanup, final documentation.
+- **16F remaining is Completed:** Azure Outlook connect-another / reactivation + Foundry regression; AWS Gmail multi-account + Bedrock regression; both stopped before Send; compute scaled to zero; both managed databases stopped. Current lineage `3fa3412` / schema `16f0001` / AWS task definition `eci-api-dev:8`.
 
 Architecture: [ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
+
+## Current as of Phase 16 closure
+
+Application HEAD: `3fa34129da06fdc7dd0d271408a6cb22971d4e8c` (`3fa3412`). Alembic head: `16f0001`. CI after that commit: `33319984954` PASS.
+
+`display_identity` is nullable and presentation-only. It is never a security identifier. Gmail durable identity is the verified Google `sub`. Microsoft durable identity is `{tid}:{oid}`. Public API omits `external_account_id`. Uniqueness remains `(user_id, provider, external_account_id)`.
+
+### Azure retained state
+
+```text
+backend / frontend     3fa3412
+schema                  16f0001
+PostgreSQL              eci-pg-dev-susanta Stopped
+Container App           scaled naturally to zero
+approved workflow       unsent
+```
+
+16F Azure path: Entra login → Connect another Outlook → Microsoft picker → intended mailbox → OAuth callback → existing disconnected connector reactivated → `display_identity` populated → bounded list → one non-sensitive synthetic message → Microsoft Foundry Analyze → Propose → Pending → Approve → Approved → STOP BEFORE SEND.
+
+Temporary Flexible Server stop is not indefinite. The provider may automatically restart the database after its permitted stop interval.
+
+### AWS retained state
+
+Account `034456343525`. Region `eu-south-2`.
+
+```text
+backend / frontend     3fa3412
+task definition         eci-api-dev:8
+SPA bundle (observed)   assets/index-yS3Q0W_j.js
+schema                  16f0001 (migrated 13a0001 → 16f0001)
+ECS                     desired/running/pending 0/0/0
+RDS                     eci-pg-dev Stopped
+RDS shape               PostgreSQL 16.15; db.t4g.micro; Single-AZ; gp3 / 20 GiB
+ALB                     eci-alb-dev retained
+```
+
+16F AWS Gmail: retained connector preserved; same ACTIVE identity reused the existing row; a different Gmail identity created a second ACTIVE row; original row retained; two active Gmail connectors; bounded routing to the second mailbox; durable Google identifiers not exposed publicly.
+
+16F AWS Gmail → Bedrock regression: one non-sensitive newsletter message → Analyze once → Amazon Bedrock (`AI_PROVIDER=amazon_bedrock`, `BEDROCK_REGION=eu-south-2`, `BEDROCK_MODEL_ID=eu.anthropic.claude-haiku-4-5-20251001-v1:0`) → Propose once → Pending → Approve once → Approved → STOP BEFORE SEND.
+
+Historical 16E already included one manual Send. 16F deliberately did not Send.
+
+RDS temporary stop may automatically end after the provider maximum stop interval (currently 7 days). `eci-developer` intentionally lacks `rds:StartDBInstance` / `rds:StopDBInstance`. Privileged start/stop uses the existing AWS Console operator path. Do not add ad hoc IAM for that constraint.
 
 ## Frozen topology
 
@@ -539,35 +582,62 @@ SPA and API HTTPS hostnames live without custom domain; ECS registered behind AL
 
 ## 16E — AWS Live Mailbox → Amazon Bedrock Validation
 
-**Status: Next (not started).**
+**Status: Completed.**
 
 ### Objective
 
-Prove Gmail mailbox → Bedrock analyze → propose → approve on AWS. Stop before Send. 16D completed AWS HTTPS hosting only; 16E separately proves the real AWS mailbox/AI path. Gmail credentials and Bedrock inference were **not** exercised in 16D.
+Prove Gmail mailbox → Bedrock analyze → propose → approve on AWS. 16D completed AWS HTTPS hosting only; 16E separately proved the real AWS mailbox/AI path. Gmail credentials and Bedrock inference were **not** exercised in 16D.
+
+### Result
+
+AWS-hosted path:
+
+```text
+SPA CloudFront
+→ Entra/MSAL
+→ API CloudFront → HTTP ALB → ECS
+→ Amazon RDS
+→ AWS Secrets Manager
+→ Gmail
+→ AmazonBedrockProvider
+→ Analyze
+→ Propose
+→ Approve
+```
+
+Historical 16E also included one explicit manual Send after Approve. That Send is **historical 16E proof only**. Phase 16F later re-ran Analyze → Propose → Approve on the same product path and **stopped before Send**. Do not treat the 16F regression as a second Send.
+
+Sanitized live proof:
+
+- Real Gmail delegated OAuth completed on ECS.
+- Durable Gmail credentials used AWS Secrets Manager (`CREDENTIAL_STORE_BACKEND=aws_secrets_manager`).
+- Bounded Gmail listing and selected-message Analyze passed through real `AmazonBedrockProvider`.
+- `AI_PROVIDER=amazon_bedrock`, `BEDROCK_REGION=eu-south-2`, `BEDROCK_MODEL_ID=eu.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- Explicit Propose created a `WorkflowAction` in **PENDING**.
+- Explicit Approve transitioned that action to **APPROVED**.
+- Historical 16E then executed one authorized Send. 16F did not.
+
+This is not Graph on AWS, Foundry on AWS, Gmail on Azure, or a 2×2×2 matrix.
 
 ### Planned cloud mutations
 
-None required for the frozen hosting topology (16D is complete). Optional: one Bedrock invoke. Desired count may be raised then returned to 0.
+None required for the frozen hosting topology (16D is complete). Bedrock: one selected-message inference (consumed). Desired count was raised for the live path.
 
 ### Authorization gates
 
-Live Gmail OAuth; live Bedrock inference. Each separate. 16E has **not** started.
+Completed: live Gmail OAuth; live Bedrock inference; explicit Propose; explicit Approve; one historical Send. Each was a separate gate.
 
 ### Cost gates
 
-Bedrock: **one** selected-message real analysis unless an explicit retry is required. Avoid repeated calls.
+Bedrock: selected-message real analysis. Avoid repeated calls.
 
 ### Live validation boundary
 
-Gmail on AWS only. Not Graph. Not Send. Not Foundry.
-
-### Expected tests
-
-Controlled live path; credentials survive task restart without normal reauthorization.
+Gmail on AWS only. Not Graph. Not Foundry. Historical Send in 16E only.
 
 ### Exit criteria
 
-Same product path as 16C with Gmail + Bedrock. Stop before Send.
+Same product path as 16C with Gmail + Bedrock. Historical 16E additionally proved one Send. 16F later stopped before Send.
 
 ---
 
@@ -614,39 +684,79 @@ Backend unit/integration coverage for display identity, reconnect, and connect-a
 
 ## 16F — Cross-Cloud Parity / Security / Cost Hardening + Final Documentation
 
-**Status: Not started.**
+**Status: Completed.**
+
+Application baseline: `3fa3412` (`feat: support safe multi-account mailbox connections`). Schema: `16f0001` (parent `13a0001`).
 
 ### Objective
 
-Reconcile documentation, confirm parity of the two proofs, apply cost hardening (stop databases, scale compute to zero, optionally delete ALB), and perform an explicitly authorized IAM inventory to remove temporary operator permissions that are no longer required.
+Prove 16F-A2 connect-another / multi-account semantics on the frozen clouds, confirm parity of the two mailbox→AI proofs, pause compute and both managed databases, and reconcile documentation.
 
-### Planned cloud mutations
+### Result
 
-Stop/start or delete only under explicit gates. Never delete `rg-eci-dev`. Do not delete Key Vault/Foundry/ACR/ECS cluster as part of “cleanup” unless a later prompt explicitly says so.
+Azure 16F (Outlook → Foundry):
+
+```text
+Entra login
+→ Connect another Outlook account
+→ Microsoft account picker
+→ intended Outlook mailbox
+→ OAuth callback
+→ existing disconnected connector reactivated
+→ display_identity populated
+→ bounded mailbox listing
+→ one non-sensitive synthetic message
+→ Microsoft Foundry Analyze
+→ Propose → Pending → Approve → Approved
+→ STOP BEFORE SEND
+```
+
+Backend / frontend / schema lineage: `3fa3412` / `3fa3412` / `16f0001`. No Send.
+
+AWS 16F (Gmail → Bedrock):
+
+- schema migration `13a0001` → `16f0001` PASS; existing connector row preserved
+- backend `3fa3412`; task definition `eci-api-dev:8`
+- frontend `3fa3412`; observed bundle `assets/index-yS3Q0W_j.js`
+- same ACTIVE Gmail identity → existing connector reused; no duplicate row
+- different Gmail durable identity → second connector row created; original retained
+- two active Gmail connectors; one may still show `display_identity` null (`Account identity unavailable`) because the label is optional
+- bounded routing to the second mailbox PASS
+- one non-sensitive newsletter message → Analyze once → Amazon Bedrock → Propose once → Pending → Approve once → Approved → STOP BEFORE SEND
+- `AI_PROVIDER=amazon_bedrock`; region `eu-south-2`; model `eu.anthropic.claude-haiku-4-5-20251001-v1:0`
+
+Historical 16E already included one manual Send. 16F did not Send.
+
+### Final pause
+
+| Cloud | Compute | Database |
+|---|---|---|
+| Azure | Container App scaled naturally to zero | Flexible Server `eci-pg-dev-susanta` **Stopped** |
+| AWS | ECS `eci-api-dev` desired/running/pending `0/0/0`; task definition `eci-api-dev:8` retained | RDS `eci-pg-dev` **Stopped** |
+
+ALB `eci-alb-dev` remains retained (standing hourly cost). Temporary 16D operator IAM inventory remains optional production-hardening. Permanent runtime policies `eci-mailbox-secrets-runtime-dev` and `eci-runtime-db-secret-execution-dev` are not cleanup candidates.
+
+Temporary database stop is not indefinite. Azure Flexible Server and Amazon RDS may automatically restart after the provider permitted stop interval (AWS currently 7 days). `eci-developer` intentionally lacks `rds:StartDBInstance` / `rds:StopDBInstance`. Privileged RDS start/stop uses the existing Console path. Do not add ad hoc IAM for that constraint.
 
 ### Authorization gates
 
-Any stop, delete, ingress tighten-back, or IAM inventory/removal of temporary operator policies. Do not confuse temporary 16D operator policies with permanent runtime policies (`eci-mailbox-secrets-runtime-dev`, `eci-runtime-db-secret-execution-dev`).
+Completed: Azure connect-another / Foundry regression; AWS connect-another / Bedrock regression; compute scale-to-zero; both database stops. Send/execute was not authorized in 16F.
 
 ### Cost gates
 
-Do not keep two managed PostgreSQL servers running for symmetry. ALB is the main AWS standing-cost leftover after compute scale-to-zero.
+Both managed databases stopped after the proofs. ALB remains the main AWS standing-cost leftover.
 
 ### Live validation boundary
 
-No additional live Send. No extra AI calls unless a documented defect requires one authorized retry.
-
-### Expected tests
-
-Full offline regression. README/docs reconciliation.
+Crossed minimum only (ADR-026): Azure Graph → Foundry; AWS Gmail → Bedrock. No 2×2×2 matrix. No 16F Send.
 
 ### Exit criteria
 
-Parity notes, cost state recorded, ADR/roadmap/README consistent, no silent billable leftovers undocumented.
+Parity of the two proofs recorded; current lineage `3fa3412` / `16f0001` / `eci-api-dev:8`; pause state recorded; documentation reconciled to that current state. Top-level `README.md` remains owner-curated and is updated in a separate slice.
 
 ---
 
-## Azure current resource inventory (16A, sanitized)
+## Azure resource inventory (16A, sanitized, historical)
 
 | Resource | Current state | Reuse? | Mutation later? | Cost relevance | Notes |
 |---|---|---|---|---|---|
@@ -669,7 +779,7 @@ ACA env **names** present in 16A: `AI_PROVIDER`, `APP_ENV`, `FOUNDRY_PROJECT_END
 
 Missing in 16A: `DATABASE_URL`, `CREDENTIAL_STORE_BACKEND`, `AZURE_KEY_VAULT_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_OAUTH_RETURN_URL`, Gmail OAuth, Microsoft mailbox OAuth.
 
-### After 16B (Azure)
+### After 16B (Azure) — historical slice state
 
 | Resource | 16B state |
 |---|---|
@@ -686,7 +796,7 @@ ACA production Settings names now include the 16A set plus `DATABASE_URL` (secre
 
 ---
 
-## AWS current resource inventory (16A, sanitized)
+## AWS resource inventory (16A, sanitized, historical)
 
 Identity: IAM user `eci-developer`, account `034456343525`, region `eu-south-2`. No mutation.
 
@@ -712,7 +822,7 @@ Task env **names** present: `AI_PROVIDER`, `APP_ENV`, `BEDROCK_REGION`, `BEDROCK
 
 Missing: `DATABASE_URL`, credential store, CORS, OAuth return, Gmail/Microsoft OAuth.
 
-### After 16D (AWS)
+### After 16D (AWS) — historical slice state
 
 | Resource | 16D state |
 |---|---|
@@ -808,7 +918,7 @@ Runtime identity is the ECS task role. Do not set static AWS keys on the task.
 | `CREDENTIAL_STORE_BACKEND` | `aws_secrets_manager` | public identifier |
 | `AWS_SECRETS_MANAGER_REGION` | `eu-south-2` | public identifier |
 | `AWS_SECRETS_MANAGER_NAMESPACE` | `eci/mailbox-oauth` (default) | public identifier |
-| Gmail OAuth trio | same client as local; intended callback on API CloudFront HTTPS; **not configured or exercised in 16D** | identifier + secret + runtime URL |
+| Gmail OAuth trio | same client as local; callback on API CloudFront HTTPS; **not configured or exercised in 16D**; configured and exercised in 16E/16F | identifier + secret + runtime URL |
 | Microsoft OAuth quartet | live matrix does not require Graph on AWS; **not configured or exercised in 16D** | identifier + secret + runtime URL |
 | `CORS_ALLOWED_ORIGINS` | `https://d1ut7j94w7lt3b.cloudfront.net` | runtime URL |
 | `FRONTEND_OAUTH_RETURN_URL` | `https://d1ut7j94w7lt3b.cloudfront.net` | runtime URL |
@@ -834,7 +944,7 @@ Same variable names. Same five full scope identifiers against `eci-api-auth-dev`
 | Row | LOCAL | AZURE | AWS |
 |---|---|---|---|
 | MSAL SPA redirect | `http://localhost:5173` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | `https://d1ut7j94w7lt3b.cloudfront.net` |
-| Gmail provider callback | `http://localhost:8000/api/v1/oauth/callbacks/gmail` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/gmail` | intended `https://dnookm0ucbhv1.cloudfront.net/api/v1/oauth/callbacks/gmail` (not configured or exercised in 16D) |
+| Gmail provider callback | `http://localhost:8000/api/v1/oauth/callbacks/gmail` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/gmail` | `https://dnookm0ucbhv1.cloudfront.net/api/v1/oauth/callbacks/gmail` (not configured or exercised in 16D; used in 16E/16F) |
 | Microsoft mailbox callback | `http://localhost:8000/api/v1/oauth/callbacks/microsoft_graph` | `https://eci-api-dev.politestone-fb9d0321.spaincentral.azurecontainerapps.io/api/v1/oauth/callbacks/microsoft_graph` | not required on AWS live matrix; not configured or exercised in 16D |
 | `FRONTEND_OAUTH_RETURN_URL` | `http://localhost:5173` | `https://witty-island-03f5de51e.7.azurestaticapps.net` | `https://d1ut7j94w7lt3b.cloudfront.net` |
 | CORS origin (that cloud’s API) | `http://localhost:5173` | SWA origin only | `https://d1ut7j94w7lt3b.cloudfront.net` (exact; no wildcard) |
@@ -879,7 +989,8 @@ CORS remains an explicit allowlist, no wildcard, `allow_credentials=false`. Each
 | Slice | Provider | Policy |
 |---|---|---|
 | 16C | Microsoft Foundry | Consumed: one selected-message analysis. No retry. No additional inference during 16C closure. |
-| 16E | Amazon Bedrock | One selected-message analysis unless one explicit retry after failure |
+| 16E | Amazon Bedrock | Consumed: Gmail mailbox analysis. Historical 16E also included one Send. |
+| 16F | Foundry + Bedrock | Consumed: one Azure Outlook Foundry analysis and one AWS Gmail Bedrock analysis. No Send. |
 
 Do not call either in 16A.
 
@@ -891,11 +1002,11 @@ Do not call either in 16A.
 - Azure: Flexible Server in Spain Central, TLS required, firewall/VNet so ACA can connect.
 - AWS: RDS PostgreSQL in the ECS VPC, TLS required, SG from `eci-fargate-sg-dev`.
 - Credentials: injected `DATABASE_URL`; do not commit passwords. Entra/IAM DB auth remains future (ADR-014).
-- Migration: `alembic upgrade head` once per new database. Current head: **`13a0001`**. No new revision in 16A, 16B, 16C, or 16D.
+- Migration: `alembic upgrade head` once per new database. Head during 16A–16D was **`13a0001`**. Current head after 16F-A2 is **`16f0001`**.
 - Advisory locks: required for durable credential mutations (`pg_advisory_xact_lock`).
 - Sequential: Azure proof first, then stop/pause Azure PG before RDS (or reverse) so both are not standing indefinitely.
 
-Database cost gates: Azure Flexible Server exists after 16B; RDS `eci-pg-dev` exists after 16D. Sequential validation still applies so both paid databases are not left standing indefinitely (16F). Stop may still bill storage; delete destroys data.
+Database cost gates: Azure Flexible Server exists after 16B; RDS `eci-pg-dev` exists after 16D. After 16F both are **Stopped**. Temporary stop is not indefinite; each provider may automatically restart the database after its permitted stop interval (AWS currently 7 days). Stop may still bill storage; delete destroys data.
 
 ---
 
@@ -927,7 +1038,7 @@ Reuse existing development Google and Microsoft mailbox OAuth apps. Phase 16B ad
 
 - Backend: **no change required for hosting.** Gaps were configuration, RBAC, ingress, and hosting.
 - Frontend: **no change required.** Per-environment Vite builds are sufficient. Runtime config JSON and cloud selectors are out of scope.
-- Alembic: **no new revision.** Head remains `13a0001`.
+- Alembic: **no new revision in 16A.** Head at 16A was `13a0001`. Current head after 16F-A2 is `16f0001`.
 
 Phase 16D later corrected a composition defect: `GET /api/v1/connector-accounts` now uses `get_connector_account_listing_service` (`communications:read`, persistence only) instead of the connect/lifecycle factory. That is not a new architecture decision. Disconnect/reauthorize remain `communications:connect` with credential-store requirements intact.
 
@@ -948,12 +1059,12 @@ Phase 16D later corrected a composition defect: `GET /api/v1/connector-accounts`
 
 ## Future AWS authorization gates (not 16A)
 
-Hosting gates 1–8 were consumed in 16D (S3, CloudFront SPA/API, ALB, RDS, ECS, Secrets Manager runtime IAM, security groups, Entra SPA redirect). Remaining:
+Hosting gates 1–8 were consumed in 16D (S3, CloudFront SPA/API, ALB, RDS, ECS, Secrets Manager runtime IAM, security groups, Entra SPA redirect). Remaining 16A-era mailbox/AI gates were consumed later:
 
-9. Gmail callback addition (if not already registered; not exercised in 16D)
-10. Microsoft callback addition if needed (not required for the AWS live matrix)
-11. Live Gmail OAuth (16E)
-12. Live Bedrock inference (16E)
+9. Gmail callback addition — consumed for 16E
+10. Microsoft callback addition if needed — not required for the AWS live matrix
+11. Live Gmail OAuth — consumed in 16E
+12. Live Bedrock inference — consumed in 16E; 16F re-validated Analyze → Propose → Approve and stopped before Send
 
 ---
 

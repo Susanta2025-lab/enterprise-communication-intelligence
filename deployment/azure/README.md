@@ -2,9 +2,30 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. Phase 16B is the current Azure runtime (image `eci-api:7518360`, revision `eci-api-dev--0000004`, public HTTPS, SWA + PostgreSQL). Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
+**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. Phase 16F is the current retained Azure runtime (image `3fa3412`, schema `16f0001`, PostgreSQL Stopped, ACA scaled to zero). Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
 
-## Phase 16B verified current state
+## Phase 16F current retained state
+
+```text
+rg-eci-deploy-dev
+├── ACR                         eciacrdev6c (includes eci-api:3fa3412)
+├── UAMI                        eci-ca-identity-dev
+├── Container App               eci-api-dev
+│   ├── image                   3fa3412
+│   └── scale                   naturally scaled to zero
+├── SWA                         eci-web-dev
+│                               https://witty-island-03f5de51e.7.azurestaticapps.net
+└── PostgreSQL                  eci-pg-dev-susanta Stopped
+
+rg-eci-dev                      Foundry unchanged. Do not delete.
+Schema                          16f0001
+```
+
+16F Azure path: Entra login → Connect another Outlook → Microsoft picker → intended mailbox → OAuth callback → existing disconnected connector reactivated → `display_identity` populated → bounded list → one non-sensitive synthetic message → Microsoft Foundry Analyze → Propose → Approve → STOP BEFORE SEND. Approved workflow remained unsent.
+
+Temporary Flexible Server stop is not indefinite. The provider may automatically restart the database after its permitted stop interval.
+
+## Phase 16B verified state (historical)
 
 ```text
 rg-eci-deploy-dev
@@ -26,7 +47,7 @@ rg-eci-deploy-dev
 rg-eci-dev                      Foundry unchanged. Do not delete.
 ```
 
-16B did not invoke Foundry, did not start mailbox OAuth, and did not Send. Schema head is `13a0001`. Migration remains an operator `alembic upgrade head`. ACA secrets (`database-url`, OAuth client secrets) are not in Git.
+16B did not invoke Foundry, did not start mailbox OAuth, and did not Send. Schema head at that slice was `13a0001`. Migration remains an operator `alembic upgrade head`. ACA secrets (`database-url`, OAuth client secrets) are not in Git.
 
 Phase 16C live-validated the existing Azure runtime with **no resource create/delete** and **no image/revision/config change**:
 
@@ -61,19 +82,19 @@ Azure PostgreSQL                none
 Azure Static Web Apps           none
 ```
 
-Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Phase 16B created SWA and PostgreSQL under explicit authorization (see current state above).
+Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Phase 16B created SWA and PostgreSQL under explicit authorization (see historical 16B state above). Current retained state is the Phase 16F banner.
 
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 Azure hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
 
-Current ECI application architecture (code and documentation; Phase 16B redeployed `eci-api-dev` as current `master` with production OIDC, PostgreSQL, Key Vault backend, and Foundry config — not mailbox OAuth or Foundry inference certification):
+Current ECI application architecture (code and documentation; Phase 16F retained `eci-api-dev` as `3fa3412` with production OIDC, PostgreSQL schema `16f0001`, Key Vault backend, and Foundry config):
 
 - Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP). Analyze is not an anonymous public API.
 - Mailbox delegated OAuth is a separate identity domain from that login (Gmail/Microsoft consent → opaque credential store → `ConnectorAccount.credential_ref`).
 - Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault `eci-kv-oauth-dev-susanta` at the store/factory path.
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
-- Production ACA uses managed identity for Key Vault. Phase 16B runs `eci-api:7518360` on ACA with Key Vault selected. Phase 16C live-validated Graph delegated OAuth and one Foundry mailbox analysis on that runtime and stopped before Send. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
+- Production ACA uses managed identity for Key Vault. Historical 16B ran `eci-api:7518360`. Current retained image is `3fa3412`. Phase 16C live-validated Graph delegated OAuth and one Foundry mailbox analysis and stopped before Send. Phase 16F re-validated Outlook connect-another / reactivation → Foundry and stopped before Send. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
 
 See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 

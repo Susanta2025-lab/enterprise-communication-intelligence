@@ -41,8 +41,8 @@ Internal `users.id` is an ownership key, not a login system and not a tenant.
 | `users` | Opaque UUID primary key and timestamps. No PII columns. |
 | `external_identities` | `issuer`, `subject`, unique `(issuer, subject)`, FK to `users.id` |
 | `analyses` | User-owned structured analysis results |
-| `connector_accounts` | User-owned connector account registry with opaque `credential_ref` and nullable provider-neutral `granted_capabilities` |
-| `mailbox_authorization_sessions` | Short-lived mailbox consent sessions. Persist `state_hash` and a TTL-bounded PKCE verifier. Never persist raw state or tokens. |
+| `connector_accounts` | User-owned connector account registry with opaque `credential_ref`, nullable provider-neutral `granted_capabilities`, and optional presentation-only `display_identity` |
+| `mailbox_authorization_sessions` | Short-lived mailbox consent sessions (`connect`, `reauthorize`, `connect_another`). Persist `state_hash` and a TTL-bounded PKCE verifier. Never persist raw state or tokens. |
 | `workflow_actions` | User-owned approval-gated reply actions with proposed/approved snapshots |
 
 Identifier classes:
@@ -226,9 +226,10 @@ Phase 10 added `connector_accounts`:
 | `id` | Internal UUID |
 | `user_id` | Ownership FK to `users.id` |
 | `provider` | Connector provider identity (`gmail`, `microsoft_graph`, `fake`, …) — not `SourceType` |
-| `external_account_id` | Provider-side account identity |
+| `external_account_id` | Durable provider-side account identity (Gmail verified Google `sub`; Microsoft verified `{tid}:{oid}`) |
+| `display_identity` | Optional nullable presentation label. Never a security or uniqueness key. Added in Alembic `16f0001`. |
 | `credential_ref` | Opaque locator for credential material stored elsewhere; nullable |
-| `status` | `active` or `disconnected` |
+| `status` | `active`, `disconnected`, or `reauth_required` |
 | `created_at` / `updated_at` | Timestamps |
 | uniqueness | `(user_id, provider, external_account_id)` |
 
@@ -244,6 +245,14 @@ Still **not** present (deliberately deferred):
 - OAuth token columns
 
 Those remain later production/connector-lifecycle work, not Phase 10 defects.
+
+## Phase 16F persistence additions
+
+Alembic `16f0001` (revises `13a0001`) is the current schema head.
+
+- `connector_accounts.display_identity` is nullable `TEXT`. It is a presentation-only mailbox label. It is never used for authorization, uniqueness, or reconnect matching.
+- `mailbox_authorization_sessions.purpose` accepts `connect`, `reauthorize`, and `connect_another`. `CONNECT_ANOTHER` is unbound (`connector_account_id` IS NULL), same as first-connect.
+- Durable uniqueness remains `(user_id, provider, external_account_id)`.
 
 ## Phase 11B persistence additions
 
@@ -316,7 +325,7 @@ TX1 still commits `EXECUTING` before provider I/O. Confirmed success writes `EXE
 
 ## Performance and operations (deferred)
 
-Do not implement premature optimizations. Future production work should consider connection-pool sizing, managed-database connection limits, indexes driven by observed queries, pagination beyond the current bounded `limit`/`offset` page, retention/archival, and migration timing. Managed backup, PITR, replication, cross-region DR, and failover are deferred because no managed production database exists. CI PostgreSQL is not production backup proof.
+Do not implement premature optimizations. Future production work should consider connection-pool sizing, managed-database connection limits, indexes driven by observed queries, pagination beyond the current bounded `limit`/`offset` page, retention/archival, and migration timing. Phase 16 provisioned colocated Azure Flexible Server and Amazon RDS for browser certification; they are currently Stopped. Managed backup, PITR, replication, cross-region DR, and failover remain deferred. CI PostgreSQL is not production backup proof. Current Alembic head is `16f0001`.
 
 ## Multi-cloud claim
 

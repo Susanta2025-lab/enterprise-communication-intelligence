@@ -62,18 +62,23 @@ See [Authentication](authentication.md), [Deployment](deployment.md), [PostgreSQ
 
 ## Cloud-hosted browser path (Phase 16)
 
-Phase 16A froze the topology. 16B/16C implemented Azure. 16D implemented AWS HTTPS hosting. 16E (Gmail → Bedrock) is next. No live Send on either cloud.
+Phase 16A froze the topology. 16A–16F are completed. Current retained lineage is application `3fa3412`, schema `16f0001`, AWS task definition `eci-api-dev:8`. The required matrix is the crossed minimum only: Azure Graph → Foundry; AWS Gmail → Bedrock. That is not a 2×2×2 certification.
 
-| Concern | Azure (16B/16C) | AWS (16D) |
+Historical slices remain: 16B Azure hosting; 16C Azure Graph → Foundry Analyze → Propose → Approve, stop before Send; 16D AWS HTTPS hosting only; 16E AWS Gmail → Bedrock, including one historical manual Send; 16F multi-account connectors plus Azure/AWS regression, stop before Send, then runtime pause.
+
+| Concern | Azure | AWS |
 |---|---|---|
-| SPA HTTPS | Static Web Apps `eci-web-dev` | private S3 + CloudFront OAC `E1XFNK98P7PU2W` |
-| API HTTPS | ACA managed HTTPS | CloudFront `E2IF9K4FM4A6WJ` → HTTP ALB → ECS |
+| SPA HTTPS | Static Web Apps `eci-web-dev` (16B) | private S3 + CloudFront OAC `E1XFNK98P7PU2W` (16D) |
+| API HTTPS | ACA managed HTTPS (16B) | CloudFront `E2IF9K4FM4A6WJ` → HTTP ALB → ECS (16D) |
 | Custom domain | not required | not required |
-| PostgreSQL | Flexible Server `eci-pg-dev-susanta` | RDS `eci-pg-dev` |
+| PostgreSQL | Flexible Server `eci-pg-dev-susanta` currently **Stopped** | RDS `eci-pg-dev` currently **Stopped** |
 | Credential store | Azure Key Vault | AWS Secrets Manager |
-| Browser MSAL / CORS | verified | verified |
-| Mailbox + AI | Graph → Foundry → Propose → Approve (16C) | not exercised; 16E |
-| Send | not performed | not performed |
+| Browser MSAL / CORS | verified (16B) | verified (16D) |
+| Mailbox + AI | Graph → Foundry (16C; 16F regression) | Gmail → Bedrock (16E; 16F regression) |
+| Send | 16C and 16F stopped before Send | historical 16E included one manual Send; 16F stopped before Send |
+| Current compute | Container App scaled to zero | ECS `0/0/0`; task definition `eci-api-dev:8`; ALB retained |
+
+Temporary database stop is not indefinite; each provider may automatically restart the database after its permitted stop interval. `eci-developer` intentionally lacks privileged RDS start/stop.
 
 ## Observability comparison (Phase 7)
 

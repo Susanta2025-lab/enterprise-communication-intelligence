@@ -286,6 +286,9 @@ Phase 15 does not deploy the SPA to ACA/ECS/AWS, add sync/search/attachments/wor
 * ✅ Phase 16B – Azure Full-Stack Browser Deployment
 * ✅ Phase 16C – Azure Live Mailbox → Microsoft Foundry Validation
 * ✅ Phase 16D – AWS HTTPS + Full-Stack Browser Deployment
+* ✅ Phase 16E – AWS Gmail → Amazon Bedrock Validation
+* ✅ Phase 16F – Multi-Account Connectors, Cross-Cloud Regression & Runtime Pause
+* ✅ Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation
 
 ---
 
@@ -750,11 +753,13 @@ Beyond communication channels, ECI Platform is designed to support multiple AI p
 | ↳ Phase 15E – Workflow + Explicit Send UX  | ✅ Completed   |
 | ↳ Phase 15F – Accessibility / Responsive | ✅ Completed   |
 | ↳ Phase 15G – Live Browser Validation    | ✅ Completed   |
-| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | 16A–16D completed; 16E next; 16F not started |
+| Phase 16 – Cloud-Hosted Browser & Multi-Cloud Validation | ✅ Completed   |
 | ↳ Phase 16A – Cloud Runtime / Deployment Readiness | ✅ Completed   |
 | ↳ Phase 16B – Azure Full-Stack Browser Deployment | ✅ Completed   |
 | ↳ Phase 16C – Azure Live Mailbox → Foundry Validation | ✅ Completed   |
 | ↳ Phase 16D – AWS HTTPS + Full-Stack Browser Deployment | ✅ Completed   |
+| ↳ Phase 16E – AWS Gmail → Bedrock Validation | ✅ Completed   |
+| ↳ Phase 16F – Multi-Account Validation & Runtime Pause | ✅ Completed   |
 
 ---
 
@@ -778,18 +783,19 @@ The current implementation intentionally focuses on architecture and application
 
 Not yet implemented:
 
-* Amazon RDS `eci-pg-dev` exists from Phase 16D (PostgreSQL 16.15; schema head `13a0001`); dual standing Azure+AWS databases remain a 16F cost-hardening concern
 * Mailbox synchronization, search, attachments, bulk analysis, workers, and webhooks
 * Automatic replies, retry/reconciliation, or exactly-once delivery
-* AWS-hosted Gmail OAuth or Phase 14 mailbox→AI certification on ECS (16D hosted the AWS SPA/API path; Gmail, Graph mailbox, Bedrock inference, and Send were not started). Azure Graph → Foundry analyze → Propose → Approve was live-validated in 16C and stopped before Send
-* Bedrock live inference on the connected-mailbox analyze path (Phase 14 and Phase 15G live proof used `MockAIProvider`; 16C used Foundry once on Azure; 16D did not invoke Bedrock)
+* A 2×2×2 cloud × mailbox × AI matrix. Phase 16 validated Azure Graph → Foundry and AWS Gmail → Bedrock only
+* Cloud-hosted live Send as a standing product path. Historical Phase 16E included one manual Gmail Send. Phase 16F stopped before Send
 * Local in-memory credential store may require exact-account reauthorization after a FastAPI process restart even when the connector row remains `ACTIVE`; durable Key Vault / Secrets Manager backends remain the production architecture
-* Phase 16F temporary IAM inventory/cleanup, cost hardening, and cross-cloud parity
-* Phase 8B temporary IAM policy cleanup if still attached
+* Temporary 16D operator IAM inventory/cleanup and Phase 8B temporary IAM policy cleanup if still attached
 * Distributed tracing, custom metrics, dashboards, alerts, and SLOs
 * Database backup, PITR, HA, and cross-region DR
+* Privileged AWS RDS start/stop on `eci-developer` (intentional; existing Console operator path only)
 
-AWS ALB architecture was verified in Phase 8B and then torn down for cost control. Phase 16D restored CloudFront default HTTPS in front of HTTP ALB `eci-alb-dev` as the browser API path (no custom domain). Direct AWS task HTTP remains verification-only. Never send a real bearer token to task-IP HTTP. Azure PostgreSQL Flexible Server `eci-pg-dev-susanta` and Amazon RDS `eci-pg-dev` both exist; sequential stop/pause belongs to 16F.
+Azure PostgreSQL and Amazon RDS are temporarily Stopped and may automatically restart after the provider stop interval (AWS currently 7 days). Azure Container Apps is scaled to zero. AWS ECS is paused at `desiredCount=0`. ALB `eci-alb-dev` remains retained and may incur standing cost. Current retained lineage is application `3fa3412`, schema `16f0001`, AWS task definition `eci-api-dev:8`.
+
+Phase 16 is complete. Both retained cloud runtimes were validated. Compute was returned to scale-to-zero / paused state and both managed databases were stopped. Remaining work is future production hardening. Direct AWS task HTTP remains verification-only. Never send a real bearer token to task-IP HTTP.
 
 ---
 

@@ -80,7 +80,7 @@ Later credential options:
 1. secret/reference-based PostgreSQL credential
 2. Microsoft Entra-based PostgreSQL authentication where practical
 
-Entra database authentication is not implemented. Phase 16B created Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta` (PostgreSQL 16, Burstable `Standard_B1ms`, 32 GiB, HA disabled, TLS required, schema head `13a0001`). Sequential validation must still avoid leaving Azure PG and RDS both standing indefinitely. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
+Entra database authentication is not implemented. Phase 16B created Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta` (PostgreSQL 16, Burstable `Standard_B1ms`, 32 GiB, HA disabled, TLS required; schema at creation was `13a0001`). After 16F the schema head is `16f0001` and the server is **Stopped**. Temporary stop is not indefinite; the provider may automatically restart the database after its permitted stop interval. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 ## Future AWS path (conceptual)
 
@@ -97,7 +97,7 @@ Later credential options:
 1. secret-managed DB credential
 2. RDS IAM database authentication where operationally appropriate
 
-IAM database authentication is not implemented. Phase 16D created Amazon RDS for PostgreSQL `eci-pg-dev` (PostgreSQL 16.15, database `eci`, runtime role `eci_app`, TLS required, schema head `13a0001`). `DATABASE_URL` is an ECS secret reference; plaintext is absent from the task environment. Sequential validation must still avoid leaving Azure PG and RDS both standing indefinitely (16F). See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
+IAM database authentication is not implemented. Phase 16D created Amazon RDS for PostgreSQL `eci-pg-dev` (PostgreSQL 16.15, database `eci`, runtime role `eci_app`, TLS required; schema at creation was `13a0001`). After 16F the schema is `16f0001` (`13a0001` → `16f0001`) and the instance is **Stopped** (`db.t4g.micro`, Single-AZ, gp3 / 20 GiB). `DATABASE_URL` is an ECS secret reference; plaintext is absent from the task environment. Temporary stop is not indefinite; AWS may automatically restart the instance after the provider maximum stop interval (currently 7 days). `eci-developer` intentionally lacks `rds:StartDBInstance` / `rds:StopDBInstance`; privileged start/stop uses the existing Console path. See [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md).
 
 ## DATABASE_URL and secrets
 
@@ -165,4 +165,8 @@ CI PostgreSQL is not production backup, HA, or DR proof.
 
 ## Current cloud environments
 
-Azure Container Apps `eci-api-dev` runs `eci-api:7518360` with Azure PostgreSQL `eci-pg-dev-susanta` (`DATABASE_URL` as an ACA secret). Phase 16C persisted a Graph `ConnectorAccount` (ACTIVE) and a `WorkflowAction` (PENDING → APPROVED) on that database. ECS service `eci-api-dev` runs `eci-api-dev:6` (image `0050b30`) with Amazon RDS `eci-pg-dev` (`DATABASE_URL` as an ECS secret reference). Phase 16D used that database for identity mapping and an empty owned connector-account list (`result_count=0`). Schema head remains `13a0001`. No new Alembic revision.
+Current retained application lineage on both clouds is `3fa3412`. Schema head is `16f0001`. Both managed databases are **Stopped**. Temporary stop is not indefinite; each provider may automatically restart the database after its permitted stop interval (AWS currently 7 days).
+
+Azure Container Apps `eci-api-dev` is scaled to zero with retained image `3fa3412`. `DATABASE_URL` remains an ACA secret. Historical 16B image was `eci-api:7518360`. Phase 16C persisted a Graph `ConnectorAccount` and a `WorkflowAction` (PENDING → APPROVED). Phase 16F reactivated a disconnected Outlook connector (`display_identity` populated) and left an approved workflow unsent.
+
+ECS service `eci-api-dev` is paused at desired/running/pending `0/0/0` with retained task definition `eci-api-dev:8` (image `3fa3412`). `DATABASE_URL` remains an ECS secret reference. Historical 16D used task definition `eci-api-dev:6` (image `0050b30`) and an empty owned connector-account list (`result_count=0`). After 16F the AWS database has two active Gmail connector rows for different durable identities (one may have null `display_identity`). Durable mailbox identifiers are not documented here.

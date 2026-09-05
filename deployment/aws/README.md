@@ -2,11 +2,38 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Amazon ECS on Fargate in `eu-south-2`.
 
-**Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. Phase 16D is the current AWS runtime (`eci-api-dev:6`, image `0050b30`, CloudFront HTTPS → HTTP ALB → ECS, RDS + Secrets Manager). Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+**Status:** Prompt 7 live deployment completed. Phase 7C pushed `phase7a-5f4f5f8`, registered task definition `eci-api-dev:2`, verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. Phase 16F is the current retained AWS runtime (`eci-api-dev:8`, image `3fa3412`, schema `16f0001`, ECS `0/0/0`, RDS Stopped). Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
 
-## Phase 16D verified current state
+## Phase 16F current retained state
 
-Region `eu-south-2`. No mailbox OAuth, Bedrock inference, or Send.
+Region `eu-south-2`. Account `034456343525`.
+
+```text
+ECR                         eci-api-dev tag 3fa3412
+Cluster                     eci-cluster-dev
+Service                     eci-api-dev desired/running/pending 0/0/0
+Task definition             eci-api-dev:8
+ALB                         eci-alb-dev HTTP :80 origin (retained)
+API CloudFront              E2IF9K4FM4A6WJ https://dnookm0ucbhv1.cloudfront.net
+SPA CloudFront              E1XFNK98P7PU2W https://d1ut7j94w7lt3b.cloudfront.net
+S3                          eci-web-aws-dev-034456343525 private; OAC eci-spa-oac-dev
+RDS                         eci-pg-dev Stopped
+RDS shape                   PostgreSQL 16.15; db.t4g.micro; Single-AZ; gp3 / 20 GiB
+Schema                      16f0001 (migrated 13a0001 → 16f0001)
+DATABASE_URL                ECS secret reference only
+Credential store            aws_secrets_manager (Gmail credentials exercised in 16E/16F)
+SPA bundle (observed)       assets/index-yS3Q0W_j.js
+```
+
+16E historically validated Gmail → Bedrock including one manual Send. 16F re-validated same ACTIVE reuse, different-account second Gmail connector, bounded routing to the second mailbox, and Analyze → Propose → Approve, then **stopped before Send**.
+
+RDS temporary stop is not indefinite. AWS may automatically restart the instance after the provider maximum stop interval (currently 7 days). `eci-developer` intentionally lacks `rds:StartDBInstance` / `rds:StopDBInstance`. Privileged start/stop uses the existing AWS Console operator path. Do not add ad hoc IAM for that constraint.
+
+SPA and API use separate CloudFront distributions. Custom domain is not required. Temporary 16D operator IAM remains optional later hardening. Permanent runtime policies `eci-mailbox-secrets-runtime-dev` (task role) and `eci-runtime-db-secret-execution-dev` (execution role) are not cleanup candidates.
+
+## Phase 16D verified state (historical)
+
+Region `eu-south-2`. No mailbox OAuth, Bedrock inference, or Send in that slice.
 
 ```text
 ECR                         eci-api-dev tag 0050b30
@@ -28,7 +55,7 @@ Protected GETs              /api/v1/analyses?limit=1 200
                             /api/v1/connector-accounts 200 after corrective image
 ```
 
-SPA and API use separate CloudFront distributions. Custom domain is not required. Connector-list 503 was resolved by `get_connector_account_listing_service` (`communications:read`, persistence only). Temporary 16D operator IAM is 16F cleanup debt. Permanent runtime policies `eci-mailbox-secrets-runtime-dev` (task role) and `eci-runtime-db-secret-execution-dev` (execution role) are not cleanup candidates.
+SPA and API use separate CloudFront distributions. Custom domain is not required. Connector-list 503 was resolved by `get_connector_account_listing_service` (`communications:read`, persistence only). Permanent runtime policies `eci-mailbox-secrets-runtime-dev` (task role) and `eci-runtime-db-secret-execution-dev` (execution role) are not cleanup candidates.
 
 See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md).
 
@@ -49,13 +76,13 @@ Bedrock profile             eu.anthropic.claude-haiku-4-5-20251001-v1:0 ACTIVE
 RDS / S3 / CloudFront       none found / not inspectable; treat as CREATE LATER
 ```
 
-Phase 16 hosting freeze: private S3 + CloudFront SPA; CloudFront HTTPS → HTTP ALB → ECS (no custom domain). ALB has standing cost while retained. Phase 16D created that path (see current state above). Do not create or mutate S3, CloudFront, ALB, or RDS from this historical runbook unless a later phase explicitly authorizes it.
+Phase 16 hosting freeze: private S3 + CloudFront SPA; CloudFront HTTPS → HTTP ALB → ECS (no custom domain). ALB has standing cost while retained. Phase 16D created that path (see historical 16D state above). Current retained state is the Phase 16F banner. Do not create or mutate S3, CloudFront, ALB, or RDS from this historical runbook unless a later phase explicitly authorizes it.
 
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 AWS hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
 
-Current ECI application architecture (code and documentation; Phase 16D redeployed `eci-api-dev` as current `master` with production OIDC, RDS, Secrets Manager backend, and Bedrock config — not mailbox OAuth or Bedrock inference certification):
+Current ECI application architecture (code and documentation; Phase 16F retained `eci-api-dev` as `3fa3412` / task definition `eci-api-dev:8` with production OIDC, RDS schema `16f0001`, Secrets Manager backend, and Bedrock config):
 
 - Application-user OIDC exists (`AUTH_MODE=oidc`; live Entra is the first IdP).
 - Mailbox delegated OAuth is a separate identity domain from that login and from Bedrock.
@@ -64,7 +91,7 @@ Current ECI application architecture (code and documentation; Phase 16D redeploy
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
 - Phase 13E live-validated Secrets Manager at the store/factory path using the existing ECI developer identity. Phase 16D selected `CREDENTIAL_STORE_BACKEND=aws_secrets_manager` on ECS. That is not a claim that Gmail or Graph mailbox OAuth ran on `eci-api-dev`.
 - The operator IAM user (`eci-developer` / profile `eci-dev`) is **not** the production ECS application identity. The application uses `eci-bedrock-task-role-dev` plus `eci-mailbox-secrets-runtime-dev`.
-- The retained ECS service now runs image `0050b30` / task definition `eci-api-dev:6` behind CloudFront HTTPS. It has **not** been certified as a complete Phase 13 mailbox-OAuth runtime or a Phase 14 mailbox→AI runtime. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`. 16D did not call Gmail, Graph mailbox, or Bedrock.
+- The retained ECS service image is `3fa3412` / task definition `eci-api-dev:8` behind CloudFront HTTPS, currently paused at `desiredCount=0`. Phase 16E certified Gmail OAuth and Gmail → Bedrock, including one historical Send. Phase 16F re-validated multi-account Gmail and Bedrock Analyze → Propose → Approve and stopped before Send. Phase 14 live proof used local ECI runtime + real Entra OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`. 16D itself did not call Gmail, Graph mailbox, or Bedrock.
 
 See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 
