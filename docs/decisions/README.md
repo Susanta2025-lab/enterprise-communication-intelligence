@@ -42,6 +42,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-024](ADR-024-connected-mailbox-read-and-analysis-authorization-boundary.md) | Connected Mailbox Read and Analysis Authorization Boundary | Accepted |
 | [ADR-025](ADR-025-browser-frontend-and-authentication-architecture.md) | Browser Frontend and Authentication Architecture | Accepted |
 | [ADR-026](ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) | Cloud-hosted browser SPA topology and multi-cloud HTTPS validation | Accepted |
+| [ADR-027](ADR-027-microsoft-entra-external-id-customer-authentication.md) | Microsoft Entra External ID for Customer Authentication | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -82,6 +83,8 @@ ADR-024 records that `communications:read` is distinct from connect, analyze, wo
 ADR-025 records the Phase 15A browser foundation: same-repository React + TypeScript + Vite SPA, MSAL public client, FastAPI bearer tokens, no BFF or application cookies, mailbox OAuth remaining server-side, TanStack Query for server state, and an explicit CORS origin allowlist. A dedicated Entra SPA registration is preferred for live browser operation and was not created in 15A.
 
 ADR-026 records Phase 16 hosting: environment-specific Vite SPA builds, Azure Static Web Apps → ACA, AWS S3/CloudFront SPA plus CloudFront HTTPS → HTTP ALB → ECS (no custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, crossed Graph+Foundry / Gmail+Bedrock proofs, and no live Send by default. ADR-010's ALB-native TLS still needs ACM/domain; Phase 16 uses CloudFront default certificates instead. 16B/16C implemented the Azure path. 16D implemented AWS HTTPS hosting (COMPLETE / PASS) without Gmail, Bedrock, or Send. 16E completed AWS Gmail → Bedrock, including one historical Send. 16F completed multi-account connector semantics, Azure/AWS regression validation, and runtime pause, stopping before Send. Phase 16 is closed from the validation perspective.
+
+ADR-027 records Phase 17 product-login cutover to Microsoft Entra External ID. The workforce tenant remains the operator/admin/mailbox-OAuth directory, not the long-term customer-login directory. Browser MSAL, authorization code + PKCE, bearer tokens, single-issuer JWT validation, `(iss, sub)` mapping, and the five `communications:*` permissions are retained. Email OTP is the initial customer path. Dual-issuer trust, email identity keys, schema migration, social login, and mailbox-login merging are rejected. External ID `sub` is pairwise to the API registration. ECI application login remains separate from mailbox login. Implementation begins after this architecture lock.
 
 ## Template
 
