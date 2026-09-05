@@ -4,11 +4,11 @@ export type EnvRecord = Record<string, string | boolean | undefined>;
 
 export type FrontendConfig = {
   readonly apiBaseUrl: string;
-  readonly entraTenantId: string;
   readonly entraSpaClientId: string;
   readonly entraRedirectUri: string;
   readonly eciApiScopes: readonly string[];
   readonly entraAuthority: string;
+  readonly knownAuthorities: readonly string[];
 };
 
 export class FrontendConfigError extends Error {
@@ -21,6 +21,9 @@ export class FrontendConfigError extends Error {
 
 const GUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const AUTHORITY_HOSTNAME =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
 function readString(env: EnvRecord, key: string): string {
   const raw = env[key];
@@ -97,15 +100,39 @@ export function parseEciApiScopes(raw: string): readonly string[] {
   return Object.freeze([...parts]);
 }
 
+export function parseEntraAuthority(raw: string): {
+  readonly authority: string;
+  readonly knownAuthorities: readonly string[];
+} {
+  const parsed = parseHttpUrl("VITE_ENTRA_AUTHORITY", raw);
+  if (parsed.protocol !== "https:") {
+    throw new FrontendConfigError("VITE_ENTRA_AUTHORITY must be an https URL.");
+  }
+  if (parsed.search) {
+    throw new FrontendConfigError("VITE_ENTRA_AUTHORITY is not a valid URL.");
+  }
+  if (!AUTHORITY_HOSTNAME.test(parsed.hostname) || !/[a-z]/i.test(parsed.hostname)) {
+    throw new FrontendConfigError("VITE_ENTRA_AUTHORITY hostname is invalid.");
+  }
+
+  const pathSegments = parsed.pathname.split("/").filter(Boolean);
+  if (pathSegments.length === 0) {
+    throw new FrontendConfigError("VITE_ENTRA_AUTHORITY must include a tenant path.");
+  }
+  if (pathSegments.some((segment) => segment === "." || segment === "..")) {
+    throw new FrontendConfigError("VITE_ENTRA_AUTHORITY is not a valid URL.");
+  }
+
+  return Object.freeze({
+    authority: `${parsed.origin}/${pathSegments.join("/")}`,
+    knownAuthorities: Object.freeze([parsed.hostname]),
+  });
+}
+
 export function loadFrontendConfig(env: EnvRecord): FrontendConfig {
   const apiBaseUrlValue = readString(env, "VITE_ECI_API_BASE_URL");
   const apiBaseUrlParsed = parseHttpUrl("VITE_ECI_API_BASE_URL", apiBaseUrlValue);
   const apiBaseUrl = `${apiBaseUrlParsed.origin}${apiBaseUrlParsed.pathname.replace(/\/+$/, "")}`;
-
-  const entraTenantId = readString(env, "VITE_ENTRA_TENANT_ID");
-  if (!GUID.test(entraTenantId)) {
-    throw new FrontendConfigError("VITE_ENTRA_TENANT_ID is invalid.");
-  }
 
   const entraSpaClientId = readString(env, "VITE_ENTRA_SPA_CLIENT_ID");
   if (!GUID.test(entraSpaClientId)) {
@@ -119,13 +146,16 @@ export function loadFrontendConfig(env: EnvRecord): FrontendConfig {
   }
 
   const eciApiScopes = parseEciApiScopes(readString(env, "VITE_ECI_API_SCOPES"));
+  const { authority: entraAuthority, knownAuthorities } = parseEntraAuthority(
+    readString(env, "VITE_ENTRA_AUTHORITY"),
+  );
 
   return Object.freeze({
     apiBaseUrl,
-    entraTenantId,
     entraSpaClientId,
     entraRedirectUri,
     eciApiScopes,
-    entraAuthority: `https://login.microsoftonline.com/${entraTenantId}`,
+    entraAuthority,
+    knownAuthorities,
   });
 }

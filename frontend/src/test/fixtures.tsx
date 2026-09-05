@@ -8,7 +8,7 @@ export const TEST_TOKEN = "eci-test-access-token-value";
 
 export const TEST_ENV = {
   VITE_ECI_API_BASE_URL: "http://localhost:8000",
-  VITE_ENTRA_TENANT_ID: "11111111-1111-1111-1111-111111111111",
+  VITE_ENTRA_AUTHORITY: "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
   VITE_ENTRA_SPA_CLIENT_ID: "22222222-2222-2222-2222-222222222222",
   VITE_ENTRA_REDIRECT_URI: "http://localhost:5173",
   VITE_ECI_API_SCOPES: [
@@ -22,11 +22,11 @@ export const TEST_ENV = {
 
 export const TEST_CONFIG: FrontendConfig = {
   apiBaseUrl: "http://localhost:8000",
-  entraTenantId: "11111111-1111-1111-1111-111111111111",
   entraSpaClientId: "22222222-2222-2222-2222-222222222222",
   entraRedirectUri: "http://localhost:5173",
   eciApiScopes: TEST_ENV.VITE_ECI_API_SCOPES.split(","),
-  entraAuthority: "https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111",
+  entraAuthority: "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
+  knownAuthorities: ["example.ciamlogin.com"],
 };
 
 export function createAuthSession(overrides: Partial<AuthSession> = {}): AuthSession {

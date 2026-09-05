@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { FrontendConfigError, loadFrontendConfig, parseEciApiScopes } from "../config/env";
+import {
+  FrontendConfigError,
+  loadFrontendConfig,
+  parseEciApiScopes,
+  parseEntraAuthority,
+} from "../config/env";
 import { TEST_ENV } from "./fixtures";
 
 describe("frontend configuration", () => {
@@ -8,8 +13,10 @@ describe("frontend configuration", () => {
     const config = loadFrontendConfig(TEST_ENV);
     expect(config.apiBaseUrl).toBe("http://localhost:8000");
     expect(config.entraAuthority).toBe(
-      "https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111",
+      "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
     );
+    expect(config.knownAuthorities).toEqual(["example.ciamlogin.com"]);
+    expect(config.entraRedirectUri).toBe("http://localhost:5173");
     expect(config.eciApiScopes).toEqual([
       "api://33333333-3333-3333-3333-333333333333/communications:read",
       "api://33333333-3333-3333-3333-333333333333/communications:analyze",
@@ -18,6 +25,29 @@ describe("frontend configuration", () => {
       "api://33333333-3333-3333-3333-333333333333/communications:send",
     ]);
     expect(Object.isFrozen(config)).toBe(true);
+  });
+
+  it("accepts an explicit CIAM authority and derives knownAuthorities from its hostname", () => {
+    const parsed = parseEntraAuthority(
+      "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111/",
+    );
+    expect(parsed.authority).toBe(
+      "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
+    );
+    expect(parsed.knownAuthorities).toEqual(["example.ciamlogin.com"]);
+  });
+
+  it("does not derive product-login authority from a workforce tenant id", () => {
+    const config = loadFrontendConfig({
+      ...TEST_ENV,
+      VITE_ENTRA_AUTHORITY: "https://example.ciamlogin.com/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      VITE_ENTRA_TENANT_ID: "99999999-9999-9999-9999-999999999999",
+    });
+    expect(config.entraAuthority).toBe(
+      "https://example.ciamlogin.com/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    );
+    expect(config.entraAuthority).not.toContain("login.microsoftonline.com");
+    expect(config).not.toHaveProperty("entraTenantId");
   });
 
   it("parses comma or whitespace separated explicit scopes", () => {
@@ -29,7 +59,7 @@ describe("frontend configuration", () => {
 
   it.each([
     "VITE_ECI_API_BASE_URL",
-    "VITE_ENTRA_TENANT_ID",
+    "VITE_ENTRA_AUTHORITY",
     "VITE_ENTRA_SPA_CLIENT_ID",
     "VITE_ENTRA_REDIRECT_URI",
     "VITE_ECI_API_SCOPES",
@@ -40,10 +70,25 @@ describe("frontend configuration", () => {
     );
   });
 
-  it("rejects a malformed tenant id", () => {
-    expect(() =>
-      loadFrontendConfig({ ...TEST_ENV, VITE_ENTRA_TENANT_ID: "not-a-guid" }),
-    ).toThrow(FrontendConfigError);
+  it.each([
+    ["not-a-url", "VITE_ENTRA_AUTHORITY is not a valid URL."],
+    ["http://example.ciamlogin.com/11111111-1111-1111-1111-111111111111", "must be an https URL"],
+    ["https://localhost/11111111-1111-1111-1111-111111111111", "hostname is invalid"],
+    ["https://127.0.0.1/11111111-1111-1111-1111-111111111111", "hostname is invalid"],
+    ["https://example.ciamlogin.com", "must include a tenant path"],
+    ["https://example.ciamlogin.com/", "must include a tenant path"],
+    ["https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111?foo=1", "is not a valid URL"],
+    [
+      "https://user:pass@example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
+      "is not a valid URL",
+    ],
+  ])("rejects malformed authority %s", (authority, message) => {
+    expect(() => loadFrontendConfig({ ...TEST_ENV, VITE_ENTRA_AUTHORITY: authority })).toThrow(
+      FrontendConfigError,
+    );
+    expect(() => loadFrontendConfig({ ...TEST_ENV, VITE_ENTRA_AUTHORITY: authority })).toThrow(
+      message,
+    );
   });
 
   it("rejects empty scope lists", () => {

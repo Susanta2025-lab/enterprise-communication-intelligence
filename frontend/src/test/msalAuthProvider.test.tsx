@@ -1,5 +1,6 @@
 import { InteractionStatus, type AccountInfo, type AuthenticationResult, type IPublicClientApplication } from "@azure/msal-browser";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +39,7 @@ function freshAccount(homeAccountId: string): AccountInfo {
     homeAccountId,
     localAccountId: "local-account-1",
     environment: "login.windows.net",
-    tenantId: TEST_CONFIG.entraTenantId,
+    tenantId: "11111111-1111-1111-1111-111111111111",
     username: "ada@example.com",
     name: "Ada Lovelace",
   };
@@ -49,14 +50,32 @@ function PermissionsProbe() {
   return <div data-testid="permissions">{permissions.join(" ")}</div>;
 }
 
+function AuthActionProbe() {
+  const { login, logout } = useAuth();
+  return (
+    <div>
+      <button type="button" onClick={() => void login()}>
+        Start sign-in
+      </button>
+      <button type="button" onClick={() => void logout()}>
+        Start sign-out
+      </button>
+    </div>
+  );
+}
+
 function createInstance(
   acquireTokenSilent: IPublicClientApplication["acquireTokenSilent"],
   homeAccountId: string | null = HOME_ACCOUNT_ID,
+  extras: Partial<IPublicClientApplication> = {},
 ): IPublicClientApplication {
   return {
     getActiveAccount: vi.fn(() => (homeAccountId === null ? null : freshAccount(homeAccountId))),
     getAllAccounts: vi.fn(() => (homeAccountId === null ? [] : [freshAccount(homeAccountId)])),
     acquireTokenSilent,
+    loginRedirect: vi.fn(async () => undefined),
+    logoutRedirect: vi.fn(async () => undefined),
+    ...extras,
   } as unknown as IPublicClientApplication;
 }
 
@@ -177,5 +196,59 @@ describe("MsalAuthProvider silent-token effect", () => {
         account: expect.objectContaining({ homeAccountId: "home-account-2" }),
       }),
     );
+  });
+});
+
+describe("MsalAuthProvider login and logout", () => {
+  beforeEach(() => {
+    msalHarness.authenticated = true;
+    msalHarness.instance = null;
+  });
+
+  afterEach(() => {
+    msalHarness.authenticated = true;
+    msalHarness.instance = null;
+  });
+
+  it("starts sign-in through MSAL loginRedirect with ECI scopes", async () => {
+    const acquireTokenSilent = vi.fn(async () => ({ accessToken: SCOPED_TOKEN }) as AuthenticationResult);
+    const instance = createInstance(acquireTokenSilent);
+    msalHarness.instance = instance;
+    const user = userEvent.setup();
+    render(
+      <MsalAuthProvider config={TEST_CONFIG} instance={instance}>
+        <AuthActionProbe />
+      </MsalAuthProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Start sign-in" }));
+
+    expect(instance.loginRedirect).toHaveBeenCalledTimes(1);
+    expect(instance.loginRedirect).toHaveBeenCalledWith({
+      scopes: [...TEST_CONFIG.eciApiScopes],
+      redirectUri: TEST_CONFIG.entraRedirectUri,
+    });
+    expect(instance.logoutRedirect).not.toHaveBeenCalled();
+  });
+
+  it("starts sign-out through MSAL logoutRedirect using the SPA redirect URI", async () => {
+    const acquireTokenSilent = vi.fn(async () => ({ accessToken: SCOPED_TOKEN }) as AuthenticationResult);
+    const instance = createInstance(acquireTokenSilent);
+    msalHarness.instance = instance;
+    const user = userEvent.setup();
+    render(
+      <MsalAuthProvider config={TEST_CONFIG} instance={instance}>
+        <AuthActionProbe />
+      </MsalAuthProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Start sign-out" }));
+
+    expect(instance.logoutRedirect).toHaveBeenCalledTimes(1);
+    expect(instance.logoutRedirect).toHaveBeenCalledWith({
+      account: expect.objectContaining({ homeAccountId: HOME_ACCOUNT_ID }),
+      postLogoutRedirectUri: TEST_CONFIG.entraRedirectUri,
+    });
+    expect(instance.loginRedirect).not.toHaveBeenCalled();
   });
 });

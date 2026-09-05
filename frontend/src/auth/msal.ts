@@ -1,7 +1,9 @@
 import {
   BrowserCacheLocation,
   PublicClientApplication,
+  type AccountInfo,
   type Configuration,
+  type EndSessionRequest,
   type IPublicClientApplication,
   type RedirectRequest,
 } from "@azure/msal-browser";
@@ -13,6 +15,7 @@ export function createMsalConfiguration(config: FrontendConfig): Configuration {
     auth: {
       clientId: config.entraSpaClientId,
       authority: config.entraAuthority,
+      knownAuthorities: [...config.knownAuthorities],
       redirectUri: config.entraRedirectUri,
       postLogoutRedirectUri: config.entraRedirectUri,
     },
@@ -33,6 +36,16 @@ export function buildLoginRequest(config: FrontendConfig): RedirectRequest {
   return {
     scopes: [...config.eciApiScopes],
     redirectUri: config.entraRedirectUri,
+  };
+}
+
+export function buildLogoutRequest(
+  config: FrontendConfig,
+  account: AccountInfo | null,
+): EndSessionRequest {
+  return {
+    account: account ?? undefined,
+    postLogoutRedirectUri: config.entraRedirectUri,
   };
 }
 

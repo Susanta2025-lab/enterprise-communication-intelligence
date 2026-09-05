@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { FrontendConfig } from "../config/env";
 import { permissionsFromAccessToken } from "./accessTokenClaims";
 import { AuthContext } from "./AuthContext";
-import { buildLoginRequest } from "./msal";
+import { buildLoginRequest, buildLogoutRequest } from "./msal";
 import type { EciPermission } from "./permissions";
 
 const EMPTY_PERMISSIONS: readonly EciPermission[] = [];
@@ -108,14 +108,11 @@ function MsalAuthSession({
     }
     setError(null);
     try {
-      await instance.logoutRedirect({
-        account: account ?? undefined,
-        postLogoutRedirectUri: config.entraRedirectUri,
-      });
+      await instance.logoutRedirect(buildLogoutRequest(config, account));
     } catch {
       setError("Sign-out could not be started. Try again.");
     }
-  }, [account, config.entraRedirectUri, instance, interactionInProgress]);
+  }, [account, config, instance, interactionInProgress]);
 
   const session = useMemo(
     () => ({

@@ -27,12 +27,12 @@ Architecture: [ADR-027](../decisions/ADR-027-microsoft-entra-external-id-custome
 
 ## Status
 
-Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
+Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
 
 - **17A is Completed / PASS:** read-only External ID readiness assessment. No tenant, app registration, code, or documentation mutation in that slice.
 - **17B-A is Completed / PASS:** ADR-027 and this roadmap lock the approved architecture. No authentication code, tenant, app registration, or migration.
-- **17B-B is Next:** frontend External ID / MSAL configuration.
-- **17B-C:** backend External ID JWT / configuration.
+- **17B-B is Completed / PASS:** frontend External ID / MSAL configuration uses explicit `VITE_ENTRA_AUTHORITY` and derived `knownAuthorities`. No live tenant.
+- **17B-C is Next:** backend External ID JWT / configuration.
 - **17B-D:** offline authentication regression.
 - **17B-E:** External ID operator setup, only after separate explicit authorization.
 - **17C:** not started. Controlled owner-account validation after 17B.
@@ -76,7 +76,7 @@ Implementation is split into narrow slices based on the 17A assessment.
 
 ### 17B-A — ADR / Architecture Lock
 
-**CURRENT SLICE. Completed / PASS.**
+**Completed / PASS.**
 
 Persist the approved architecture before any implementation.
 
@@ -97,18 +97,19 @@ Out of scope:
 
 ### 17B-B — Frontend External ID / MSAL Configuration
 
-Next implementation slice.
+**CURRENT SLICE. Completed / PASS.**
 
-- introduce explicit CIAM authority configuration
-- configure `knownAuthorities` where required
-- define the frontend environment contract
-- retain the current MSAL / auth abstraction
-- update offline frontend tests
-- do not hardcode production tenant values
+- explicit `VITE_ENTRA_AUTHORITY` is the complete public MSAL authority
+- `knownAuthorities` is derived from the authority hostname
+- product login no longer constructs `https://login.microsoftonline.com/{tenant-id}`
+- existing MSAL public-client, redirect, sessionStorage, and AuthContext model retained
+- offline frontend tests updated; no live tenant or identity-endpoint contact
 
 Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA.
 
 ### 17B-C — Backend External ID JWT / Configuration
+
+Next implementation slice.
 
 - retain the single-issuer `TokenValidator`
 - document and accept an External ID configuration contract (`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`)
