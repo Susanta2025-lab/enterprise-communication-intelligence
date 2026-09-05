@@ -146,7 +146,7 @@ jobs:
       - name: Production Vite build
         env:
           VITE_ECI_API_BASE_URL: ${{ vars.VITE_ECI_API_BASE_URL }}
-          VITE_ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          VITE_ENTRA_AUTHORITY: ${{ vars.VITE_ENTRA_AUTHORITY }}
           VITE_ENTRA_SPA_CLIENT_ID: ${{ vars.VITE_ENTRA_SPA_CLIENT_ID }}
           VITE_ENTRA_REDIRECT_URI: ${{ vars.VITE_ENTRA_REDIRECT_URI }}
           VITE_ECI_API_SCOPES: ${{ vars.VITE_ECI_API_SCOPES }}

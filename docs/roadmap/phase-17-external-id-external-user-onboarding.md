@@ -27,14 +27,14 @@ Architecture: [ADR-027](../decisions/ADR-027-microsoft-entra-external-id-custome
 
 ## Status
 
-Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS**. Phase 17B-D is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
+Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17B-B is **Completed / PASS**. Phase 17B-C is **Completed / PASS**. Phase 17B-D is **Completed / PASS**. Phase 17B-E is **Completed / PASS** (this slice). Phase 17 overall is **Next**.
 
 - **17A is Completed / PASS:** read-only External ID readiness assessment. No tenant, app registration, code, or documentation mutation in that slice.
 - **17B-A is Completed / PASS:** ADR-027 and this roadmap lock the approved architecture. No authentication code, tenant, app registration, or migration.
 - **17B-B is Completed / PASS:** frontend External ID / MSAL configuration uses explicit `VITE_ENTRA_AUTHORITY` and derived `knownAuthorities`. No live tenant.
 - **17B-C is Completed / PASS:** backend External ID JWT / configuration. Existing single-issuer `TokenValidator` retained; CIAM-shaped offline tests added. No live tenant.
 - **17B-D is Completed / PASS:** offline authentication, ownership, and mailbox-login-separation regression. No live IdP.
-- **17B-E is Next:** External ID operator setup, only after separate explicit authorization.
+- **17B-E is Completed / PASS:** External ID development tenant, email OTP user flow, SPA/API registrations, five delegated scopes, and local ignored environment configuration. No Phase 17C product validation.
 - **17C:** not started. Controlled owner-account validation after 17B.
 - **17D:** not started. Sally external verification starts only after 17C PASS.
 
@@ -60,9 +60,9 @@ The following decisions are authoritative for Phase 17. They are recorded in ADR
 | Schema | no Phase 17B migration; Alembic head remains `16f0001` |
 | Hosting | same customer IdP on Azure and AWS |
 
-Do not hardcode tenant-specific production values in source. Exact operator values come from the later tenant and OIDC discovery metadata.
+Do not hardcode tenant-specific production values in source. Exact operator values come from the created tenant and OIDC discovery metadata.
 
-Confirm External ID cost immediately before 17B-E. This roadmap does not quote pricing.
+External ID core MAU billing was confirmed immediately before 17B-E tenant creation. This roadmap does not quote pricing.
 
 ## 17A — External ID Readiness Assessment
 
@@ -119,7 +119,7 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-D — Offline Authentication Regression
 
-**CURRENT SLICE. Completed / PASS.**
+**Completed / PASS.**
 
 - frontend CIAM authority / MSAL / scope regression holds
 - backend exact-issuer JWT / `(iss, sub)` / permission regression holds
@@ -129,19 +129,27 @@ Do not rewrite the working MSAL stack. Do not implement mailbox OAuth in the SPA
 
 ### 17B-E — External ID Operator Setup
 
-Next slice. Operator/configuration work. Do not perform it without a separate explicit authorization.
+**CURRENT SLICE. Completed / PASS.**
 
-Expected later work:
+Created the minimum development External ID identity environment on the existing ECI-Development subscription. No application source change. No schema migration. No mailbox OAuth change. Azure/AWS application runtimes were not resumed or deployed.
 
-- create an External ID development tenant
-- create the customer sign-up/sign-in user flow
-- enable email OTP
-- create the SPA registration
-- create the API registration
-- expose the five existing ECI scopes
-- register localhost redirects and logout URIs
+Safe resource metadata:
 
-This slice is cost-bearing. Confirm current External ID pricing before creation. 17B-B through 17B-D can complete offline without a live tenant. Live signup cannot.
+- tenant display name: `ECI External ID Development`
+- tenant domain: `eciexternaliddev.onmicrosoft.com`
+- tenant ID: `070eadae-1958-4b21-af42-3584ac284eba`
+- SKU / billing: Base / A0, MAU (core External ID; no SMS, Go-Local, ID Governance, GSA, or M2M add-on)
+- data location: Europe
+- user flow: `ECI_SignUpSignIn_Dev` (combined sign-up/sign-in; Email OTP only)
+- API registration: `eci-api-external-id-dev`
+- SPA registration: `eci-web-external-id-dev`
+- Application ID URI shape: `api://<api-client-id>`
+- delegated scopes: `communications:read`, `communications:analyze`, `communications:connect`, `communications:workflow`, `communications:send`
+- local redirect / post-logout: `http://localhost:5173`
+
+Local ignored `.env` files now use the exact External ID issuer, JWKS URI, SPA client ID, and API audience from Microsoft discovery metadata. Tracked `.env.example` files remain placeholders. Product-login deploy templates now require `VITE_ENTRA_AUTHORITY` instead of `VITE_ENTRA_TENANT_ID`.
+
+Do not treat email as the ECI durable identity. Recreating the API registration remains an identity-breaking event.
 
 ## 17C — Controlled External-User Validation
 

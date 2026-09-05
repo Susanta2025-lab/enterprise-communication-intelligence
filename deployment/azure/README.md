@@ -58,7 +58,7 @@ SWA → MSAL → ACA → Azure PostgreSQL → Key Vault → Microsoft Graph
 
 Proven: Graph delegated OAuth; `ConnectorAccount` ACTIVE; Key Vault-backed credentials survived a same-revision ACA process/replica recycle; post-recycle Graph list with no reauthorization; one Foundry selected-message analysis; `MockAIProvider` unused; Propose PENDING; Approve APPROVED; execute/send count zero. SPA remount can drop in-browser analysis/workflow presentation; persisted workflow remains in PostgreSQL and is recoverable through existing read APIs (known UX limitation, not data loss). Do not stop PostgreSQL in 16C closure.
 
-GitHub Environment `azure` frontend CD needs public identifier variables only: `AZURE_STATIC_WEB_APP_NAME`, `VITE_ECI_API_BASE_URL`, `VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ENTRA_REDIRECT_URI`, `VITE_ECI_API_SCOPES`. Do not store the SWA deployment token in Git. Rotate it with `az staticwebapp secrets reset-api-key` if it is ever printed.
+GitHub Environment `azure` frontend CD needs public identifier variables only: `AZURE_STATIC_WEB_APP_NAME`, `VITE_ECI_API_BASE_URL`, `VITE_ENTRA_AUTHORITY`, `VITE_ENTRA_SPA_CLIENT_ID`, `VITE_ENTRA_REDIRECT_URI`, `VITE_ECI_API_SCOPES`. Do not store the SWA deployment token in Git. Rotate it with `az staticwebapp secrets reset-api-key` if it is ever printed.
 
 ## Phase 16A verified current state (read-only, historical)
 
