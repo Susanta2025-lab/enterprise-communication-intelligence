@@ -17,6 +17,8 @@ _ANALYSIS_MODULES = (
     "communication_analysis_workflow.py",
     "communication_ingestion.py",
     "analysis_history.py",
+    "attachment_analysis.py",
+    "attachment_inspection.py",
 )
 _WRITE_MARKERS = (
     "users.messages.send",

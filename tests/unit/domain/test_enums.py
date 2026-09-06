@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.enums import (
     AttachmentDisposition,
+    AttachmentExtractedContentStatus,
     AttachmentKind,
     AttachmentScanVerdict,
     ConnectorAccountStatus,
@@ -109,6 +110,11 @@ def test_attachment_kind_and_scan_verdict_values() -> None:
         AttachmentScanVerdict.MALICIOUS,
         AttachmentScanVerdict.UNKNOWN,
         AttachmentScanVerdict.ERROR,
+    ]
+    assert list(AttachmentExtractedContentStatus) == [
+        AttachmentExtractedContentStatus.TEXT,
+        AttachmentExtractedContentStatus.TRUNCATED_TEXT,
+        AttachmentExtractedContentStatus.IMAGE,
     ]
     assert "zip" not in {member.value for member in AttachmentKind}
     assert "docm" not in {member.value for member in AttachmentKind}

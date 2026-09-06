@@ -6,7 +6,9 @@ from app.application.exceptions import (
     AnalysisNotFoundError,
     AttachmentContentInvalidError,
     AttachmentExceedsLimitError,
+    AttachmentImageAnalysisNotAvailableError,
     AttachmentNotSupportedError,
+    AttachmentProcessingError,
     AttachmentScannerUnavailableError,
     AttachmentScanRejectedError,
     ConnectedMailboxNotAvailableError,
@@ -47,6 +49,8 @@ from app.core.exceptions import (
     UnsupportedCommunicationCredentialProviderError,
 )
 from app.domain.exceptions import (
+    AttachmentImageInputUnsupportedError,
+    AttachmentParseError,
     AttachmentUnsupportedError,
     InvalidWorkflowTransitionError,
 )
@@ -88,6 +92,8 @@ def test_exception_hierarchy() -> None:
     assert issubclass(AttachmentContentInvalidError, ECIPlatformError)
     assert issubclass(AttachmentScanRejectedError, ECIPlatformError)
     assert issubclass(AttachmentScannerUnavailableError, ECIPlatformError)
+    assert issubclass(AttachmentProcessingError, ECIPlatformError)
+    assert issubclass(AttachmentImageAnalysisNotAvailableError, ECIPlatformError)
     assert issubclass(ConnectorError, ECIPlatformError)
     assert issubclass(ConnectorAttachmentNotFoundError, ConnectorError)
     assert issubclass(ConnectorAttachmentContentError, ConnectorError)
@@ -127,6 +133,12 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert AttachmentContentInvalidError().message == "Attachment content is invalid."
     assert AttachmentScanRejectedError().message == "Attachment could not be processed."
     assert AttachmentScannerUnavailableError().message == "Attachment scanner is unavailable."
+    assert AttachmentProcessingError().message == "Attachment could not be processed."
+    assert AttachmentImageAnalysisNotAvailableError().message == (
+        "Image analysis is not available."
+    )
+    assert AttachmentParseError().message == "Attachment could not be processed."
+    assert AttachmentImageInputUnsupportedError().message == "Image analysis is not available."
     assert AttachmentUnsupportedError().message == "Attachment is not supported."
     assert "token" not in MailboxAttachmentNotFoundError().message.lower()
     assert "disconnected" not in ConnectedMailboxNotAvailableError().message.lower()

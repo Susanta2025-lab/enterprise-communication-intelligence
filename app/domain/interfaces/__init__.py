@@ -6,6 +6,7 @@ from app.domain.interfaces.analysis_repository import (
     AnalysisRepository,
     NewAnalysis,
 )
+from app.domain.interfaces.attachment_parser import AttachmentParser
 from app.domain.interfaces.attachment_scanner import AttachmentScanner, AttachmentScanResult
 from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
@@ -59,6 +60,7 @@ from app.domain.interfaces.workflow_action_repository import (
 __all__ = [
     "AIProvider",
     "AccessTokenProvider",
+    "AttachmentParser",
     "AttachmentScanResult",
     "AttachmentScanner",
     "AnalysisRecord",

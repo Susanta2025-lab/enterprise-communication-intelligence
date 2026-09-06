@@ -9,6 +9,7 @@ from azure.identity import DefaultAzureCredential
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
 from app.core.telemetry import elapsed_ms, error_class
+from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.providers.common.output import (
@@ -54,8 +55,14 @@ class MicrosoftFoundryProvider(AIProvider):
         self._credential: Any | None = None
         self._project_client: Any | None = None
 
+    def supports_image_input(self) -> bool:
+        """Foundry image input is not declared for the current text adapter."""
+        return False
+
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication through Microsoft Foundry and map domain results."""
+        if request.attachment_images:
+            raise AttachmentImageInputUnsupportedError()
         message_id = request.message.message_id
         logger.info(
             "microsoft_foundry_analysis_requested",

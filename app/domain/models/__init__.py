@@ -7,7 +7,14 @@ from app.domain.models.analysis import (
     Priority,
     Summary,
 )
-from app.domain.models.attachment import AttachmentContent, AttachmentMetadata
+from app.domain.models.attachment import (
+    AIImageInput,
+    AttachmentAnalysis,
+    AttachmentContent,
+    AttachmentMetadata,
+    AttachmentTextSection,
+    ParsedAttachment,
+)
 from app.domain.models.capabilities import (
     is_mail_read_allowed,
     is_mail_send_executable,
@@ -20,9 +27,13 @@ from app.domain.models.message import CommunicationMessage, MessageMetadata
 from app.domain.models.workflow import WorkflowAction
 
 __all__ = [
+    "AIImageInput",
     "ActionItem",
+    "AttachmentAnalysis",
     "AttachmentContent",
     "AttachmentMetadata",
+    "AttachmentTextSection",
+    "ParsedAttachment",
     "CommunicationAnalysis",
     "CommunicationMessage",
     "DraftReply",

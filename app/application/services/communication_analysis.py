@@ -23,6 +23,10 @@ class CommunicationAnalysisService:
         """Store the injected AI provider for later use."""
         self._provider = provider
 
+    def supports_image_input(self) -> bool:
+        """Return whether the injected provider explicitly accepts image input."""
+        return self._provider.supports_image_input()
+
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Validate, delegate, and return the analysis for a communication request.
 

@@ -8,6 +8,7 @@ import boto3
 from app.core.exceptions import ConfigurationError
 from app.core.logging import get_logger
 from app.core.telemetry import elapsed_ms, error_class
+from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.providers.amazon_bedrock.output import (
@@ -49,8 +50,14 @@ class AmazonBedrockProvider(AIProvider):
         self._model_id = resolved_model_id
         self._bedrock_runtime_client = bedrock_runtime_client
 
+    def supports_image_input(self) -> bool:
+        """Bedrock image input is not declared for the current text adapter."""
+        return False
+
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication through Amazon Bedrock and map domain results."""
+        if request.attachment_images:
+            raise AttachmentImageInputUnsupportedError()
         message_id = request.message.message_id
         logger.info(
             "amazon_bedrock_analysis_requested",

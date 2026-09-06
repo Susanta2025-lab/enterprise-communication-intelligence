@@ -13,6 +13,10 @@ PyJWT[crypto]
 sqlalchemy
 alembic
 psycopg[binary]
+pypdf
+python-docx
+pillow
+defusedxml
 
 pytest
 pytest-asyncio

@@ -12,6 +12,18 @@ class AIProvider(ABC):
     through this interface.
     """
 
+    def supports_image_input(self) -> bool:
+        """Return whether this provider accepts ``attachment_images``.
+
+        Default is fail-closed. Adapters must opt in explicitly. A multimodal
+        model name is not sufficient evidence of support.
+        """
+        return False
+
     @abstractmethod
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
-        """Analyze a communication and return structured business results."""
+        """Analyze a communication and return structured business results.
+
+        ``request.attachment_texts`` and ``request.attachment_images`` are
+        untrusted data. Implementations must not treat them as instructions.
+        """

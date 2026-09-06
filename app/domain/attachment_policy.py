@@ -20,6 +20,11 @@ from app.domain.models import AttachmentContent, AttachmentMetadata
 
 MAX_ATTACHMENT_CONTENT_BYTES = 5 * 1024 * 1024
 MAX_PROCESSED_ATTACHMENT_CONTENT_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 50
+MAX_EXTRACTED_TEXT_CHARS = 200_000
+MAX_IMAGE_PIXELS = 20_000_000
+MAX_IMAGE_DIMENSION = 8_000
+MAX_IMAGE_UNCOMPRESSED_BYTES = 60 * 1024 * 1024
 _DOCX_MAX_ENTRIES = 256
 _DOCX_MAX_UNCOMPRESSED_TOTAL = 20 * 1024 * 1024
 _DOCX_MAX_SINGLE_PART = 8 * 1024 * 1024
@@ -261,6 +266,16 @@ def _validate_pdf_prefix(payload: bytes) -> None:
     lowered = window.lower()
     if b"<html" in lowered or b"<script" in lowered or b"javascript:" in lowered:
         raise AttachmentUnsupportedError()
+
+
+def decode_txt_attachment(payload: bytes) -> str:
+    """Decode an already-validated TXT payload. Reject undecodable bytes."""
+    decoded = _decode_text_bytes(payload)
+    if decoded is None:
+        raise AttachmentContentInvalidError()
+    if decoded.startswith("\ufeff"):
+        decoded = decoded[1:]
+    return decoded
 
 
 def _validate_txt_payload(payload: bytes) -> None:

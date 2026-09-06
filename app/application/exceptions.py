@@ -164,3 +164,17 @@ class AttachmentScannerUnavailableError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Attachment scanner is unavailable.")
+
+
+class AttachmentProcessingError(ECIPlatformError):
+    """Raised when a CLEAN attachment cannot be parsed or prepared for AI."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment could not be processed.")
+
+
+class AttachmentImageAnalysisNotAvailableError(ECIPlatformError):
+    """Raised when image analysis is disabled or the provider cannot accept images."""
+
+    def __init__(self) -> None:
+        super().__init__("Image analysis is not available.")

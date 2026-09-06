@@ -3,12 +3,23 @@
 import pytest
 from pydantic import ValidationError
 
-from app.domain.enums import AttachmentDisposition, SourceType
+from app.domain.enums import (
+    AttachmentDisposition,
+    AttachmentExtractedContentStatus,
+    AttachmentKind,
+    PriorityLevel,
+    SourceType,
+)
 from app.domain.models import (
+    AttachmentAnalysis,
     AttachmentContent,
     AttachmentMetadata,
+    CommunicationAnalysis,
     CommunicationMessage,
     MessageMetadata,
+    ParsedAttachment,
+    Priority,
+    Summary,
 )
 
 
@@ -147,3 +158,38 @@ def test_communication_message_rejects_attachment_fields() -> None:
     )
     assert "attachments" not in CommunicationMessage.model_fields
     assert "attachment_metadata" not in CommunicationMessage.model_fields
+
+
+def test_parsed_attachment_and_analysis_forbid_raw_bytes() -> None:
+    parsed = ParsedAttachment(
+        kind=AttachmentKind.PDF,
+        media_type="application/pdf",
+        extracted_text="facts",
+        character_count=5,
+    )
+    assert parsed.extracted_text == "facts"
+    assert "content" not in ParsedAttachment.model_fields
+    with pytest.raises(ValidationError):
+        ParsedAttachment.model_validate(
+            {
+                "kind": "pdf",
+                "media_type": "application/pdf",
+                "content": b"%PDF-1.4",
+            }
+        )
+    analysis = AttachmentAnalysis(
+        source_message_id="msg-001",
+        source_attachment_id="att-001",
+        filename="report.pdf",
+        media_type="application/pdf",
+        kind=AttachmentKind.PDF,
+        extracted_content_status=AttachmentExtractedContentStatus.TEXT,
+        analysis=CommunicationAnalysis(
+            summary=Summary(text="Summary: report"),
+            priority=Priority(level=PriorityLevel.MEDIUM),
+        ),
+        provider="mock",
+    )
+    assert analysis.analysis.draft_reply is None
+    assert "content" not in AttachmentAnalysis.model_fields
+    assert "workflow_action_id" not in AttachmentAnalysis.model_fields

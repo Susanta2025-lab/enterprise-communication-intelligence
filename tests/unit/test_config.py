@@ -17,6 +17,7 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_V1_PREFIX",
     "AI_PROVIDER",
+    "AI_IMAGE_INPUT_ENABLED",
     "FOUNDRY_PROJECT_ENDPOINT",
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
@@ -64,6 +65,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.log_level == "INFO"
     assert settings.api_v1_prefix == "/api/v1"
     assert settings.ai_provider == "mock"
+    assert settings.ai_image_input_enabled is False
     assert settings.foundry_project_endpoint is None
     assert settings.foundry_model_deployment is None
     assert settings.bedrock_region is None
@@ -162,6 +164,19 @@ def test_ai_provider_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_PROVIDER", "MOCK")
     settings = Settings(_env_file=None)
     assert settings.ai_provider == "mock"
+
+
+def test_ai_image_input_defaults_fail_closed(clear_settings_env: None) -> None:
+    """Image analysis stays disabled unless an operator enables it."""
+    settings = Settings(_env_file=None)
+    assert settings.ai_image_input_enabled is False
+
+
+def test_ai_image_input_can_be_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AI_IMAGE_INPUT_ENABLED=true is an explicit operator opt-in."""
+    monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
+    settings = Settings(_env_file=None)
+    assert settings.ai_image_input_enabled is True
 
 
 def test_mock_provider_does_not_require_foundry_or_bedrock_settings(

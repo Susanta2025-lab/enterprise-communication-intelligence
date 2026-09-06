@@ -126,6 +126,17 @@ class AttachmentScanVerdict(StrEnum):
     ERROR = "error"
 
 
+class AttachmentExtractedContentStatus(StrEnum):
+    """What extractable content a CLEAN attachment yielded for AI.
+
+    Scanned or empty documents are errors, not a successful empty status.
+    """
+
+    TEXT = "text"
+    TRUNCATED_TEXT = "truncated_text"
+    IMAGE = "image"
+
+
 class WorkflowActionStatus(StrEnum):
     """Lifecycle of a ``WorkflowAction``.
 

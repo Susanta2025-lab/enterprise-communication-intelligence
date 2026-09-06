@@ -10,6 +10,7 @@ from app.domain.enums import PriorityLevel, SourceType, WorkflowActionType
 from app.domain.interfaces import (
     AIProvider,
     AnalysisRepository,
+    AttachmentParser,
     AttachmentScanner,
     CommunicationActionExecution,
     CommunicationActionExecutor,
@@ -108,6 +109,13 @@ def test_attachment_scanner_interface_is_abstract() -> None:
     assert issubclass(AttachmentScanner, ABC)
     with pytest.raises(TypeError):
         AttachmentScanner()  # type: ignore[abstract]
+
+
+def test_attachment_parser_interface_is_abstract() -> None:
+    """Parser ports must not be instantiable without a parse implementation."""
+    assert issubclass(AttachmentParser, ABC)
+    with pytest.raises(TypeError):
+        AttachmentParser()  # type: ignore[abstract]
 
 
 def test_communication_connector_interface_is_abstract() -> None:
@@ -250,6 +258,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.exceptions as domain_exceptions
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
+    import app.domain.interfaces.attachment_parser as attachment_parser
     import app.domain.interfaces.attachment_scanner as attachment_scanner
     import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
@@ -272,6 +281,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         attachment_policy,
         domain_exceptions,
         ai_provider,
+        attachment_parser,
         attachment_scanner,
         analysis_repository,
         communication_action_executor,

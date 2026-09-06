@@ -5,6 +5,7 @@ import time
 from app.core.logging import get_logger
 from app.core.telemetry import elapsed_ms, error_class
 from app.domain.enums import MessageCategory, PriorityLevel
+from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.models import (
     ActionItem,
@@ -41,6 +42,13 @@ class MockAIProvider(AIProvider):
 
     PROVIDER_NAME = "mock"
 
+    def __init__(self, *, supports_image_input: bool = False) -> None:
+        self._supports_image_input = supports_image_input
+
+    def supports_image_input(self) -> bool:
+        """Return the explicit mock image-capability flag. Default is off."""
+        return self._supports_image_input
+
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication using deterministic keyword heuristics."""
         message_id = request.message.message_id
@@ -73,8 +81,11 @@ class MockAIProvider(AIProvider):
 
     def _analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Run the deterministic keyword analysis without telemetry."""
+        if request.attachment_images and not self._supports_image_input:
+            raise AttachmentImageInputUnsupportedError()
+
         message = request.message
-        haystack = _combined_text(message)
+        haystack = _combined_text(request)
 
         priority = _classify_priority(haystack)
         category = _classify_category(haystack)
@@ -88,7 +99,7 @@ class MockAIProvider(AIProvider):
 
         analysis = CommunicationAnalysis(
             message_id=message.message_id,
-            summary=_build_summary(message),
+            summary=_build_summary(request),
             priority=priority,
             category=category,
             action_items=action_items,
@@ -100,15 +111,38 @@ class MockAIProvider(AIProvider):
         )
 
 
-def _combined_text(message: CommunicationMessage) -> str:
-    """Build a lowercase search corpus from subject and body."""
+def _combined_text(request: CommunicationRequest) -> str:
+    """Build a lowercase search corpus from distinguishable untrusted sections."""
+    message = request.message
     subject = message.metadata.subject or ""
-    return f"{subject}\n{message.body}".lower()
+    sections = [
+        "untrusted-email",
+        subject,
+        message.body,
+    ]
+    for attachment in request.attachment_texts:
+        sections.extend(
+            [
+                "untrusted-attachment",
+                attachment.media_kind.value,
+                attachment.text,
+            ]
+        )
+    if request.attachment_images:
+        sections.append("untrusted-image")
+    return "\n".join(sections).lower()
 
 
-def _build_summary(message: CommunicationMessage) -> Summary:
-    """Create a short deterministic summary from subject or body."""
-    if message.metadata.subject:
+def _build_summary(request: CommunicationRequest) -> Summary:
+    """Create a short deterministic summary from subject, body, or attachment."""
+    message = request.message
+    if request.attachment_images and not request.attachment_texts:
+        text = "Summary: untrusted image attachment"
+    elif request.attachment_texts:
+        kind = request.attachment_texts[0].media_kind.value
+        label = message.metadata.subject or "attachment"
+        text = f"Summary: untrusted {kind} attachment ({label})"
+    elif message.metadata.subject:
         text = f"Summary: {message.metadata.subject}"
     else:
         snippet = message.body.strip()

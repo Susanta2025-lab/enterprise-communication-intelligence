@@ -45,6 +45,8 @@ def test_factory_selects_mock_provider() -> None:
 
     assert isinstance(provider, MockAIProvider)
     assert isinstance(provider, AIProvider)
+    assert provider.supports_image_input() is False
+    assert provider.supports_image_input() is False
 
 
 @pytest.mark.parametrize("provider_name", ["MOCK", " Mock ", "mock"])

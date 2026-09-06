@@ -1,6 +1,6 @@
 """REST endpoint for communication analysis."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_communication_analysis_workflow_service
 from app.application.services.communication_analysis_workflow import (
@@ -52,6 +52,11 @@ def analyze_communication(
     ),
 ) -> CommunicationAnalysisResponse:
     """Analyze a communication using the configured AI provider."""
+    if request.attachment_texts or request.attachment_images:
+        raise HTTPException(
+            status_code=422,
+            detail="Attachment analysis is not available on this endpoint.",
+        )
     logger.info(
         "communication_analysis_request_received",
         source_type=request.message.metadata.source_type.value,

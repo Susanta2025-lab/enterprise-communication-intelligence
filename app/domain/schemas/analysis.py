@@ -2,17 +2,29 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.models import CommunicationAnalysis, CommunicationMessage
+from app.domain.models import (
+    AIImageInput,
+    AttachmentTextSection,
+    CommunicationAnalysis,
+    CommunicationMessage,
+)
 
 
 class CommunicationRequest(BaseModel):
-    """Business input required to analyze a communication."""
+    """Business input required to analyze a communication.
+
+    ``attachment_texts`` and ``attachment_images`` are untrusted data sections.
+    They are never system or developer instructions. Existing email-only
+    callers omit both lists and keep the prior analysis contract.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     message: CommunicationMessage
     include_draft_reply: bool = True
     include_action_items: bool = True
+    attachment_texts: list[AttachmentTextSection] = Field(default_factory=list)
+    attachment_images: list[AIImageInput] = Field(default_factory=list)
 
 
 class CommunicationAnalysisResult(BaseModel):

@@ -54,3 +54,35 @@ class AttachmentScannerUnavailableError(Exception):
     def __init__(self, message: str = "Attachment scanner is unavailable.") -> None:
         self.message = message
         super().__init__(self.message)
+
+
+class AttachmentParseError(Exception):
+    """Raised when a CLEAN attachment cannot be parsed safely."""
+
+    def __init__(self, message: str = "Attachment could not be processed.") -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
+class AttachmentEncryptedError(Exception):
+    """Raised when a document is encrypted or password-protected."""
+
+    def __init__(self, message: str = "Attachment is not supported.") -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
+class AttachmentNoExtractableTextError(Exception):
+    """Raised when a text-based kind has no extractable text. OCR is not used."""
+
+    def __init__(self, message: str = "Attachment is not supported.") -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
+class AttachmentImageInputUnsupportedError(Exception):
+    """Raised when image input is requested but the provider cannot accept it."""
+
+    def __init__(self, message: str = "Image analysis is not available.") -> None:
+        self.message = message
+        super().__init__(self.message)

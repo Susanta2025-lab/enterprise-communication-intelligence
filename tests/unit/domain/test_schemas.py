@@ -42,6 +42,8 @@ def test_communication_request_defaults() -> None:
 
     assert request.include_draft_reply is True
     assert request.include_action_items is True
+    assert request.attachment_texts == []
+    assert request.attachment_images == []
     assert request.message.metadata.source_type is SourceType.EMAIL
 
 

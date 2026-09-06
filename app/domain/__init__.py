@@ -2,6 +2,7 @@
 
 from app.domain.enums import (
     AttachmentDisposition,
+    AttachmentExtractedContentStatus,
     AttachmentKind,
     AttachmentScanVerdict,
     CommunicationCapability,
@@ -15,15 +16,24 @@ from app.domain.enums import (
     WorkflowActionType,
 )
 from app.domain.exceptions import InvalidWorkflowTransitionError
-from app.domain.interfaces import AIProvider, AttachmentScanner, CommunicationConnector
+from app.domain.interfaces import (
+    AIProvider,
+    AttachmentParser,
+    AttachmentScanner,
+    CommunicationConnector,
+)
 from app.domain.models import (
     ActionItem,
+    AIImageInput,
+    AttachmentAnalysis,
     AttachmentContent,
     AttachmentMetadata,
+    AttachmentTextSection,
     CommunicationAnalysis,
     CommunicationMessage,
     DraftReply,
     MessageMetadata,
+    ParsedAttachment,
     Priority,
     Summary,
     WorkflowAction,
@@ -31,14 +41,19 @@ from app.domain.models import (
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 
 __all__ = [
+    "AIImageInput",
     "AIProvider",
     "ActionItem",
+    "AttachmentAnalysis",
     "AttachmentContent",
     "AttachmentDisposition",
+    "AttachmentExtractedContentStatus",
     "AttachmentKind",
     "AttachmentMetadata",
+    "AttachmentParser",
     "AttachmentScanVerdict",
     "AttachmentScanner",
+    "AttachmentTextSection",
     "CommunicationAnalysis",
     "CommunicationAnalysisResult",
     "CommunicationCapability",
@@ -52,6 +67,7 @@ __all__ = [
     "MailboxAuthorizationPurpose",
     "MessageCategory",
     "MessageMetadata",
+    "ParsedAttachment",
     "Priority",
     "PriorityLevel",
     "SourceType",

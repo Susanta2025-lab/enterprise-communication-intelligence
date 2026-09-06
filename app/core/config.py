@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     api_v1_prefix: str = "/api/v1"
     ai_provider: str = "mock"
+    ai_image_input_enabled: bool = False
     foundry_project_endpoint: str | None = None
     foundry_model_deployment: str | None = None
     bedrock_region: str | None = None
@@ -98,6 +99,14 @@ class Settings(BaseSettings):
         """Normalize provider names to lowercase."""
         if isinstance(value, str):
             return value.strip().lower()
+        return value
+
+    @field_validator("ai_image_input_enabled", mode="before")
+    @classmethod
+    def normalize_ai_image_input_enabled(cls, value: object) -> object:
+        """Treat blank image-capability flags as the fail-closed default."""
+        if isinstance(value, str) and not value.strip():
+            return False
         return value
 
     @field_validator("foundry_project_endpoint", mode="before")

@@ -24,7 +24,7 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     if provider_name == "mock":
         from app.providers.mock.provider import MockAIProvider
 
-        return MockAIProvider()
+        return MockAIProvider(supports_image_input=resolved.ai_image_input_enabled)
 
     if provider_name == "microsoft_foundry":
         from app.providers.microsoft_foundry.provider import MicrosoftFoundryProvider
