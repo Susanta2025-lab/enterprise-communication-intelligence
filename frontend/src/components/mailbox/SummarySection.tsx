@@ -2,14 +2,15 @@ import { SUMMARY_UNAVAILABLE_COPY } from "./copy";
 
 type SummarySectionProps = {
   text: string | null | undefined;
+  headingId?: string;
 };
 
-export function SummarySection({ text }: SummarySectionProps) {
+export function SummarySection({ text, headingId = "analysis-summary-heading" }: SummarySectionProps) {
   const summary = text?.trim();
 
   return (
-    <section aria-labelledby="analysis-summary-heading" className="min-w-0">
-      <h5 id="analysis-summary-heading" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby={headingId} className="min-w-0">
+      <h5 id={headingId} className="text-sm font-semibold text-slate-900">
         Summary
       </h5>
       <p

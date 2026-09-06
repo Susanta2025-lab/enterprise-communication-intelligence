@@ -22,20 +22,45 @@ export type ApiErrorKind =
   | "not_found"
   | "conflict"
   | "validation"
+  | "payload_too_large"
   | "bad_request"
   | "unavailable"
   | "http_error"
   | "interaction_required";
 
+export type AttachmentDetailClass =
+  | "unsupported"
+  | "too_large"
+  | "invalid_content"
+  | "processing_rejected"
+  | "scanner_unavailable"
+  | "image_unavailable";
+
+const KNOWN_ATTACHMENT_DETAILS: Record<string, AttachmentDetailClass> = {
+  "Attachment is not supported.": "unsupported",
+  "Attachment exceeds limits.": "too_large",
+  "Attachment content is invalid.": "invalid_content",
+  "Attachment could not be processed.": "processing_rejected",
+  "Attachment scanner is unavailable.": "scanner_unavailable",
+  "Image analysis is not available.": "image_unavailable",
+};
+
 export class EciApiError extends Error {
   readonly name = "EciApiError";
   readonly status: number;
   readonly kind: ApiErrorKind;
+  readonly detailClass: AttachmentDetailClass | null;
 
-  constructor(status: number, kind: ApiErrorKind, message: string) {
+  constructor(
+    status: number,
+    kind: ApiErrorKind,
+    message: string,
+    detailClass: AttachmentDetailClass | null = null,
+  ) {
     super(message);
     this.status = status;
     this.kind = kind;
+    this.detailClass = detailClass;
   }
 }
 
@@ -55,6 +80,9 @@ export function kindForStatus(status: number): ApiErrorKind {
   if (status === 409) {
     return "conflict";
   }
+  if (status === 413) {
+    return "payload_too_large";
+  }
   if (status === 422) {
     return "validation";
   }
@@ -62,6 +90,13 @@ export function kindForStatus(status: number): ApiErrorKind {
     return "unavailable";
   }
   return "http_error";
+}
+
+export function classifyAttachmentDetail(detail: unknown): AttachmentDetailClass | null {
+  if (typeof detail !== "string") {
+    return null;
+  }
+  return KNOWN_ATTACHMENT_DETAILS[detail] ?? null;
 }
 
 export function messageForKind(kind: ApiErrorKind): string {
@@ -80,6 +115,8 @@ export function messageForKind(kind: ApiErrorKind): string {
       return "The request could not be completed.";
     case "unavailable":
       return "The API is temporarily unavailable.";
+    case "payload_too_large":
+      return "The request could not be validated.";
     case "interaction_required":
       return "Interactive authentication is required.";
     default:

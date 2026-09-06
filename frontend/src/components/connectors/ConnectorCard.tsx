@@ -8,6 +8,7 @@ import { CapabilityBadge } from "./CapabilityBadge";
 import { ConnectorStatus } from "./ConnectorStatus";
 import { providerLabel, RECONNECT_SAME_ACCOUNT_LABEL } from "./copy";
 import { PermissionGate } from "./PermissionGate";
+import { ProviderIcon } from "./ProviderIcon";
 
 type ConnectorCardProps = {
   account: ConnectorAccount;
@@ -32,8 +33,13 @@ export function ConnectorCard({
   return (
     <article className="flex min-w-0 flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="min-w-0">
-        <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
-        <AccountIdentity account={account} />
+        <div className="flex min-w-0 items-start gap-3">
+          <ProviderIcon provider={account.provider} className="mt-0.5 h-8 w-8 shrink-0" />
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
+            <AccountIdentity account={account} />
+          </div>
+        </div>
         <div className="mt-3">
           <ConnectorStatus status={account.status} />
         </div>

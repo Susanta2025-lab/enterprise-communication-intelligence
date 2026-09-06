@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { EciApiClient } from "../api/client";
 import {
+  ATTACHMENT_ANALYSES_PATH,
+  connectorAccountAttachmentAnalyzePath,
+  connectorAccountAttachmentsPath,
+} from "../api/attachments";
+import {
   CONNECTOR_ACCOUNTS_PATH,
   EciApiError,
   GMAIL_AUTHORIZE_PATH,
@@ -506,6 +511,132 @@ describe("workflow action API client", () => {
       expect(apiError.status).toBe(status);
       expect(apiError.kind).toBe(kind);
       expect(apiError.message).not.toContain(WORKFLOW_ACTION_ID);
+    }
+  });
+});
+
+const ATTACHMENT_ID = "att-secret-1";
+const ATTACHMENT_ANALYSIS_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+describe("attachment API client", () => {
+  function attachmentClient(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
+    return new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+      createRequestId: () => REQUEST_ID,
+    });
+  }
+
+  it("lists attachment metadata without requesting analysis", async () => {
+    const body = {
+      items: [
+        {
+          provider_attachment_id: ATTACHMENT_ID,
+          filename: "Contract.pdf",
+          media_type: "application/pdf",
+          reported_size: 1887436,
+          is_inline: false,
+          disposition: "attachment",
+        },
+      ],
+      truncated: false,
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(200, body));
+    const client = attachmentClient(fetchImpl);
+    await expect(
+      client.listMailboxAttachments({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+      }),
+    ).resolves.toEqual(body);
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.pathname).toBe(connectorAccountAttachmentsPath(MAILBOX_ACCOUNT_ID));
+    expect(requested.searchParams.get("provider_message_id")).toBe(PROVIDER_MESSAGE_ID);
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: "GET" }));
+  });
+
+  it("posts exactly one attachment id on analyze", async () => {
+    const body = {
+      attachment_analysis_id: ATTACHMENT_ANALYSIS_ID,
+      created_at: "2026-09-06T12:00:00Z",
+      connector_account_id: MAILBOX_ACCOUNT_ID,
+      provider_message_id: PROVIDER_MESSAGE_ID,
+      provider_attachment_id: ATTACHMENT_ID,
+      filename: "Contract.pdf",
+      media_type: "application/pdf",
+      kind: "pdf",
+      extracted_content_status: "text",
+      truncated: false,
+      warnings: [],
+      summary: { text: "The contract is within budget." },
+      priority: { level: "medium" },
+      category: "request",
+      action_items: [],
+      provider: "mock",
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(200, body));
+    const client = attachmentClient(fetchImpl);
+    await expect(
+      client.analyzeMailboxAttachment({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+        providerAttachmentId: ATTACHMENT_ID,
+      }),
+    ).resolves.toEqual(body);
+    expect(new URL(String(fetchImpl.mock.calls[0]?.[0])).pathname).toBe(
+      connectorAccountAttachmentAnalyzePath(MAILBOX_ACCOUNT_ID),
+    );
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          provider_message_id: PROVIDER_MESSAGE_ID,
+          provider_attachment_id: ATTACHMENT_ID,
+        }),
+      }),
+    );
+  });
+
+  it("lists owned attachment analyses with optional message filter", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { items: [], limit: 20, offset: 0 }),
+    );
+    const client = attachmentClient(fetchImpl);
+    await client.listAttachmentAnalyses({
+      connectorAccountId: MAILBOX_ACCOUNT_ID,
+      providerMessageId: PROVIDER_MESSAGE_ID,
+    });
+    const requested = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requested.pathname).toBe(ATTACHMENT_ANALYSES_PATH);
+    expect(requested.searchParams.get("connector_account_id")).toBe(MAILBOX_ACCOUNT_ID);
+    expect(requested.searchParams.get("provider_message_id")).toBe(PROVIDER_MESSAGE_ID);
+  });
+
+  it.each([
+    [401, "unauthorized", "Attachment is not supported."],
+    [404, "not_found", "Mailbox attachment not found."],
+    [409, "conflict", "Image analysis is not available."],
+    [413, "payload_too_large", "Attachment exceeds limits."],
+    [422, "validation", "Attachment could not be processed."],
+    [503, "unavailable", "Attachment scanner is unavailable."],
+  ] as const)("classifies attachment HTTP %s without exposing raw detail", async (status, kind, detail) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(status, { detail }));
+    const client = attachmentClient(fetchImpl);
+    try {
+      await client.analyzeMailboxAttachment({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+        providerAttachmentId: ATTACHMENT_ID,
+      });
+      throw new Error("expected EciApiError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EciApiError);
+      const apiError = error as EciApiError;
+      expect(apiError.status).toBe(status);
+      expect(apiError.kind).toBe(kind);
+      expect(apiError.message).not.toContain(detail);
+      expect(apiError.message).not.toContain(ATTACHMENT_ID);
     }
   });
 });

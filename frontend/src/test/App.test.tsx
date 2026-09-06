@@ -57,6 +57,7 @@ function renderApp(options: {
 describe("authentication shell", () => {
   it("renders an unauthenticated sign-in state", () => {
     const { fetchImpl } = renderApp({ isAuthenticated: false });
+    expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
@@ -84,6 +85,7 @@ describe("authentication shell", () => {
   it("renders the authenticated shell, loads connectors, and wires sign-out", async () => {
     const user = userEvent.setup();
     const { fetchImpl, logout } = renderApp({ isAuthenticated: true });
+    expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();

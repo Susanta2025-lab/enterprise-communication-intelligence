@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
+import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
 type AppShellProps = {
@@ -14,11 +15,14 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Enterprise Communication Intelligence
-            </p>
-            <h1 className="text-lg font-semibold">ECI Platform</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <EciMark className="h-9 w-9 shrink-0" title="ECI" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Enterprise Communication Intelligence
+              </p>
+              <h1 className="text-lg font-semibold">ECI Platform</h1>
+            </div>
           </div>
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             {displayName ? (

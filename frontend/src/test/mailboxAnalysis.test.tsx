@@ -84,13 +84,16 @@ function analysisBody(overrides: Record<string, unknown> = {}) {
 }
 
 function analyzeCalls(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
-  return fetchImpl.mock.calls.filter(([url]) => String(url).includes("/messages/analyze"));
+  return fetchImpl.mock.calls.filter(([url]) => {
+    const value = String(url);
+    return value.includes("/messages/analyze") && !value.includes("/attachments");
+  });
 }
 
 function listMessageCalls(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
   return fetchImpl.mock.calls.filter(([url]) => {
     const value = String(url);
-    return value.includes("/messages") && !value.includes("/analyze");
+    return value.includes("/messages") && !value.includes("/analyze") && !value.includes("/attachments");
   });
 }
 
@@ -142,7 +145,13 @@ describe("analyze trigger", () => {
     let release: ((value: Response) => void) | undefined;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return new Promise<Response>((resolve) => {
           release = resolve;
         });
@@ -183,7 +192,13 @@ describe("analyze trigger", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(200, analysisBody());
       }
       if (url.includes("/messages")) {
@@ -210,6 +225,12 @@ describe("analyze trigger", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [messageItem()], next_cursor: null });
       }
@@ -218,7 +239,7 @@ describe("analyze trigger", () => {
     renderWorkspace({ fetchImpl, permissions: ["communications:read"] });
     await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
     expect(screen.getByRole("button", { name: "Analyze message" })).toBeDisabled();
-    expect(screen.getByText(/communications:analyze permission/)).toBeInTheDocument();
+    expect(screen.getAllByText(/communications:analyze permission/).length).toBeGreaterThan(0);
     expect(analyzeCalls(fetchImpl)).toHaveLength(0);
   });
 });
@@ -228,7 +249,13 @@ describe("analysis result", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(200, analysisBody());
       }
       if (url.includes("/messages")) {
@@ -271,7 +298,13 @@ describe("analysis result", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(
           200,
           analysisBody({
@@ -302,7 +335,13 @@ describe("selection and refresh boundaries", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(200, analysisBody());
       }
       if (url.includes("/messages")) {
@@ -333,7 +372,13 @@ describe("selection and refresh boundaries", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(200, analysisBody());
       }
       if (url.includes("/messages")) {
@@ -360,7 +405,13 @@ describe("re-analysis", () => {
     let releaseSecond: ((value: Response) => void) | undefined;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         analyzeCount += 1;
         if (analyzeCount === 1) {
           return jsonResponse(200, analysisBody());
@@ -407,7 +458,13 @@ describe("re-analysis", () => {
     let analyzeCount = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         analyzeCount += 1;
         if (analyzeCount === 1) {
           return jsonResponse(200, analysisBody());
@@ -433,7 +490,13 @@ describe("re-analysis", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(503, { detail: "provider timeout" });
       }
       if (url.includes("/messages")) {
@@ -454,7 +517,13 @@ describe("analyze errors", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(403, { detail: "missing scope" });
       }
       if (url.includes("/messages")) {
@@ -472,7 +541,13 @@ describe("analyze errors", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(404, { detail: "Mailbox message not found." });
       }
       if (url.includes("/messages")) {
@@ -495,7 +570,13 @@ describe("analyze errors", () => {
     let status = "active";
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         status = "reauth_required";
         return jsonResponse(409, { detail: "Connected mailbox is not available." });
       }
@@ -519,7 +600,13 @@ describe("analyze errors", () => {
     let attempts = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         attempts += 1;
         if (attempts === 1) {
           return jsonResponse(503, { detail: "provider timeout" });
@@ -547,7 +634,13 @@ describe("analyze errors", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(500, { detail: "foundry stack trace" });
       }
       if (url.includes("/messages")) {
@@ -569,7 +662,13 @@ describe("analyze errors", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(status, { detail });
       }
       if (url.includes("/messages")) {
@@ -589,7 +688,13 @@ describe("analysis privacy and accessibility", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         return jsonResponse(200, analysisBody());
       }
       if (url.includes("/messages")) {
@@ -624,7 +729,13 @@ describe("analysis privacy and accessibility", () => {
     let analyzeCount = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         analyzeCount += 1;
         if (analyzeCount === 1) {
           return jsonResponse(500, { detail: "boom" });

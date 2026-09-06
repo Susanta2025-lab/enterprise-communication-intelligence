@@ -10,6 +10,18 @@ import {
   type ListConnectorAccountsQuery,
 } from "./connectorAccounts";
 import {
+  ATTACHMENT_ANALYSES_PATH,
+  attachmentAnalysisPath,
+  connectorAccountAttachmentAnalyzePath,
+  connectorAccountAttachmentsPath,
+  type AnalyzeMailboxAttachmentQuery,
+  type AttachmentAnalysisListResponse,
+  type AttachmentAnalysisResponse,
+  type AttachmentMetadataListResponse,
+  type ListAttachmentAnalysesQuery,
+  type ListMailboxAttachmentsQuery,
+} from "./attachments";
+import {
   connectorAccountMessageAnalyzePath,
   connectorAccountMessagesPath,
   MAILBOX_UI_PAGE_SIZE,
@@ -29,6 +41,7 @@ import {
 } from "./workflowActions";
 import {
   CONNECTOR_ACCOUNTS_PATH,
+  classifyAttachmentDetail,
   EciApiError,
   GMAIL_AUTHORIZE_PATH,
   MICROSOFT_GRAPH_AUTHORIZE_PATH,
@@ -126,6 +139,55 @@ export class EciApiClient {
     );
   }
 
+  async listMailboxAttachments(
+    query: ListMailboxAttachmentsQuery,
+  ): Promise<AttachmentMetadataListResponse> {
+    const params = new URLSearchParams();
+    params.set("provider_message_id", query.providerMessageId);
+    return this.requestJson<AttachmentMetadataListResponse>(
+      "GET",
+      `${connectorAccountAttachmentsPath(query.connectorAccountId)}?${params.toString()}`,
+    );
+  }
+
+  async analyzeMailboxAttachment(
+    query: AnalyzeMailboxAttachmentQuery,
+  ): Promise<AttachmentAnalysisResponse> {
+    return this.requestJson<AttachmentAnalysisResponse>(
+      "POST",
+      connectorAccountAttachmentAnalyzePath(query.connectorAccountId),
+      {
+        provider_message_id: query.providerMessageId,
+        provider_attachment_id: query.providerAttachmentId,
+      },
+    );
+  }
+
+  async listAttachmentAnalyses(
+    query: ListAttachmentAnalysesQuery = {},
+  ): Promise<AttachmentAnalysisListResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(query.limit ?? 20));
+    params.set("offset", String(query.offset ?? 0));
+    if (query.connectorAccountId) {
+      params.set("connector_account_id", query.connectorAccountId);
+    }
+    if (query.providerMessageId) {
+      params.set("provider_message_id", query.providerMessageId);
+    }
+    return this.requestJson<AttachmentAnalysisListResponse>(
+      "GET",
+      `${ATTACHMENT_ANALYSES_PATH}?${params.toString()}`,
+    );
+  }
+
+  async getAttachmentAnalysis(attachmentAnalysisId: string): Promise<AttachmentAnalysisResponse> {
+    return this.requestJson<AttachmentAnalysisResponse>(
+      "GET",
+      attachmentAnalysisPath(attachmentAnalysisId),
+    );
+  }
+
   async createWorkflowAction(query: CreateWorkflowActionQuery): Promise<WorkflowActionResponse> {
     return this.requestJson<WorkflowActionResponse>("POST", WORKFLOW_ACTIONS_PATH, {
       analysis_id: query.analysisId,
@@ -176,9 +238,26 @@ export class EciApiClient {
 
     if (!response.ok) {
       const kind = kindForStatus(response.status);
-      throw new EciApiError(response.status, kind, messageForKind(kind));
+      throw new EciApiError(
+        response.status,
+        kind,
+        messageForKind(kind),
+        await readAttachmentDetailClass(response),
+      );
     }
 
     return (await response.json()) as T;
+  }
+}
+
+async function readAttachmentDetailClass(response: Response) {
+  try {
+    const body: unknown = await response.clone().json();
+    if (typeof body !== "object" || body === null || !("detail" in body)) {
+      return null;
+    }
+    return classifyAttachmentDetail((body as { detail: unknown }).detail);
+  } catch {
+    return null;
   }
 }

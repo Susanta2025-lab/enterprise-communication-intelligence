@@ -175,7 +175,13 @@ function mailboxFetch(
   return vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     const requestInit = init as RequestInit | undefined;
-    if (url.includes("/messages/analyze")) {
+    if (url.includes("/attachment-analyses")) {
+      return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+    }
+    if (url.includes("/attachments")) {
+      return jsonResponse(200, { items: [], truncated: false });
+    }
+    if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
       return jsonResponse(200, options.analysis ?? analysisBody());
     }
     if (isCreateWorkflow(input, requestInit)) {
@@ -659,7 +665,13 @@ describe("selection and re-analysis boundaries", () => {
     fetchImpl.mockImplementation(async (input, init) => {
       const url = String(input);
       const requestInit = init as RequestInit | undefined;
-      if (url.includes("/messages/analyze")) {
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
+      if (url.includes("/messages/analyze") && !url.includes("/attachments")) {
         analyzeCount += 1;
         if (analyzeCount === 1) {
           return jsonResponse(200, analysisBody());

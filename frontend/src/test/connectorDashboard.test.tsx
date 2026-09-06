@@ -160,6 +160,26 @@ describe("connector dashboard", () => {
     expect(document.body.textContent).not.toContain(GMAIL_ID);
     expect(document.body.textContent).not.toContain("credential_ref");
     expect(document.body.textContent).not.toContain("external_account_id");
+    expect(screen.getByRole("heading", { name: "Gmail" })).toBeVisible();
+  });
+
+  it("keeps Gmail and Microsoft Outlook text labels when generic icons are present", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        jsonResponse(
+          200,
+          listBody([
+            account({ id: GMAIL_ID, provider: "gmail" }),
+            account({ id: GRAPH_ID, provider: "microsoft_graph" }),
+          ]),
+        ),
+    );
+    renderDashboard({ fetchImpl });
+    expect(await screen.findByRole("heading", { name: "Gmail" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Microsoft Outlook" })).toBeVisible();
+    expect(screen.queryByAltText(/gmail logo/i)).not.toBeInTheDocument();
+    expect(screen.queryByAltText(/outlook logo/i)).not.toBeInTheDocument();
+    expect(screen.queryByAltText(/microsoft logo/i)).not.toBeInTheDocument();
   });
 
   it("renders REAUTH_REQUIRED with reconnect and does not imply deletion", async () => {
@@ -314,6 +334,7 @@ describe("connector dashboard", () => {
     );
     renderDashboard({ fetchImpl });
     expect(await screen.findByRole("heading", { name: "Microsoft Outlook" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Microsoft Outlook" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect another Outlook account" })).toBeEnabled();
     expect(screen.getByText(CONNECT_ANOTHER_AVAILABLE_COPY)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect Gmail" })).toBeInTheDocument();

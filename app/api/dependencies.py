@@ -23,6 +23,9 @@ from app.application.services.connected_mailbox_analysis import (
 from app.application.services.connected_mailbox_attachment_analysis import (
     ConnectedMailboxAttachmentAnalysisService,
 )
+from app.application.services.connected_mailbox_attachment_listing import (
+    ConnectedMailboxAttachmentListingService,
+)
 from app.application.services.connected_mailbox_listing import (
     ConnectedMailboxMessageListingService,
 )
@@ -712,6 +715,29 @@ def get_attachment_analysis_history_service(
 ) -> AttachmentAnalysisHistoryService:
     """Build attachment-analysis history after persistence is available."""
     return AttachmentAnalysisHistoryService(uow_factory)
+
+
+def get_connected_mailbox_attachment_listing_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+    connector_factory: Annotated[
+        CommunicationConnectorFactory,
+        Depends(get_communication_connector_factory),
+    ],
+) -> ConnectedMailboxAttachmentListingService:
+    """Compose attachment-metadata listing after communications:read authorization.
+
+    Construction does not fetch tokens, refresh OAuth, retrieve attachment
+    bytes, or construct AI analysis services.
+    """
+    return ConnectedMailboxAttachmentListingService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        connector_factory,
+    )
 
 
 def get_connected_mailbox_listing_service(

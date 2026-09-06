@@ -186,6 +186,20 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "credential_ref" not in serialized_mailbox
     assert "refresh_token" not in serialized_mailbox
     assert "access_token" not in serialized_mailbox
+    attachment_list_path = (
+        "/api/v1/connector-accounts/{connector_account_id}/messages/attachments"
+    )
+    assert attachment_list_path in schema["paths"]
+    attachment_list = schema["paths"][attachment_list_path]["get"]
+    assert attachment_list.get("security") == [{"HTTPBearer": []}]
+    assert "200" in attachment_list["responses"]
+    assert "401" in attachment_list["responses"]
+    assert "403" in attachment_list["responses"]
+    assert "404" in attachment_list["responses"]
+    serialized_attachment_list = repr(attachment_list).lower()
+    assert "contentbytes" not in serialized_attachment_list
+    assert "body.data" not in serialized_attachment_list
+    assert "extracted_text" not in serialized_attachment_list
     attachment_analyze_path = (
         "/api/v1/connector-accounts/{connector_account_id}/messages/attachments/analyze"
     )

@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.enums import (
+    AttachmentDisposition,
     AttachmentExtractedContentStatus,
     AttachmentKind,
     MessageCategory,
@@ -13,6 +14,42 @@ from app.domain.enums import (
 from app.domain.interfaces.attachment_analysis_repository import AttachmentAnalysisRecord
 from app.domain.models import ActionItem, Priority, Summary
 from app.domain.models.validation import require_non_empty_text
+
+
+class ConnectorAccountAttachmentListQuery(BaseModel):
+    """Metadata-only attachment list for one provider message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider_message_id: str
+
+    @field_validator("provider_message_id")
+    @classmethod
+    def validate_provider_message_id(cls, value: str) -> str:
+        """Require a non-empty opaque provider message identifier."""
+        return require_non_empty_text(value, "provider_message_id")
+
+
+class ConnectorAccountAttachmentListItem(BaseModel):
+    """Public attachment metadata. Never includes bytes, URLs, or Content-ID."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider_attachment_id: str
+    filename: str = ""
+    media_type: str
+    reported_size: int = Field(ge=0)
+    is_inline: bool = False
+    disposition: AttachmentDisposition = AttachmentDisposition.UNKNOWN
+
+
+class ConnectorAccountAttachmentListResponse(BaseModel):
+    """Bounded attachment-metadata page for one owned mailbox message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ConnectorAccountAttachmentListItem]
+    truncated: bool = False
 
 
 class ConnectorAccountAttachmentAnalyzeRequest(BaseModel):

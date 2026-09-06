@@ -212,6 +212,7 @@ def test_mailbox_list_and_analyze_are_mounted() -> None:
     assert "@router.get(" in mailbox_routes
     assert "/connector-accounts/{connector_account_id}/messages" in mailbox_routes
     assert "messages/attachments/analyze" in attachment_routes
+    assert '"/connector-accounts/{connector_account_id}/messages/attachments"' in attachment_routes
     assert "GmailCommunicationConnector" not in mailbox_routes
     assert "MicrosoftGraphCommunicationConnector" not in mailbox_routes
     assert "GmailCommunicationConnector" not in attachment_routes

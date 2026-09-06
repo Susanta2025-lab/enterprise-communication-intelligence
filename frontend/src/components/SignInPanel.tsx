@@ -1,5 +1,6 @@
 import { useAuth } from "../auth/AuthContext";
 import { SIGN_IN_LABEL, TEST_PRIVACY_NOTICE_COPY, TEST_PRIVACY_NOTICE_TITLE } from "../errors/copy";
+import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
 export function SignInPanel() {
@@ -7,7 +8,8 @@ export function SignInPanel() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 px-4 py-16 sm:px-6">
-      <div className="space-y-2">
+      <div className="space-y-3">
+        <EciMark className="h-12 w-12" title="ECI" />
         <p className="text-sm font-medium uppercase tracking-wide text-slate-500">
           Enterprise Communication Intelligence
         </p>

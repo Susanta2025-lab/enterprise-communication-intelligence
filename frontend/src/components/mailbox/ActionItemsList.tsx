@@ -4,14 +4,18 @@ import { NO_ACTION_ITEMS_COPY, priorityLabel } from "./copy";
 
 type ActionItemsListProps = {
   items: readonly AnalysisActionItem[] | null | undefined;
+  headingId?: string;
 };
 
-export function ActionItemsList({ items }: ActionItemsListProps) {
+export function ActionItemsList({
+  items,
+  headingId = "analysis-action-items-heading",
+}: ActionItemsListProps) {
   const actionItems = items ?? [];
 
   return (
-    <section aria-labelledby="analysis-action-items-heading" className="min-w-0">
-      <h5 id="analysis-action-items-heading" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby={headingId} className="min-w-0">
+      <h5 id={headingId} className="text-sm font-semibold text-slate-900">
         Action items
       </h5>
       {actionItems.length === 0 ? (

@@ -12,6 +12,9 @@ export type ProductOperation =
   | "connector_lifecycle"
   | "mailbox_list"
   | "analyze"
+  | "attachment_list"
+  | "attachment_analyze"
+  | "attachment_history"
   | "propose"
   | "review"
   | "execute"
@@ -70,6 +73,12 @@ export function presentProductError(
       return presentMailboxListError(status);
     case "analyze":
       return presentAnalyzeError(status);
+    case "attachment_list":
+      return presentAttachmentListError(status);
+    case "attachment_analyze":
+      return presentAttachmentAnalyzeError(error, status);
+    case "attachment_history":
+      return presentAttachmentHistoryError(status);
     case "propose":
       return presentProposeError(status);
     case "review":
@@ -219,6 +228,135 @@ function presentAnalyzeError(status: number | null): ProductErrorPresentation {
   }
   return presentation({
     message: "The message could not be analyzed.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentAttachmentListError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Viewing attachments requires the communications:read permission.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "This message is no longer available. Refresh the mailbox to update the list.",
+      retryLabel: REFRESH_MAILBOX_LABEL,
+      showDashboardLink: true,
+    });
+  }
+  if (status === 409) {
+    return presentation({
+      message: "This mailbox is not available right now.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 422) {
+    return presentation({
+      message: "Attachment details for this message are not supported.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Attachment details are temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "Attachment details could not be loaded.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentAttachmentAnalyzeError(
+  error: unknown,
+  status: number | null,
+): ProductErrorPresentation {
+  const detailClass = error instanceof EciApiError ? error.detailClass : null;
+  if (detailClass === "unsupported") {
+    return presentation({
+      message: "This file type is not supported for analysis.",
+    });
+  }
+  if (detailClass === "too_large" || status === 413) {
+    return presentation({
+      message: "This file is too large to analyze.",
+    });
+  }
+  if (detailClass === "invalid_content") {
+    return presentation({
+      message: "Document extraction failed for this attachment.",
+    });
+  }
+  if (detailClass === "processing_rejected") {
+    return presentation({
+      message: "A security check blocked processing of this attachment.",
+    });
+  }
+  if (detailClass === "scanner_unavailable") {
+    return presentation({
+      message: "The attachment security scanner is unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  if (detailClass === "image_unavailable") {
+    return presentation({
+      message: "Image analysis is not available with the current AI provider.",
+    });
+  }
+  if (status === 401) {
+    return sessionExpired();
+  }
+  if (status === 403) {
+    return presentation({
+      message: "Analyzing attachments requires the communications:analyze permission.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "This attachment is no longer available. Refresh the mailbox to update the list.",
+      retryLabel: REFRESH_MAILBOX_LABEL,
+      showDashboardLink: true,
+    });
+  }
+  if (status === 409) {
+    return presentation({
+      message: "This mailbox is not available right now.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 422) {
+    return presentation({
+      message: "This attachment could not be analyzed.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Attachment analysis is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The attachment could not be analyzed.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentAttachmentHistoryError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Viewing attachment analysis history requires the communications:analyze permission.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Attachment analysis history is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "Previous attachment analyses could not be loaded.",
     retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
   });
 }

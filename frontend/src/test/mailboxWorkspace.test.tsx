@@ -53,7 +53,10 @@ function messageItem(overrides: Record<string, unknown> = {}) {
 }
 
 function messageCalls(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
-  return fetchImpl.mock.calls.filter(([url]) => String(url).includes("/messages"));
+  return fetchImpl.mock.calls.filter(([url]) => {
+    const value = String(url);
+    return value.includes("/messages") && !value.includes("/attachments");
+  });
 }
 
 function connectorCalls(fetchImpl: ReturnType<typeof vi.fn<typeof fetch>>) {
@@ -99,6 +102,12 @@ describe("mailbox workspace entry", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [messageItem()], next_cursor: null });
       }
@@ -120,6 +129,12 @@ describe("mailbox workspace entry", () => {
     let release: ((value: Response) => void) | undefined;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return new Promise<Response>((resolve) => {
           release = resolve;
@@ -157,6 +172,12 @@ describe("mailbox list rendering", () => {
   it("renders sender, subject, and timestamps without provider identifiers", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [messageItem()], next_cursor: null });
       }
@@ -174,6 +195,12 @@ describe("mailbox list rendering", () => {
   it("shows product copy when subject is absent", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, {
           items: [messageItem({ subject: null })],
@@ -189,6 +216,12 @@ describe("mailbox list rendering", () => {
   it("shows a neutral empty state when the page has no items", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [], next_cursor: null });
       }
@@ -205,6 +238,12 @@ describe("mailbox list rendering", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, {
           items: [
@@ -230,7 +269,7 @@ describe("mailbox list rendering", () => {
     expect(within(panel).getByText("Quarterly review")).toBeInTheDocument();
     expect(within(panel).getByText("Gmail")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyze message" })).toBeDisabled();
-    expect(screen.getByText(/communications:analyze permission/)).toBeInTheDocument();
+    expect(screen.getAllByText(/communications:analyze permission/).length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toContain(MESSAGE_ID_ONE);
     expect(messageCalls(fetchImpl).every(([url]) => !String(url).includes("/analyze"))).toBe(true);
     expect(fetchImpl.mock.calls.every(([url]) => !String(url).includes("workflow"))).toBe(true);
@@ -243,6 +282,12 @@ describe("mailbox pagination", () => {
     let secondPagePending: ((value: Response) => void) | undefined;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         const requested = new URL(url);
         if (requested.searchParams.get("cursor") === OPAQUE_CURSOR) {
@@ -285,6 +330,12 @@ describe("mailbox pagination", () => {
   it("does not prefetch additional pages", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [messageItem()], next_cursor: OPAQUE_CURSOR });
       }
@@ -299,6 +350,12 @@ describe("mailbox pagination", () => {
   it("hides Load more when the first page has no next_cursor", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, { items: [messageItem()], next_cursor: null });
       }
@@ -313,6 +370,12 @@ describe("mailbox pagination", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         const requested = new URL(url);
         if (requested.searchParams.get("cursor") === OPAQUE_CURSOR) {
@@ -340,6 +403,12 @@ describe("mailbox refresh and errors", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         const requested = new URL(url);
         if (requested.searchParams.get("cursor") === OPAQUE_CURSOR) {
@@ -365,6 +434,12 @@ describe("mailbox refresh and errors", () => {
     let status = "active";
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         status = "reauth_required";
         return jsonResponse(409, { detail: "Connected mailbox is not available." });
@@ -383,6 +458,12 @@ describe("mailbox refresh and errors", () => {
     let attempts = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         attempts += 1;
         if (attempts === 1) {
@@ -420,6 +501,12 @@ describe("mailbox refresh and errors", () => {
   it("shows authentication copy for 401", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(401, { detail: TEST_TOKEN });
       }
@@ -435,6 +522,12 @@ describe("mailbox refresh and errors", () => {
   it("shows permission copy for backend 403", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(403, { detail: "missing scope" });
       }
@@ -453,6 +546,12 @@ describe("mailbox refresh and errors", () => {
     ];
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         const requested = new URL(url);
         if (requested.searchParams.get("cursor") === OPAQUE_CURSOR) {
@@ -483,6 +582,12 @@ describe("mailbox privacy boundary", () => {
   it("does not persist mailbox payloads or render credentials, cursors, or bodies", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, {
           items: [messageItem()],

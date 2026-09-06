@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EciApiError } from "../api/errors";
+import { EciApiError, type AttachmentDetailClass } from "../api/errors";
 import {
   BACK_TO_DASHBOARD_LABEL,
   REFRESH_MAILBOX_LABEL,
@@ -23,6 +23,9 @@ describe("presentProductError", () => {
       "connector_lifecycle",
       "mailbox_list",
       "analyze",
+      "attachment_list",
+      "attachment_analyze",
+      "attachment_history",
       "propose",
       "review",
       "execute",
@@ -93,6 +96,23 @@ describe("presentProductError", () => {
       const view = presentProductError("execute", apiError(status));
       expect(view.retryLabel).not.toBe(TRY_AGAIN_LABEL);
       expect(view.retryLabel ?? "").not.toMatch(/retry send/i);
+    }
+  });
+
+  it("maps attachment analyze details to controlled copy", () => {
+    const cases: Array<[AttachmentDetailClass, number, string]> = [
+      ["unsupported", 422, "This file type is not supported for analysis."],
+      ["too_large", 422, "This file is too large to analyze."],
+      ["invalid_content", 422, "Document extraction failed for this attachment."],
+      ["processing_rejected", 422, "A security check blocked processing of this attachment."],
+      ["scanner_unavailable", 503, "The attachment security scanner is unavailable."],
+      ["image_unavailable", 409, "Image analysis is not available with the current AI provider."],
+    ];
+    for (const [detailClass, status, message] of cases) {
+      const error = new EciApiError(status, "validation", "raw provider boom", detailClass);
+      const view = presentProductError("attachment_analyze", error);
+      expect(view.message).toBe(message);
+      expect(view.message).not.toContain("raw provider boom");
     }
   });
 

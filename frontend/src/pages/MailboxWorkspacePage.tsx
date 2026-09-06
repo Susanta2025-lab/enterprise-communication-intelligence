@@ -12,6 +12,7 @@ import { MailboxHeader } from "../components/mailbox/MailboxHeader";
 import { MailboxLoadingSkeleton } from "../components/mailbox/MailboxLoadingSkeleton";
 import { MailboxUnavailableState } from "../components/mailbox/MailboxUnavailableState";
 import { LoadMoreButton } from "../components/mailbox/LoadMoreButton";
+import { AttachmentsSection } from "../components/mailbox/AttachmentsSection";
 import { MessageAnalysisSection } from "../components/mailbox/MessageAnalysisSection";
 import { WorkflowReviewPanel } from "../components/mailbox/WorkflowReviewPanel";
 import { MessageList } from "../components/mailbox/MessageList";
@@ -21,7 +22,13 @@ import { ProductErrorState } from "../components/feedback/ProductErrorState";
 import { providerLabel } from "../components/connectors/copy";
 import { presentProductError } from "../errors/presentProductError";
 import { CONNECTOR_ACCOUNT_QUERY_KEY, useConnectorAccounts } from "../hooks/useConnectorAccounts";
+import { useAnalyzeAttachment } from "../hooks/useAnalyzeAttachment";
 import { useAnalyzeMailboxMessage } from "../hooks/useAnalyzeMailboxMessage";
+import {
+  previousAnalysesForAttachment,
+  useAttachmentAnalysisHistory,
+} from "../hooks/useAttachmentAnalysisHistory";
+import { useMailboxAttachments } from "../hooks/useMailboxAttachments";
 import { useWorkflowAction } from "../hooks/useWorkflowAction";
 import {
   flattenMailboxItems,
@@ -53,6 +60,29 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     selected?.provider_message_id ?? null,
   );
   const workflow = useWorkflowAction(apiClient, analysis.result?.analysis_id ?? null);
+  const attachmentsQuery = useMailboxAttachments(
+    apiClient,
+    connectorAccountId ?? "",
+    selected?.provider_message_id ?? null,
+    mailboxEnabled && Boolean(selected),
+  );
+  const attachmentHistoryQuery = useAttachmentAnalysisHistory(
+    apiClient,
+    connectorAccountId ?? "",
+    selected?.provider_message_id ?? null,
+    mailboxEnabled && Boolean(selected) && canAnalyze,
+  );
+  const attachmentAnalysis = useAnalyzeAttachment(
+    apiClient,
+    connectorAccountId ?? "",
+    selected?.provider_message_id ?? null,
+  );
+
+  useEffect(() => {
+    if (attachmentsQuery.error instanceof EciApiError && attachmentsQuery.error.status === 409) {
+      void queryClient.invalidateQueries({ queryKey: CONNECTOR_ACCOUNT_QUERY_KEY });
+    }
+  }, [attachmentsQuery.error, queryClient]);
 
   const items = useMemo(
     () => flattenMailboxItems(mailboxQuery.data?.pages),
@@ -271,25 +301,47 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
               onBackToList={() => setSelected(null)}
             >
               {selected ? (
-                <MessageAnalysisSection
-                  canAnalyze={canAnalyze}
-                  pending={analysis.isPending}
-                  result={analysis.result}
-                  error={analysis.error}
-                  onAnalyze={handleAnalyze}
-                  onRetry={handleAnalysisRetry}
-                  workflow={
-                    analysis.result ? (
-                      <WorkflowReviewPanel
-                        analysisId={analysis.result.analysis_id ?? null}
-                        hasDraft={Boolean(analysis.result.analysis.draft_reply?.body?.trim())}
-                        canWorkflow={canWorkflow}
-                        canSend={canSend}
-                        workflow={workflow}
-                      />
-                    ) : null
-                  }
-                />
+                <>
+                  <AttachmentsSection
+                    canAnalyze={canAnalyze}
+                    loading={attachmentsQuery.isPending}
+                    listError={attachmentsQuery.error}
+                    onRetryList={() => void attachmentsQuery.refetch()}
+                    items={attachmentsQuery.data?.items ?? []}
+                    truncated={attachmentsQuery.data?.truncated ?? false}
+                    pendingId={attachmentAnalysis.pendingId}
+                    resultFor={attachmentAnalysis.resultFor}
+                    errorFor={attachmentAnalysis.errorFor}
+                    historyFor={(providerAttachmentId) =>
+                      previousAnalysesForAttachment(
+                        attachmentHistoryQuery.data?.items,
+                        providerAttachmentId,
+                      )
+                    }
+                    onAnalyze={(providerAttachmentId) => {
+                      void attachmentAnalysis.analyze(providerAttachmentId);
+                    }}
+                  />
+                  <MessageAnalysisSection
+                    canAnalyze={canAnalyze}
+                    pending={analysis.isPending}
+                    result={analysis.result}
+                    error={analysis.error}
+                    onAnalyze={handleAnalyze}
+                    onRetry={handleAnalysisRetry}
+                    workflow={
+                      analysis.result ? (
+                        <WorkflowReviewPanel
+                          analysisId={analysis.result.analysis_id ?? null}
+                          hasDraft={Boolean(analysis.result.analysis.draft_reply?.body?.trim())}
+                          canWorkflow={canWorkflow}
+                          canSend={canSend}
+                          workflow={workflow}
+                        />
+                      ) : null
+                    }
+                  />
+                </>
               ) : null}
             </SelectedMessagePanel>
           </div>

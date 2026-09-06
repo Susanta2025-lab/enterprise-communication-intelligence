@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import type { EciApiClient } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
@@ -31,6 +32,14 @@ export function App({ apiClient }: AppProps) {
 
 function AppRoutes({ apiClient }: AppProps) {
   const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      queryClient.removeQueries({ queryKey: ["mailbox-attachments"] });
+      queryClient.removeQueries({ queryKey: ["attachment-analyses"] });
+    }
+  }, [isAuthenticated, queryClient]);
 
   if (!isAuthenticated) {
     return <SignInPanel />;

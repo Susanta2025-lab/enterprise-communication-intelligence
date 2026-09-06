@@ -119,6 +119,12 @@ describe("mailbox selection accessibility", () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
+      if (url.includes("/attachment-analyses")) {
+        return jsonResponse(200, { items: [], limit: 20, offset: 0 });
+      }
+      if (url.includes("/attachments")) {
+        return jsonResponse(200, { items: [], truncated: false });
+      }
       if (url.includes("/messages")) {
         return jsonResponse(200, {
           items: [

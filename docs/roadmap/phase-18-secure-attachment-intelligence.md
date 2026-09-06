@@ -14,7 +14,7 @@ Phase 17D (Sally external verification) is **not** a technical dependency. This 
 
 ## Status
 
-Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slices **18A**, **18B**, **18C**, and **18D** are implemented. Later slices are not started. Phase 18 is **not** complete.
+Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slices **18A**, **18B**, **18C**, **18D**, and **18E** are implemented. Phase 18 is **not** complete.
 
 | Item | Status |
 |---|---|
@@ -23,9 +23,9 @@ Phase 18 overall is **In progress**. This assessment is complete and accepted. E
 | **18B** Attachment policy, explicit retrieval & scanner boundary | Completed |
 | **18C** Parsers + AI request shape | Completed |
 | **18D** Application API + persistence | Completed |
-| **18E** Frontend attachment UX | Next |
-| **18F** Hardening, telemetry, docs, offline regression | Not started |
-| Phase 18 implementation | In progress (18A–18D) |
+| **18E** Frontend attachment UX | Completed |
+| **18F** Hardening, telemetry, docs, offline regression | Next |
+| Phase 18 implementation | In progress (18A–18E) |
 | Phase 17D Sally verification | Deferred / not a Phase 18 dependency |
 | Live mailbox or attachment validation | Not performed |
 | Cloud resume / Foundry / Bedrock invocation | Not performed |
@@ -244,7 +244,63 @@ Each explicit Analyze Attachment request creates a new history row, matching ema
 
 #### Remaining work
 
-**18E — Frontend Attachment UX & Product/Connector Branding** is the next implementation slice. Do not commission another Phase 18 readiness assessment for it. 18E owns attachment metadata presentation, the Analyze Attachment control, processing/error states, analysis display, and permitted ECI / Gmail / Microsoft Outlook branding. A real scanner backend remains required before Phase 18 production/cloud completion.
+**18E — Frontend Attachment UX & Product/Connector Branding** is implemented below. Do not commission another Phase 18 readiness assessment for it. A real scanner backend remains required before Phase 18 production/cloud completion.
+
+### 18E implementation close-out
+
+The selected-message mailbox panel now exposes attachment metadata and an explicit **Analyze attachment** action. Opening or selecting a message may load metadata only. Attachment content retrieval and AI analysis start only after the labeled button for that one attachment.
+
+#### Attachment UX
+
+- Attachments render above email Analyze with filename, friendly type, reported size, inline status, and analysis status.
+- Supported display types: PDF, DOCX, TXT, JPEG/JPG, PNG. Unsupported files remain visible as **Unsupported for analysis**. Reported size above 5 MiB shows **Too large to analyze**. Backend policy remains authoritative.
+- Privacy notice: attachments are accessed only when the user chooses Analyze attachment. No confirmation modal.
+- Per-attachment states map 18D errors to controlled copy: unsupported, too large, security rejection, scanner unavailable, extraction failure, image-AI unavailable, provider/network failure.
+- 18D analyze is synchronous. The selected attachment shows a loading state and cannot be clicked again while that request is in flight. Sibling attachments are not analyzed. Mailbox navigation stays usable.
+- Results show summary, priority, category, action items, warnings, provider, timestamp, and a truncation indicator when `truncated=true`. Raw extracted text, bytes, prompts, and scanner internals are not rendered.
+
+#### Explicit user-action behavior
+
+Selecting a message may call `GET .../messages/attachments`. That GET is metadata-only. Frontend tests prove the Analyze POST is not issued until **Analyze attachment** is clicked, and that the POST body contains only the selected `provider_message_id` and `provider_attachment_id`.
+
+#### Workflow isolation
+
+Attachment results are visually and structurally separate from email analysis. They do not render Propose, Approve, Execute, or Send. `attachment_analysis_id` is not passed to workflow components.
+
+#### Email Analyze separation
+
+**Analyze message** and **Analyze attachment** remain independent. Analyzing email does not analyze attachments. Analyzing an attachment does not re-run email analysis.
+
+#### Metadata listing contract
+
+18D did not expose a public metadata GET. 18E added the assessed route without changing authorization semantics:
+
+```text
+GET /api/v1/connector-accounts/{connector_account_id}/messages/attachments
+    ?provider_message_id=
+    Requires: communications:read
+    Returns: { items, truncated } metadata only
+```
+
+The listing service calls `list_attachments` only. It never calls `fetch_attachment_content`.
+
+#### History
+
+Owner-scoped `GET /api/v1/attachment-analyses` is used for the selected message. The latest matching analysis is shown under the attachment, with a bounded **Previous analyses** disclosure when more rows exist. Attachment query caches are cleared on sign-out.
+
+#### Branding
+
+- ECI: original wordmark plus a simple locally bundled `ECI` mark in the sign-in page, app header, and favicon (`frontend/public/eci-mark.svg`, `frontend/public/favicon.svg`). Accessible text fallback remains “ECI Platform”.
+- Gmail / Microsoft Outlook: **text-first**. Connector cards keep visible “Gmail” and “Microsoft Outlook” labels and use a generic envelope icon. Official Gmail and Microsoft marks were **not** bundled. Trademark-permitted official assets remain pending owner confirmation.
+- No remote/CDN logo fetches. No lookalike provider marks.
+
+#### Accessibility and responsive behavior
+
+Analyze controls are labeled buttons, loading uses `role="status"` / `aria-busy`, status is text (not color only), errors are visible without hover, and the attachment stack wraps on narrow viewports.
+
+#### Remaining work after 18E
+
+**18F — Security Hardening, Real Scanner Integration, Telemetry, Documentation & Final Regression** is the next implementation slice. Do not commission another Phase 18 readiness assessment for it. Phase 18 overall remains incomplete until a real malware scanner backend exists and 18F closes documentation and offline regression.
 
 ---
 
