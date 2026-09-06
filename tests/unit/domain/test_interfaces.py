@@ -252,6 +252,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.persistence_unit_of_work as persistence_unit_of_work
     import app.domain.interfaces.workflow_action_repository as workflow_action_repository
     import app.domain.models.analysis as analysis_models
+    import app.domain.models.attachment as attachment_models
     import app.domain.models.message as message_models
     import app.domain.models.workflow as workflow_models
     import app.domain.schemas.analysis as analysis_schemas
@@ -272,6 +273,7 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         persistence_unit_of_work,
         workflow_action_repository,
         analysis_models,
+        attachment_models,
         message_models,
         workflow_models,
         analysis_schemas,

@@ -3,6 +3,7 @@
 import pytest
 
 from app.domain.enums import (
+    AttachmentDisposition,
     ConnectorAccountStatus,
     MessageCategory,
     PriorityLevel,
@@ -81,6 +82,18 @@ def test_workflow_action_status_values() -> None:
     assert WorkflowActionStatus.PENDING == "pending"
 
 
+def test_attachment_disposition_values() -> None:
+    """Attachment disposition is provider-neutral presentation, not a vendor class."""
+    assert list(AttachmentDisposition) == [
+        AttachmentDisposition.ATTACHMENT,
+        AttachmentDisposition.INLINE,
+        AttachmentDisposition.UNKNOWN,
+    ]
+    assert AttachmentDisposition.ATTACHMENT == "attachment"
+    assert "fileAttachment" not in {member.value for member in AttachmentDisposition}
+    assert "itemAttachment" not in {member.value for member in AttachmentDisposition}
+
+
 def test_priority_level_values() -> None:
     """PriorityLevel should expose the supported business priorities."""
     assert list(PriorityLevel) == [
@@ -108,6 +121,7 @@ def test_message_category_values() -> None:
         (ConnectorAccountStatus, "credential_invalid"),
         (WorkflowActionType, "calendar_event"),
         (WorkflowActionStatus, "execution_unknown"),
+        (AttachmentDisposition, "fileAttachment"),
     ],
 )
 def test_invalid_enum_values_raise(enum_cls: type, invalid_value: str) -> None:

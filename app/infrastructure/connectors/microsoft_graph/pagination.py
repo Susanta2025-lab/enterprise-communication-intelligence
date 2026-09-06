@@ -17,6 +17,41 @@ _LIST_PATH = "/v1.0/me/messages"
 _ALLOWED_PORTS = frozenset({None, 443})
 _SKIPTOKEN_PREFIX = "st."
 _SKIP_PREFIX = "sk."
+_ATTACHMENT_SELECT = "id,name,contentType,size,isInline,contentId,@odata.type"
+
+
+def attachment_list_query_params() -> dict[str, str]:
+    """Build the metadata-only Graph attachment list query.
+
+    ``contentBytes`` is intentionally omitted from ``$select``.
+    """
+    return {"$select": _ATTACHMENT_SELECT}
+
+
+def attachment_pagination_params_from_next_link(
+    next_link: str,
+    provider_message_id: str,
+) -> dict[str, str]:
+    """Rebuild a safe attachment-list query from a Graph ``@odata.nextLink``.
+
+    The nextLink host and path are validated. ``$select`` is always replaced
+    with the metadata-only field list so a provider nextLink cannot reintroduce
+    ``contentBytes``.
+    """
+    parsed = _parsed_graph_attachment_list_url(next_link, provider_message_id)
+    if parsed is None:
+        raise ConnectorUnavailableError() from None
+    params = parse_qs(parsed.query, keep_blank_values=False)
+    rebuilt = attachment_list_query_params()
+    skiptoken = _first_query_value(params.get("$skiptoken"))
+    if skiptoken is not None:
+        rebuilt["$skiptoken"] = skiptoken
+        return rebuilt
+    skip = _first_query_value(params.get("$skip"))
+    if skip is not None:
+        rebuilt["$skip"] = skip
+        return rebuilt
+    raise ConnectorUnavailableError() from None
 
 
 def list_query_params(query: ConnectorMessageQuery) -> dict[str, str | int]:
@@ -72,6 +107,32 @@ def _looks_like_url(value: str) -> bool:
     stripped = value.strip()
     lowered = stripped.lower()
     return "://" in stripped or lowered.startswith("//") or lowered.startswith("http")
+
+
+def _parsed_graph_attachment_list_url(
+    value: str,
+    provider_message_id: str,
+) -> ParseResult | None:
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    if parsed.scheme.lower() != "https":
+        return None
+    if parsed.hostname is None or parsed.hostname.lower() != _GRAPH_HOST:
+        return None
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    if parsed.port not in _ALLOWED_PORTS:
+        return None
+    if parsed.fragment:
+        return None
+    if parsed.params:
+        return None
+    expected = f"/v1.0/me/messages/{provider_message_id}/attachments"
+    if unquote(parsed.path).rstrip("/") != expected:
+        return None
+    return parsed
 
 
 def _parsed_graph_list_url(value: str) -> ParseResult | None:

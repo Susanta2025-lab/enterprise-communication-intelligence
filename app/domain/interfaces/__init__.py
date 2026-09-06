@@ -14,6 +14,7 @@ from app.domain.interfaces.communication_action_executor_factory import (
     CommunicationActionExecutorFactory,
 )
 from app.domain.interfaces.communication_connector import (
+    AttachmentMetadataPage,
     CommunicationConnector,
     ConnectorMessageQuery,
     MessagePage,
@@ -59,6 +60,7 @@ __all__ = [
     "AccessTokenProvider",
     "AnalysisRecord",
     "AnalysisRepository",
+    "AttachmentMetadataPage",
     "CommunicationActionExecution",
     "CommunicationActionExecutor",
     "CommunicationActionExecutorFactory",

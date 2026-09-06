@@ -14,15 +14,49 @@ Phase 17D (Sally external verification) is **not** a technical dependency. This 
 
 ## Status
 
-Phase 18 overall is **Not started**. This assessment is complete and awaits architect acceptance.
+Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slice **18A** is implemented. Later slices are not started. Phase 18 is **not** complete.
 
 | Item | Status |
 |---|---|
-| Phase 18 assessment | Completed — verdict below |
-| Phase 18 implementation | Not started |
+| Phase 18 assessment | Completed — accepted |
+| **18A** Domain ports + metadata-only connectors | Completed |
+| **18B** Attachment policy, explicit retrieval & scanner boundary | Not started |
+| **18C** Parsers + AI request shape | Not started |
+| **18D** Application API + persistence | Not started |
+| **18E** Frontend attachment UX | Not started |
+| **18F** Hardening, telemetry, docs, offline regression | Not started |
+| Phase 18 implementation | In progress (18A only) |
 | Phase 17D Sally verification | Deferred / not a Phase 18 dependency |
 | Live mailbox or attachment validation | Not performed |
 | Cloud resume / Foundry / Bedrock invocation | Not performed |
+
+### 18A implementation close-out
+
+Attachment **metadata** can now be discovered through `CommunicationConnector.list_attachments` on Gmail, Microsoft Graph, and the fake connector.
+
+#### Phase 18 user-control invariant
+
+ECI never explicitly retrieves, decodes, persists, or analyzes attachment content without an explicit user action for that specific attachment.
+
+That is the product/runtime invariant. It is **not** a claim that zero attachment bytes can ever appear on the wire during ordinary Gmail message HTTP.
+
+Distinguish two Gmail surfaces:
+
+| Surface | What ECI requests | What may still be on the wire |
+|---|---|---|
+| **A. Explicit attachment retrieve** | `GET .../messages/{id}/attachments/{attachmentId}` (`users.messages.attachments.get`) | Attachment bytes, only when 18B+ implements this for one selected id |
+| **B. Incidental MIME `body.data`** | Ordinary `GET .../messages/{id}?format=full` | Gmail may embed complete MIME-part bytes in `payload.*.body.data` when no `attachmentId` exists, including attachment-classified parts |
+
+18A behavior:
+
+- `list_attachments` (Gmail) uses `format=full` plus a `fields` mask that keeps `attachmentId`, `size`, `filename`, `mimeType`, disposition / Content-ID headers, and nested `parts`, and **does not select `body.data`**.
+- `list_attachments` never calls `users.messages.attachments.get`.
+- `fetch_message` / `list_messages` keep `format=full` **without** a `fields` mask. Gmail cannot guarantee text-part `body.data` while excluding attachment-part `body.data` in the same resource. ECI does not invent a workaround. Attachment-classified `body.data` is not decoded as email body, not returned as retrievable `AttachmentMetadata` unless `attachmentId` is present, not persisted, not sent to AI, and not treated as authorization to analyze.
+- Graph metadata uses `$select` that omits `contentBytes`, does not `$expand=attachments`, and does not request `/$value`.
+- Gmail and Graph `fetch_attachment_content` are 18A stubs that raise without HTTP.
+- The fake connector can return in-memory bytes for later explicit-retrieval tests.
+
+Parsers, malware scanning, AI attachment analysis, persistence, and frontend attachment UI remain later Phase 18 execution slices.
 
 ---
 
@@ -79,7 +113,7 @@ Attachments are an explicit non-feature through Phase 17.
 - Foundry and Bedrock adapters send text-only prompts.
 - Workflow Propose → Approve → Execute remains a separate, explicit path. Send cannot be triggered by analysis alone.
 
-Existing behavior already satisfies “do not download attachment bytes” for Graph and for Gmail’s `attachments.get`. Phase 18 must preserve that while adding an explicit, single-attachment retrieve path.
+Existing behavior already satisfies “do not call Gmail `attachments.get` / Graph attachment content” for list and fetch. Gmail `format=full` may still include incidental MIME `body.data`. That is provider payload adjacency, not an ECI attachment-download API. Phase 18 must preserve the user-control invariant while adding an explicit, single-attachment retrieve path.
 
 ---
 
@@ -177,7 +211,7 @@ Selected email (existing list item)
 | Layer | Enforcement |
 |---|---|
 | Domain | Metadata and content are different types. Content is not on `CommunicationMessage`. No “fetch all” operation. |
-| Connector | Metadata methods must not request Gmail `attachments.get`, Graph `contentBytes`, `$expand=attachments`, or `/$value`. Content fetch requires both message id and attachment id and retrieves one object. |
+| Connector | Metadata methods must not request Gmail `attachments.get`, Graph `contentBytes`, `$expand=attachments`, or `/$value`. Gmail `list_attachments` must not select `body.data`. Content fetch requires both message id and attachment id and retrieves one object. Gmail `fetch_message` may receive incidental `body.data` inside `format=full`; that is not treated as attachment content. |
 | Application | Bytes are retrieved only inside explicit analyze. List, message analyze, selection, and metadata GET never call content fetch. Attachment id must have been listed for that message. |
 | API | Separate metadata and analyze routes. Analyze body names one attachment. No bulk analyze. |
 | Frontend | Metadata fetch on message selection is allowed. No thumbnail/preview that needs bytes. Analyze is a labeled button. |
@@ -257,7 +291,14 @@ Trade-off: two new port methods instead of one “message with attachments” fe
 
 **Metadata**
 
-Reuse the existing `format=full` MIME walk, but collect skipped parts instead of discarding them.
+Reuse the existing MIME walk, but collect skipped parts instead of discarding them.
+
+`list_attachments` requests `format=full` with a Gmail `fields` mask that includes only:
+
+- message `id`
+- nested `payload` / `parts` (`mimeType`, `filename`, `headers(name,value)`, `body(size,attachmentId)`)
+
+It does **not** select `body.data`. The mask is unrolled to a finite MIME depth (8) because Gmail partial response has no recursive wildcard. That is an HTTP-level exclusion for metadata listing, not a guarantee about `fetch_message`.
 
 From each attachment-classified part:
 
@@ -272,10 +313,12 @@ Rules:
 
 - Nested multipart: recurse; collect every qualifying part.
 - Inline images with filename: include, marked `is_inline=true`.
-- Parts with `attachmentId` missing: omit from analyzable list (cannot retrieve safely).
-- Do not decode `body.data` during metadata listing.
+- Parts with `attachmentId` missing: omit from analyzable list (cannot retrieve safely). A filename plus incidental `body.data` is not retrievable metadata and is not decoded as attachment content.
+- Do not decode `body.data` during metadata listing. The metadata HTTP request also omits `body.data`.
 - Malformed trees: skip the unusable part; fail the message only if the MIME root is unusable for metadata (same class as current `ConnectorMessageContentError` when the payload is not a message).
 - Reported size is advisory until bytes are retrieved.
+
+`fetch_message` remains `format=full` without `fields`. Gmail may include attachment-part `body.data` in that response. ECI still extracts only non-attachment `text/plain` / `text/html` bodies. It does not persist, expose, or analyze those incidental attachment bytes.
 
 **Retrieve one attachment**
 
@@ -792,7 +835,7 @@ Keep the API image manageable: parsers + Pillow only.
 | Malicious images | Pixel/dimension caps; verify before load; EXIF stripped from AI |
 | Malformed documents | Reject; do not retry-parse unbounded |
 | Race / attachment substitution | Re-validate type/size after download; store hash of received bytes; cannot freeze the provider mailbox |
-| Hidden prefetch | Tests forbid attachments.get / contentBytes / $value on metadata and on message analyze |
+| Hidden prefetch | Tests forbid attachments.get / contentBytes / $value on metadata and on message analyze. Gmail `list_attachments` must not select `body.data`. Gmail `fetch_message` may receive incidental `body.data`; it is not decoded as attachment content. |
 | Confused deputy via filename | Filename never authorizes |
 | Attachment-triggered Send | No workflow creation from this path |
 
@@ -814,7 +857,7 @@ This matrix is the Phase 18 test contract. Later execution slices implement rows
 
 **Connector contract (httpx MockTransport)**
 
-- Gmail: metadata from `format=full` without `attachments.get`
+- Gmail: metadata from `format=full` with a `fields` mask that omits `body.data`, and without `attachments.get`
 - Gmail: analyze calls `attachments.get` once for one id; base64url decode
 - Gmail: nested multipart ids; missing attachmentId omitted
 - Graph: `$select` excludes `contentBytes`; no `$expand`; no `$value` on list
@@ -903,9 +946,9 @@ Optional later work **outside** Phase 18 DoD: ClamAV sidecar deploy, cloud timeo
 
 Phase 18 is complete when all of the following are true:
 
-- [ ] Gmail attachment metadata works without `attachments.get`
+- [ ] Gmail attachment metadata works without `attachments.get` and without selecting `body.data`
 - [ ] Graph attachment metadata works without `contentBytes` / `$expand` / `$value`
-- [ ] Listing or opening an email does not download attachment bytes
+- [ ] Listing or opening an email does not explicitly retrieve, decode, persist, or analyze attachment content. Gmail `format=full` may still include incidental MIME `body.data`; that is not treated as attachment content.
 - [ ] Explicit Analyze attachment is required for bytes, scan, parse, and AI
 - [ ] Only one selected attachment is retrieved per analyze
 - [ ] PDF text extraction works; encrypted/image-only PDFs fail closed; no OCR

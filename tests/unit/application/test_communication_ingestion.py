@@ -7,8 +7,19 @@ from app.application.services.communication_analysis_workflow import PersistedAn
 from app.application.services.communication_ingestion import CommunicationIngestionService
 from app.core.exceptions import ConnectorMessageNotFoundError, ConnectorUnavailableError
 from app.domain.enums import MessageCategory, PriorityLevel, SourceType
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationAnalysis, CommunicationMessage, Priority, Summary
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import (
+    AttachmentContent,
+    CommunicationAnalysis,
+    CommunicationMessage,
+    Priority,
+    Summary,
+)
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from tests.unit.application.conftest import RequestFactory
 
@@ -29,6 +40,16 @@ class _RecordingConnector(CommunicationConnector):
         self.fetch_ids.append(provider_message_id)
         return self.message
 
+    def list_attachments(self, provider_message_id: str) -> AttachmentMetadataPage:
+        raise AssertionError("ingestion must not list attachments")
+
+    def fetch_attachment_content(
+        self,
+        provider_message_id: str,
+        provider_attachment_id: str,
+    ) -> AttachmentContent:
+        raise AssertionError("ingestion must not fetch attachment content")
+
 
 class _FailingConnector(CommunicationConnector):
     def __init__(self, error: Exception) -> None:
@@ -45,6 +66,16 @@ class _FailingConnector(CommunicationConnector):
     def fetch_message(self, provider_message_id: str) -> CommunicationMessage:
         self.fetch_ids.append(provider_message_id)
         raise self.error
+
+    def list_attachments(self, provider_message_id: str) -> AttachmentMetadataPage:
+        raise AssertionError("ingestion must not list attachments")
+
+    def fetch_attachment_content(
+        self,
+        provider_message_id: str,
+        provider_attachment_id: str,
+    ) -> AttachmentContent:
+        raise AssertionError("ingestion must not fetch attachment content")
 
 
 class _RecordingWorkflow:

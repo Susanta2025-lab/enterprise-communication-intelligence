@@ -4,10 +4,20 @@ from pathlib import Path
 
 import pytest
 
-from app.core.exceptions import ConnectorInvalidCursorError, ConnectorMessageNotFoundError
-from app.domain.enums import SourceType
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationMessage
+from app.core.exceptions import (
+    ConnectorAttachmentNotFoundError,
+    ConnectorInvalidCursorError,
+    ConnectorMessageNotFoundError,
+    ConnectorUnsupportedAttachmentError,
+)
+from app.domain.enums import AttachmentDisposition, SourceType
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import AttachmentContent, AttachmentMetadata, CommunicationMessage
 from app.infrastructure.connectors.fake import FakeCommunicationConnector
 
 _FAKE_ROOT = Path(__file__).resolve().parents[4] / "app" / "infrastructure" / "connectors" / "fake"
@@ -132,6 +142,120 @@ def test_fetch_unknown_message_raises_not_found() -> None:
         connector.fetch_message("missing-message")
 
     assert exc_info.value.message == "Connector message not found."
+
+
+def _attachment(
+    attachment_id: str,
+    *,
+    filename: str = "report.pdf",
+    is_inline: bool = False,
+) -> AttachmentMetadata:
+    return AttachmentMetadata(
+        provider_attachment_id=attachment_id,
+        filename=filename,
+        media_type="application/pdf",
+        reported_size=128,
+        disposition=(
+            AttachmentDisposition.INLINE if is_inline else AttachmentDisposition.ATTACHMENT
+        ),
+        is_inline=is_inline,
+    )
+
+
+def test_default_catalog_has_no_attachments() -> None:
+    connector = FakeCommunicationConnector()
+
+    page = connector.list_attachments("fake-msg-001")
+
+    assert isinstance(page, AttachmentMetadataPage)
+    assert page.items == []
+    assert page.truncated is False
+
+
+def test_fake_lists_one_and_multiple_attachment_metadata() -> None:
+    connector = FakeCommunicationConnector(
+        attachments={
+            "fake-msg-001": (_attachment("att-1"),),
+            "fake-msg-002": (_attachment("att-2"), _attachment("att-3", filename="notes.pdf")),
+        }
+    )
+
+    one = connector.list_attachments("fake-msg-001")
+    many = connector.list_attachments("fake-msg-002")
+    none = connector.list_attachments("fake-msg-003")
+
+    assert [item.provider_attachment_id for item in one.items] == ["att-1"]
+    assert [item.provider_attachment_id for item in many.items] == ["att-2", "att-3"]
+    assert none.items == []
+    listed = connector.list_messages(ConnectorMessageQuery(limit=1)).items[0]
+    assert listed.message_id == "fake-msg-001"
+    assert "attachments" not in CommunicationMessage.model_fields
+
+
+def test_fake_inline_attachment_metadata() -> None:
+    connector = FakeCommunicationConnector(
+        attachments={
+            "fake-msg-001": (
+                _attachment("att-inline", filename="logo.png", is_inline=True),
+            )
+        }
+    )
+
+    page = connector.list_attachments("fake-msg-001")
+
+    assert page.items[0].is_inline is True
+    assert page.items[0].disposition is AttachmentDisposition.INLINE
+
+
+def test_fake_unsupported_attachment_type_fails_closed() -> None:
+    connector = FakeCommunicationConnector(
+        unsupported_attachment_message_ids=frozenset({"fake-msg-004"}),
+        attachments={"fake-msg-004": (_attachment("att-x"),)},
+    )
+
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
+        connector.list_attachments("fake-msg-004")
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
+        connector.fetch_attachment_content("fake-msg-004", "att-x")
+
+
+def test_fake_missing_attachment_is_not_found() -> None:
+    connector = FakeCommunicationConnector(
+        attachments={"fake-msg-001": (_attachment("att-1"),)},
+        attachment_contents={("fake-msg-001", "att-1"): b"%PDF-test"},
+    )
+
+    with pytest.raises(ConnectorAttachmentNotFoundError):
+        connector.fetch_attachment_content("fake-msg-001", "missing")
+    with pytest.raises(ConnectorMessageNotFoundError):
+        connector.list_attachments("missing-message")
+
+
+def test_fake_fetch_attachment_content_uses_stable_ids() -> None:
+    connector = FakeCommunicationConnector(
+        attachments={"fake-msg-001": (_attachment("att-stable"),)},
+        attachment_contents={("fake-msg-001", "att-stable"): b"%PDF-stable"},
+    )
+
+    first = connector.list_attachments("fake-msg-001").items[0]
+    content = connector.fetch_attachment_content("fake-msg-001", first.provider_attachment_id)
+
+    assert isinstance(content, AttachmentContent)
+    assert content.source_message_id == "fake-msg-001"
+    assert content.source_attachment_id == "att-stable"
+    assert content.content == b"%PDF-stable"
+    assert content.metadata.provider_attachment_id == "att-stable"
+
+
+def test_fake_attachment_metadata_does_not_mutate_catalog() -> None:
+    connector = FakeCommunicationConnector(
+        attachments={"fake-msg-001": (_attachment("att-1"),)}
+    )
+    listed = connector.list_attachments("fake-msg-001").items[0]
+    listed.filename = "mutated.pdf"
+
+    again = connector.list_attachments("fake-msg-001").items[0]
+    assert again.filename == "report.pdf"
 
 
 def test_fake_connector_source_is_offline() -> None:

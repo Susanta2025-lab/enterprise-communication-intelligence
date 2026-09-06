@@ -91,6 +91,12 @@ class _RecordingConnector:
             raise self.error
         return self.inner.fetch_message(provider_message_id)
 
+    def list_attachments(self, provider_message_id: str):
+        raise AssertionError("mailbox lifecycle tests must not list attachments")
+
+    def fetch_attachment_content(self, provider_message_id: str, provider_attachment_id: str):
+        raise AssertionError("mailbox lifecycle tests must not fetch attachment content")
+
 
 class _RecordingProvider:
     def __init__(self) -> None:

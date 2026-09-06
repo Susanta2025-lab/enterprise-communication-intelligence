@@ -8,6 +8,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.exceptions import (
+    ConnectorAttachmentNotFoundError,
     ConnectorAuthenticationError,
     ConnectorError,
     ConnectorInvalidCursorError,
@@ -16,11 +17,17 @@ from app.core.exceptions import (
     ConnectorRateLimitError,
     ConnectorUnavailableError,
 )
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationMessage
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import AttachmentContent, CommunicationMessage
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.gmail.normalization import (
     gmail_rate_limit_reason,
+    list_gmail_attachment_metadata,
     normalize_gmail_message,
     parse_list_page,
 )
@@ -29,6 +36,27 @@ _GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1"
 _LIST_URL = f"{_GMAIL_API_BASE}/users/me/messages"
 _OPERATION_LIST = "list"
 _OPERATION_FETCH = "fetch"
+_OPERATION_LIST_ATTACHMENTS = "list_attachments"
+_ATTACHMENT_CONTENT_UNAVAILABLE = "Attachment content is not available."
+_ATTACHMENT_METADATA_MIME_DEPTH = 8
+_ATTACHMENT_PART_FIELDS = "mimeType,filename,headers(name,value),body(size,attachmentId)"
+
+
+def attachment_metadata_fields(depth: int = _ATTACHMENT_METADATA_MIME_DEPTH) -> str:
+    """Gmail ``fields`` mask that keeps nested MIME metadata and omits ``body.data``.
+
+    ``format=full`` still selects the MIME tree. The mask then excludes
+    ``MessagePartBody.data`` at each unrolled ``parts`` level so metadata
+    listing does not request embedded attachment bytes. Depth is finite
+    because Gmail partial response cannot apply a recursive wildcard.
+    """
+    nested = _ATTACHMENT_PART_FIELDS
+    for _ in range(max(depth, 0)):
+        nested = f"{_ATTACHMENT_PART_FIELDS},parts({nested})"
+    return f"id,payload({nested})"
+
+
+_ATTACHMENT_METADATA_FIELDS = attachment_metadata_fields()
 
 
 class GmailCommunicationConnector(CommunicationConnector):
@@ -68,7 +96,13 @@ class GmailCommunicationConnector(CommunicationConnector):
         return MessagePage(items=items, next_cursor=next_cursor)
 
     def fetch_message(self, provider_message_id: str) -> CommunicationMessage:
-        """Return one normalized message for a Gmail API message id."""
+        """Return one normalized message for a Gmail API message id.
+
+        Uses ``format=full`` without a ``fields`` mask so text-part ``body.data``
+        remains available. Gmail may also embed attachment-part ``body.data``
+        in that same response. Those parts are not decoded as body or
+        attachment content.
+        """
         message_id = _validated_message_id(provider_message_id)
         payload = self._get_json(
             _message_url(message_id),
@@ -76,6 +110,31 @@ class GmailCommunicationConnector(CommunicationConnector):
             operation=_OPERATION_FETCH,
         )
         return normalize_gmail_message(payload)
+
+    def list_attachments(self, provider_message_id: str) -> AttachmentMetadataPage:
+        """Return MIME attachment metadata without requesting ``body.data``.
+
+        Uses ``format=full`` so nested ``parts`` exist, plus a ``fields`` mask
+        that omits ``body.data``. This is not ``users.messages.attachments.get``.
+        """
+        message_id = _validated_message_id(provider_message_id)
+        payload = self._get_json(
+            _message_url(message_id),
+            params={"format": "full", "fields": _ATTACHMENT_METADATA_FIELDS},
+            operation=_OPERATION_LIST_ATTACHMENTS,
+        )
+        items = list_gmail_attachment_metadata(payload)
+        return AttachmentMetadataPage(items=items, truncated=False)
+
+    def fetch_attachment_content(
+        self,
+        provider_message_id: str,
+        provider_attachment_id: str,
+    ) -> AttachmentContent:
+        """Phase 18A stub: do not retrieve Gmail attachment bytes."""
+        _validated_message_id(provider_message_id)
+        _validated_attachment_id(provider_attachment_id)
+        raise ConnectorError(_ATTACHMENT_CONTENT_UNAVAILABLE)
 
     def _get_json(
         self,
@@ -117,6 +176,15 @@ def _validated_message_id(provider_message_id: str) -> str:
     return message_id
 
 
+def _validated_attachment_id(provider_attachment_id: str) -> str:
+    if not isinstance(provider_attachment_id, str):
+        raise ConnectorAttachmentNotFoundError()
+    attachment_id = provider_attachment_id.strip()
+    if not attachment_id:
+        raise ConnectorAttachmentNotFoundError()
+    return attachment_id
+
+
 def _message_url(message_id: str) -> str:
     return f"{_LIST_URL}/{quote(message_id, safe='')}"
 
@@ -137,7 +205,7 @@ def _raise_for_status(
             raise ConnectorRateLimitError() from None
         raise ConnectorPermissionError() from None
     if status == 404:
-        if operation == _OPERATION_FETCH:
+        if operation in {_OPERATION_FETCH, _OPERATION_LIST_ATTACHMENTS}:
             raise ConnectorMessageNotFoundError() from None
         raise ConnectorUnavailableError() from None
     if status == 429:

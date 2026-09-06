@@ -12,9 +12,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.core.exceptions import ConnectorMessageContentError, ConnectorUnavailableError
-from app.domain.enums import SourceType
-from app.domain.models import CommunicationMessage, MessageMetadata
+from app.core.exceptions import (
+    ConnectorAttachmentMetadataError,
+    ConnectorMessageContentError,
+    ConnectorUnavailableError,
+)
+from app.domain.enums import AttachmentDisposition, SourceType
+from app.domain.models import AttachmentMetadata, CommunicationMessage, MessageMetadata
 from app.infrastructure.connectors.common.html_text import html_to_plain_text
 
 _RATE_LIMIT_REASONS = frozenset(
@@ -62,6 +66,37 @@ def normalize_gmail_message(payload: object) -> CommunicationMessage:
         )
     except ValidationError:
         raise ConnectorMessageContentError() from None
+
+
+def list_gmail_attachment_metadata(payload: object) -> list[AttachmentMetadata]:
+    """Collect attachment metadata from a Gmail message MIME tree.
+
+    Never decodes ``body.data`` and never treats it as attachment content.
+    Parts without ``attachmentId`` are omitted because they cannot be retrieved
+    later. Duplicate attachment ids fail closed.
+    """
+    if not isinstance(payload, dict):
+        raise ConnectorMessageContentError()
+    message_id = _required_text(payload.get("id"))
+    if message_id is None:
+        raise ConnectorMessageContentError()
+    mime_payload = payload.get("payload")
+    if not isinstance(mime_payload, dict):
+        raise ConnectorMessageContentError()
+
+    collected: list[AttachmentMetadata] = []
+    seen_ids: set[str] = set()
+    for part in _iter_mime_parts(mime_payload):
+        if not _is_attachment(part):
+            continue
+        metadata = _attachment_metadata_from_part(part)
+        if metadata is None:
+            continue
+        if metadata.provider_attachment_id in seen_ids:
+            raise ConnectorAttachmentMetadataError()
+        seen_ids.add(metadata.provider_attachment_id)
+        collected.append(metadata)
+    return collected
 
 
 def parse_list_page(payload: object) -> tuple[list[str], str | None]:
@@ -124,6 +159,19 @@ def _plain_text_body(part: dict[str, Any]) -> str:
     raise ConnectorMessageContentError()
 
 
+def _iter_mime_parts(part: object) -> list[dict[str, Any]]:
+    if not isinstance(part, dict):
+        return []
+    found = [part]
+    if _is_attachment(part):
+        return found
+    nested = part.get("parts")
+    if isinstance(nested, list):
+        for child in nested:
+            found.extend(_iter_mime_parts(child))
+    return found
+
+
 def _iter_text_parts(part: object) -> list[tuple[str, str]]:
     if not isinstance(part, dict) or _is_attachment(part):
         return []
@@ -138,6 +186,85 @@ def _iter_text_parts(part: object) -> list[tuple[str, str]]:
         for child in nested:
             found.extend(_iter_text_parts(child))
     return found
+
+
+def _attachment_metadata_from_part(part: dict[str, Any]) -> AttachmentMetadata | None:
+    body = part.get("body")
+    if not isinstance(body, dict):
+        return None
+    attachment_id = _required_text(body.get("attachmentId"))
+    if attachment_id is None:
+        return None
+    media_type = _media_type(part)
+    if not media_type:
+        return None
+    reported_size = _reported_size(body.get("size"))
+    if reported_size is None:
+        return None
+    disposition, is_inline = _attachment_disposition(part)
+    try:
+        return AttachmentMetadata(
+            provider_attachment_id=attachment_id,
+            filename=_attachment_filename(part),
+            media_type=media_type,
+            reported_size=reported_size,
+            disposition=disposition,
+            is_inline=is_inline,
+            content_id=_content_id(part),
+        )
+    except ValidationError:
+        return None
+
+
+def _reported_size(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _attachment_filename(part: dict[str, Any]) -> str:
+    raw = part.get("filename")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    for value in _header_values(part).get("content-disposition", []):
+        filename = _filename_from_disposition(value)
+        if filename:
+            return filename
+    return ""
+
+
+def _filename_from_disposition(value: str) -> str | None:
+    message = Message()
+    try:
+        message["Content-Disposition"] = value
+        filename = message.get_filename()
+    except (TypeError, ValueError, LookupError):
+        return None
+    if isinstance(filename, str) and filename.strip():
+        return filename.strip()
+    return None
+
+
+def _attachment_disposition(part: dict[str, Any]) -> tuple[AttachmentDisposition, bool]:
+    for value in _header_values(part).get("content-disposition", []):
+        message = Message()
+        try:
+            message["Content-Disposition"] = value
+            kind = message.get_content_disposition()
+        except (TypeError, ValueError, LookupError):
+            continue
+        if kind == "inline":
+            return AttachmentDisposition.INLINE, True
+        if kind == "attachment":
+            return AttachmentDisposition.ATTACHMENT, False
+    return AttachmentDisposition.UNKNOWN, False
+
+
+def _content_id(part: dict[str, Any]) -> str | None:
+    raw = _first_header(_header_values(part), "content-id")
+    if raw is None:
+        return None
+    return raw
 
 
 def _is_attachment(part: dict[str, Any]) -> bool:

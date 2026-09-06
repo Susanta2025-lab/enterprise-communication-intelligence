@@ -1,6 +1,7 @@
 """Provider-independent communication domain for ECI Platform."""
 
 from app.domain.enums import (
+    AttachmentDisposition,
     CommunicationCapability,
     ConnectorAccountStatus,
     MailboxAuthorizationProvider,
@@ -15,6 +16,8 @@ from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.domain.interfaces import AIProvider, CommunicationConnector
 from app.domain.models import (
     ActionItem,
+    AttachmentContent,
+    AttachmentMetadata,
     CommunicationAnalysis,
     CommunicationMessage,
     DraftReply,
@@ -28,6 +31,9 @@ from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 __all__ = [
     "AIProvider",
     "ActionItem",
+    "AttachmentContent",
+    "AttachmentDisposition",
+    "AttachmentMetadata",
     "CommunicationAnalysis",
     "CommunicationAnalysisResult",
     "CommunicationCapability",

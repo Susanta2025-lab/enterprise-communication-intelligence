@@ -8,6 +8,8 @@ from urllib.parse import quote
 import httpx
 
 from app.core.exceptions import (
+    ConnectorAttachmentMetadataError,
+    ConnectorAttachmentNotFoundError,
     ConnectorAuthenticationError,
     ConnectorError,
     ConnectorInvalidCursorError,
@@ -16,14 +18,23 @@ from app.core.exceptions import (
     ConnectorRateLimitError,
     ConnectorUnavailableError,
 )
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationMessage
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import AttachmentContent, AttachmentMetadata, CommunicationMessage
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.microsoft_graph.normalization import (
+    normalize_graph_attachment,
     normalize_graph_message,
+    parse_attachment_page,
     parse_list_page,
 )
 from app.infrastructure.connectors.microsoft_graph.pagination import (
+    attachment_list_query_params,
+    attachment_pagination_params_from_next_link,
     list_query_params,
     opaque_cursor_from_next_link,
 )
@@ -38,6 +49,9 @@ _FETCH_SELECT = (
 _PREFER_TEXT_BODY = 'outlook.body-content-type="text"'
 _OPERATION_LIST = "list"
 _OPERATION_FETCH = "fetch"
+_OPERATION_LIST_ATTACHMENTS = "list_attachments"
+_MAX_LISTED_ATTACHMENTS = 50
+_ATTACHMENT_CONTENT_UNAVAILABLE = "Attachment content is not available."
 
 
 class MicrosoftGraphCommunicationConnector(CommunicationConnector):
@@ -84,6 +98,53 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
         )
         return normalize_graph_message(payload)
 
+    def list_attachments(self, provider_message_id: str) -> AttachmentMetadataPage:
+        """List file-attachment metadata without ``contentBytes`` or ``$value``."""
+        message_id = _validated_message_id(provider_message_id)
+        items: list[AttachmentMetadata] = []
+        seen_ids: set[str] = set()
+        params: dict[str, str | int] = attachment_list_query_params()
+        url = _attachments_url(message_id)
+        truncated = False
+        while True:
+            payload = self._get_json(
+                url,
+                params=params,
+                operation=_OPERATION_LIST_ATTACHMENTS,
+            )
+            raw_items, next_link = parse_attachment_page(payload)
+            for raw in raw_items:
+                if len(items) >= _MAX_LISTED_ATTACHMENTS:
+                    truncated = True
+                    break
+                metadata = normalize_graph_attachment(raw)
+                if metadata is None:
+                    continue
+                if metadata.provider_attachment_id in seen_ids:
+                    raise ConnectorAttachmentMetadataError()
+                seen_ids.add(metadata.provider_attachment_id)
+                items.append(metadata)
+            else:
+                if next_link is None:
+                    break
+                if len(items) >= _MAX_LISTED_ATTACHMENTS:
+                    truncated = True
+                    break
+                params = attachment_pagination_params_from_next_link(next_link, message_id)
+                continue
+            break
+        return AttachmentMetadataPage(items=items, truncated=truncated)
+
+    def fetch_attachment_content(
+        self,
+        provider_message_id: str,
+        provider_attachment_id: str,
+    ) -> AttachmentContent:
+        """Phase 18A stub: do not retrieve Graph attachment bytes."""
+        _validated_message_id(provider_message_id)
+        _validated_attachment_id(provider_attachment_id)
+        raise ConnectorError(_ATTACHMENT_CONTENT_UNAVAILABLE)
+
     def _get_json(
         self,
         url: str,
@@ -128,8 +189,21 @@ def _validated_message_id(provider_message_id: str) -> str:
     return message_id
 
 
+def _validated_attachment_id(provider_attachment_id: str) -> str:
+    if not isinstance(provider_attachment_id, str):
+        raise ConnectorAttachmentNotFoundError()
+    attachment_id = provider_attachment_id.strip()
+    if not attachment_id:
+        raise ConnectorAttachmentNotFoundError()
+    return attachment_id
+
+
 def _message_url(message_id: str) -> str:
     return f"{_LIST_URL}/{quote(message_id, safe='')}"
+
+
+def _attachments_url(message_id: str) -> str:
+    return f"{_message_url(message_id)}/attachments"
 
 
 def _raise_for_status(
@@ -146,7 +220,7 @@ def _raise_for_status(
     if status == 403:
         raise ConnectorPermissionError() from None
     if status == 404:
-        if operation == _OPERATION_FETCH:
+        if operation in {_OPERATION_FETCH, _OPERATION_LIST_ATTACHMENTS}:
             raise ConnectorMessageNotFoundError() from None
         raise ConnectorUnavailableError() from None
     if status == 429:

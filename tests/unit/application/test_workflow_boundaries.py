@@ -103,11 +103,17 @@ def test_communication_connector_remains_read_only() -> None:
     assert not hasattr(CommunicationConnector, "reply")
     assert not hasattr(CommunicationConnector, "execute")
     names = set(CommunicationConnector.__abstractmethods__)
-    assert names == {"provider", "list_messages", "fetch_message"}
+    assert names == {
+        "provider",
+        "list_messages",
+        "fetch_message",
+        "list_attachments",
+        "fetch_attachment_content",
+    }
 
 
 def test_gmail_and_graph_adapters_remain_read_only() -> None:
-    """Vendor adapters still expose only list/fetch; no send or reply writes."""
+    """Vendor adapters still have no send or reply writes."""
     assert not hasattr(GmailCommunicationConnector, "send")
     assert not hasattr(GmailCommunicationConnector, "reply")
     assert not hasattr(GmailCommunicationConnector, "execute")

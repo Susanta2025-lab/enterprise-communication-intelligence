@@ -7,10 +7,19 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.core.exceptions import ConnectorMessageContentError, ConnectorUnavailableError
-from app.domain.enums import SourceType
-from app.domain.models import CommunicationMessage, MessageMetadata
+from app.core.exceptions import (
+    ConnectorAttachmentMetadataError,
+    ConnectorMessageContentError,
+    ConnectorUnavailableError,
+    ConnectorUnsupportedAttachmentError,
+)
+from app.domain.enums import AttachmentDisposition, SourceType
+from app.domain.models import AttachmentMetadata, CommunicationMessage, MessageMetadata
 from app.infrastructure.connectors.common.html_text import html_to_plain_text
+
+_FILE_ATTACHMENT = "microsoft.graph.fileattachment"
+_ITEM_ATTACHMENT = "microsoft.graph.itemattachment"
+_REFERENCE_ATTACHMENT = "microsoft.graph.referenceattachment"
 
 _NEXT_LINK_KEY = "@odata.nextLink"
 
@@ -47,6 +56,81 @@ def normalize_graph_message(payload: object) -> CommunicationMessage:
         )
     except ValidationError:
         raise ConnectorMessageContentError() from None
+
+
+def parse_attachment_page(payload: object) -> tuple[list[object], str | None]:
+    """Return raw Graph attachment resources and the raw ``@odata.nextLink``."""
+    if not isinstance(payload, dict):
+        raise ConnectorUnavailableError()
+    if "value" not in payload:
+        raise ConnectorUnavailableError()
+    value = payload["value"]
+    if not isinstance(value, list):
+        raise ConnectorUnavailableError()
+    return value, _next_cursor(payload.get(_NEXT_LINK_KEY))
+
+
+def normalize_graph_attachment(item: object) -> AttachmentMetadata | None:
+    """Normalize one Graph attachment resource. Fail closed for unsupported classes.
+
+    Returns ``None`` when a file attachment is missing identifiers required for
+    later retrieve. Presence of ``contentBytes`` is treated as invalid metadata.
+    """
+    if not isinstance(item, dict):
+        raise ConnectorAttachmentMetadataError()
+    if "contentBytes" in item:
+        raise ConnectorAttachmentMetadataError()
+    attachment_class = _graph_attachment_class(item.get("@odata.type"))
+    if attachment_class == _FILE_ATTACHMENT:
+        return _file_attachment_metadata(item)
+    if attachment_class in {_ITEM_ATTACHMENT, _REFERENCE_ATTACHMENT}:
+        raise ConnectorUnsupportedAttachmentError()
+    raise ConnectorUnsupportedAttachmentError()
+
+
+def _file_attachment_metadata(item: dict[str, Any]) -> AttachmentMetadata | None:
+    attachment_id = _required_text(item.get("id"))
+    if attachment_id is None:
+        return None
+    media_type = _optional_text(item.get("contentType"))
+    if media_type is None:
+        return None
+    reported_size = _reported_size(item.get("size"))
+    if reported_size is None:
+        return None
+    is_inline = item.get("isInline") is True
+    disposition = (
+        AttachmentDisposition.INLINE if is_inline else AttachmentDisposition.ATTACHMENT
+    )
+    filename = item.get("name")
+    if filename is None:
+        filename = ""
+    elif not isinstance(filename, str):
+        return None
+    try:
+        return AttachmentMetadata(
+            provider_attachment_id=attachment_id,
+            filename=filename,
+            media_type=media_type,
+            reported_size=reported_size,
+            disposition=disposition,
+            is_inline=is_inline,
+            content_id=_optional_text(item.get("contentId")),
+        )
+    except ValidationError:
+        return None
+
+
+def _graph_attachment_class(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    return value.strip().lstrip("#").lower()
+
+
+def _reported_size(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 def parse_list_page(payload: object) -> tuple[list[str], str | None]:

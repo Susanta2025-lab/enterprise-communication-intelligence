@@ -95,6 +95,14 @@ class WorkflowActionType(StrEnum):
     REPLY = "reply"
 
 
+class AttachmentDisposition(StrEnum):
+    """How a provider presented an attachment part. Not an authorization signal."""
+
+    ATTACHMENT = "attachment"
+    INLINE = "inline"
+    UNKNOWN = "unknown"
+
+
 class WorkflowActionStatus(StrEnum):
     """Lifecycle of a ``WorkflowAction``.
 

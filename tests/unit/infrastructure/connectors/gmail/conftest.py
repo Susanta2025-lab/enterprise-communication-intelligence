@@ -26,6 +26,49 @@ def header(name: str, value: str) -> dict[str, str]:
     return {"name": name, "value": value}
 
 
+def filename_data_part_without_attachment_id(
+    secret: str = "SECRET-INLINE-PART-DATA",
+    *,
+    filename: str = "notes.txt",
+    mime_type: str = "text/plain",
+) -> dict[str, Any]:
+    """Gmail small-part shape: filename + body.data, no attachmentId."""
+    return {
+        "mimeType": mime_type,
+        "filename": filename,
+        "headers": [header("Content-Disposition", f'attachment; filename="{filename}"')],
+        "body": {"data": b64url(secret), "size": len(secret.encode("utf-8"))},
+    }
+
+
+def attachment_part(
+    *,
+    attachment_id: str,
+    filename: str = "report.pdf",
+    mime_type: str = "application/pdf",
+    size: int = 2048,
+    disposition: str | None = "attachment",
+    content_id: str | None = None,
+    include_data: bool = False,
+    data: str | None = None,
+) -> dict[str, Any]:
+    headers: list[dict[str, str]] = []
+    if disposition is not None:
+        header_value = disposition if filename == "" else f'{disposition}; filename="{filename}"'
+        headers.append(header(name="Content-Disposition", value=header_value))
+    if content_id is not None:
+        headers.append(header(name="Content-ID", value=content_id))
+    body_obj: dict[str, Any] = {"attachmentId": attachment_id, "size": size}
+    if include_data:
+        body_obj["data"] = data if data is not None else b64url("must-not-decode")
+    return {
+        "mimeType": mime_type,
+        "filename": filename,
+        "headers": headers,
+        "body": body_obj,
+    }
+
+
 def text_part(
     body: str,
     *,
@@ -120,12 +163,19 @@ class GmailHttpStub:
         self.fetch_text: dict[str, str] = {}
         self.error_json: dict[str, Any] | None = None
         self.transport_error: BaseException | None = None
+        self.attachment_content_requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.transport_error is not None:
             raise self.transport_error
         path = request.url.path
+        if "/attachments" in path.lower():
+            self.attachment_content_requests.append(request)
+            return httpx.Response(
+                599,
+                json={"error": {"message": "attachment content must not be requested"}},
+            )
         if path.rstrip("/") == GMAIL_API_PREFIX:
             return self._list_response()
         prefix = GMAIL_API_PREFIX + "/"

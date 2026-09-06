@@ -71,6 +71,8 @@ def test_communication_connector_remains_read_only() -> None:
         "provider",
         "list_messages",
         "fetch_message",
+        "list_attachments",
+        "fetch_attachment_content",
     }
 
 

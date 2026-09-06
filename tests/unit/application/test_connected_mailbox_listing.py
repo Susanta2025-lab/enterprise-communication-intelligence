@@ -116,6 +116,12 @@ class _RecordingConnector:
         self.fetch_ids.append(provider_message_id)
         raise AssertionError("listing service must not fetch by id")
 
+    def list_attachments(self, provider_message_id: str):
+        raise AssertionError("listing service must not list attachments")
+
+    def fetch_attachment_content(self, provider_message_id: str, provider_attachment_id: str):
+        raise AssertionError("listing service must not fetch attachment content")
+
 
 def _principal(
     *,

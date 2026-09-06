@@ -7,6 +7,7 @@ from app.domain.models.analysis import (
     Priority,
     Summary,
 )
+from app.domain.models.attachment import AttachmentContent, AttachmentMetadata
 from app.domain.models.capabilities import (
     is_mail_read_allowed,
     is_mail_send_executable,
@@ -20,6 +21,8 @@ from app.domain.models.workflow import WorkflowAction
 
 __all__ = [
     "ActionItem",
+    "AttachmentContent",
+    "AttachmentMetadata",
     "CommunicationAnalysis",
     "CommunicationMessage",
     "DraftReply",

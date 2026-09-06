@@ -30,6 +30,17 @@ FETCH_SELECT_FIELDS = frozenset(
         "categories",
     }
 )
+ATTACHMENT_SELECT_FIELDS = frozenset(
+    {
+        "id",
+        "name",
+        "contentType",
+        "size",
+        "isInline",
+        "contentId",
+        "@odata.type",
+    }
+)
 
 
 def email_address(address: str, name: str | None = None) -> dict[str, Any]:
@@ -37,6 +48,32 @@ def email_address(address: str, name: str | None = None) -> dict[str, Any]:
     if name is not None:
         payload["name"] = name
     return {"emailAddress": payload}
+
+
+def graph_file_attachment(
+    attachment_id: str,
+    *,
+    name: str = "report.pdf",
+    content_type: str = "application/pdf",
+    size: int = 2048,
+    is_inline: bool = False,
+    content_id: str | None = None,
+    odata_type: str = "#microsoft.graph.fileAttachment",
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    resource: dict[str, Any] = {
+        "@odata.type": odata_type,
+        "id": attachment_id,
+        "name": name,
+        "contentType": content_type,
+        "size": size,
+        "isInline": is_inline,
+    }
+    if content_id is not None:
+        resource["contentId"] = content_id
+    if extra:
+        resource.update(extra)
+    return resource
 
 
 def graph_resource(
@@ -111,6 +148,11 @@ class GraphHttpStub:
         self.error_json: dict[str, Any] | None = None
         self.transport_error: BaseException | None = None
         self.redirect_location = "https://evil.example/steal"
+        self.attachments: dict[str, list[dict[str, Any]]] = {}
+        self.attachment_list_json: dict[str, Any] = {}
+        self.attachment_list_status: dict[str, int] = {}
+        self.attachment_list_handler: Any = None
+        self.attachment_content_requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -121,7 +163,10 @@ class GraphHttpStub:
             return self._list_response()
         prefix = GRAPH_API_PREFIX + "/"
         if path.startswith(prefix):
-            return self._fetch_response(path[len(prefix) :])
+            remainder = path[len(prefix) :]
+            if "/attachments" in remainder or remainder.endswith("/attachments"):
+                return self._attachment_response(request, remainder)
+            return self._fetch_response(remainder)
         return httpx.Response(404, json={"error": {"code": "Unknown", "message": "unknown route"}})
 
     def _headers_for_status(self, status: int) -> dict[str, str]:
@@ -163,6 +208,33 @@ class GraphHttpStub:
                 json={"error": {"code": "ErrorItemNotFound", "message": "not found"}},
             )
         return httpx.Response(200, json=resource)
+
+    def _attachment_response(self, request: httpx.Request, remainder: str) -> httpx.Response:
+        decoded = unquote(remainder)
+        marker = "/attachments"
+        split_at = decoded.lower().find(marker)
+        message_id = decoded[:split_at] if split_at >= 0 else decoded
+        after = decoded[split_at + len(marker) :] if split_at >= 0 else ""
+        if after not in {"", "/"}:
+            self.attachment_content_requests.append(request)
+            return httpx.Response(
+                599,
+                json={"error": {"code": "Forbidden", "message": "attachment content"}},
+            )
+        if self.attachment_list_handler is not None:
+            return self.attachment_list_handler(request, message_id)
+        status = self.attachment_list_status.get(message_id, 200)
+        headers = self._headers_for_status(status)
+        if message_id in self.attachment_list_json:
+            return httpx.Response(
+                status,
+                json=self.attachment_list_json[message_id],
+                headers=headers,
+            )
+        if status != 200:
+            return httpx.Response(status, json=self._error_body(), headers=headers)
+        body: dict[str, Any] = {"value": list(self.attachments.get(message_id, []))}
+        return httpx.Response(200, json=body)
 
 
 @pytest.fixture

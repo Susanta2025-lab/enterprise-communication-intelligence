@@ -1,11 +1,27 @@
 """Deterministic offline CommunicationConnector for architecture and tests."""
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
-from app.core.exceptions import ConnectorInvalidCursorError, ConnectorMessageNotFoundError
+from app.core.exceptions import (
+    ConnectorAttachmentNotFoundError,
+    ConnectorInvalidCursorError,
+    ConnectorMessageNotFoundError,
+    ConnectorUnsupportedAttachmentError,
+)
 from app.domain.enums import SourceType
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationMessage, MessageMetadata
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import (
+    AttachmentContent,
+    AttachmentMetadata,
+    CommunicationMessage,
+    MessageMetadata,
+)
 
 _CURSOR_PREFIX = "n:"
 
@@ -91,7 +107,15 @@ def _email(
 class FakeCommunicationConnector(CommunicationConnector):
     """In-memory connector that returns synthetic, already-normalized messages."""
 
-    def __init__(self, messages: tuple[CommunicationMessage, ...] | None = None) -> None:
+    def __init__(
+        self,
+        messages: tuple[CommunicationMessage, ...] | None = None,
+        *,
+        attachments: Mapping[str, Sequence[AttachmentMetadata]] | None = None,
+        attachment_contents: Mapping[tuple[str, str], bytes] | None = None,
+        unsupported_attachment_message_ids: frozenset[str] | None = None,
+        truncated_attachment_message_ids: frozenset[str] | None = None,
+    ) -> None:
         catalog = messages if messages is not None else _synthetic_messages()
         self._messages = tuple(message.model_copy(deep=True) for message in catalog)
         self._by_id = {
@@ -99,6 +123,17 @@ class FakeCommunicationConnector(CommunicationConnector):
             for message in self._messages
             if message.message_id is not None
         }
+        self._attachments = {
+            message_id: tuple(item.model_copy(deep=True) for item in entries)
+            for message_id, entries in (attachments or {}).items()
+        }
+        self._attachment_contents = dict(attachment_contents or {})
+        self._unsupported_attachment_message_ids = frozenset(
+            unsupported_attachment_message_ids or ()
+        )
+        self._truncated_attachment_message_ids = frozenset(
+            truncated_attachment_message_ids or ()
+        )
 
     @property
     def provider(self) -> str:
@@ -116,6 +151,49 @@ class FakeCommunicationConnector(CommunicationConnector):
         if message is None:
             raise ConnectorMessageNotFoundError()
         return message.model_copy(deep=True)
+
+    def list_attachments(self, provider_message_id: str) -> AttachmentMetadataPage:
+        if provider_message_id not in self._by_id:
+            raise ConnectorMessageNotFoundError()
+        if provider_message_id in self._unsupported_attachment_message_ids:
+            raise ConnectorUnsupportedAttachmentError()
+        items = [
+            item.model_copy(deep=True)
+            for item in self._attachments.get(provider_message_id, ())
+        ]
+        return AttachmentMetadataPage(
+            items=items,
+            truncated=provider_message_id in self._truncated_attachment_message_ids,
+        )
+
+    def fetch_attachment_content(
+        self,
+        provider_message_id: str,
+        provider_attachment_id: str,
+    ) -> AttachmentContent:
+        if provider_message_id not in self._by_id:
+            raise ConnectorMessageNotFoundError()
+        if provider_message_id in self._unsupported_attachment_message_ids:
+            raise ConnectorUnsupportedAttachmentError()
+        metadata = next(
+            (
+                item.model_copy(deep=True)
+                for item in self._attachments.get(provider_message_id, ())
+                if item.provider_attachment_id == provider_attachment_id
+            ),
+            None,
+        )
+        if metadata is None:
+            raise ConnectorAttachmentNotFoundError()
+        content = self._attachment_contents.get((provider_message_id, provider_attachment_id))
+        if content is None:
+            raise ConnectorAttachmentNotFoundError()
+        return AttachmentContent(
+            metadata=metadata,
+            content=content,
+            source_message_id=provider_message_id,
+            source_attachment_id=provider_attachment_id,
+        )
 
     def _decode_cursor(self, cursor: str | None) -> int:
         if cursor is None:

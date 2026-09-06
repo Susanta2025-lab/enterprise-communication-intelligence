@@ -147,3 +147,24 @@ class ConnectorMessageContentError(ConnectorError):
 
     def __init__(self, message: str = "Connector message content is invalid.") -> None:
         super().__init__(message)
+
+
+class ConnectorAttachmentNotFoundError(ConnectorError):
+    """Raised when the requested provider attachment id is unknown."""
+
+    def __init__(self, message: str = "Connector attachment not found.") -> None:
+        super().__init__(message)
+
+
+class ConnectorAttachmentMetadataError(ConnectorError):
+    """Raised when attachment metadata cannot be normalized safely."""
+
+    def __init__(self, message: str = "Connector attachment metadata is invalid.") -> None:
+        super().__init__(message)
+
+
+class ConnectorUnsupportedAttachmentError(ConnectorError):
+    """Raised when a provider attachment class is outside the supported set."""
+
+    def __init__(self, message: str = "Connector attachment is not supported.") -> None:
+        super().__init__(message)

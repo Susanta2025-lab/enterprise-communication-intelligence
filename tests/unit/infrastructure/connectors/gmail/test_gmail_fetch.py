@@ -36,6 +36,7 @@ def test_fetch_requests_message_endpoint_with_format_full(
     assert request.method == "GET"
     assert request.url.path == f"{GMAIL_API_PREFIX}/msg-1"
     assert request.url.params.get("format") == "full"
+    assert request.url.params.get("fields") is None
     assert request.headers.get("authorization") == f"Bearer {GMAIL_TOKEN}"
     assert request.headers.get("accept") == "application/json"
 

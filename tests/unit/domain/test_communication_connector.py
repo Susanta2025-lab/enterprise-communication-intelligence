@@ -6,8 +6,18 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.enums import SourceType
-from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
-from app.domain.models import CommunicationMessage, MessageMetadata
+from app.domain.interfaces import (
+    AttachmentMetadataPage,
+    CommunicationConnector,
+    ConnectorMessageQuery,
+    MessagePage,
+)
+from app.domain.models import (
+    AttachmentContent,
+    AttachmentMetadata,
+    CommunicationMessage,
+    MessageMetadata,
+)
 
 
 def _message(**overrides: object) -> CommunicationMessage:
@@ -34,6 +44,15 @@ def test_connector_contract_uses_domain_and_python_types() -> None:
     list_hints = get_type_hints(CommunicationConnector.list_messages)
     assert list_hints["query"] is ConnectorMessageQuery
     assert list_hints["return"] is MessagePage
+
+    list_attachments_hints = get_type_hints(CommunicationConnector.list_attachments)
+    assert list_attachments_hints["provider_message_id"] is str
+    assert list_attachments_hints["return"] is AttachmentMetadataPage
+
+    fetch_attachment_hints = get_type_hints(CommunicationConnector.fetch_attachment_content)
+    assert fetch_attachment_hints["provider_message_id"] is str
+    assert fetch_attachment_hints["provider_attachment_id"] is str
+    assert fetch_attachment_hints["return"] is AttachmentContent
 
     provider_getter = CommunicationConnector.provider.fget
     assert provider_getter is not None
@@ -138,3 +157,24 @@ def test_connector_contract_is_read_only() -> None:
     assert not hasattr(CommunicationConnector, "execute")
     assert hasattr(CommunicationConnector, "list_messages")
     assert hasattr(CommunicationConnector, "fetch_message")
+    assert hasattr(CommunicationConnector, "list_attachments")
+    assert hasattr(CommunicationConnector, "fetch_attachment_content")
+
+
+def test_attachment_metadata_page_forbids_bytes() -> None:
+    """Attachment pages carry metadata only."""
+    metadata = AttachmentMetadata(
+        provider_attachment_id="att-001",
+        filename="notes.txt",
+        media_type="text/plain",
+        reported_size=12,
+    )
+    page = AttachmentMetadataPage(items=[metadata], truncated=False)
+
+    assert page.items == [metadata]
+    assert page.truncated is False
+    assert set(AttachmentMetadataPage.model_fields) == {"items", "truncated"}
+    with pytest.raises(ValidationError):
+        AttachmentMetadataPage.model_validate(
+            {"items": [metadata.model_dump()], "contentBytes": "abc"}
+        )
