@@ -19,6 +19,8 @@ _ANALYSIS_MODULES = (
     "analysis_history.py",
     "attachment_analysis.py",
     "attachment_inspection.py",
+    "attachment_analysis_history.py",
+    "connected_mailbox_attachment_analysis.py",
 )
 _WRITE_MARKERS = (
     "users.messages.send",
@@ -74,6 +76,12 @@ def test_workflow_api_exposes_execute_without_retry() -> None:
     assert "WorkflowActionService" not in communications
     assert "WorkflowAction" not in analyses
     assert "WorkflowActionService" not in analyses
+    mailbox_attachments = (_API_ROUTES / "mailbox_attachments.py").read_text(encoding="utf-8")
+    attachment_history = (_API_ROUTES / "attachment_analyses.py").read_text(encoding="utf-8")
+    assert "WorkflowAction" not in mailbox_attachments
+    assert "WorkflowActionService" not in mailbox_attachments
+    assert "WorkflowAction" not in attachment_history
+    assert "WorkflowActionService" not in attachment_history
 
     router = (_ROOT / "app" / "api" / "router.py").read_text(encoding="utf-8")
     assert "workflow_actions" in router

@@ -13,9 +13,18 @@ from app.api.routes import health
 from app.application.exceptions import (
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    AttachmentAnalysisNotFoundError,
+    AttachmentContentInvalidError,
+    AttachmentExceedsLimitError,
+    AttachmentImageAnalysisNotAvailableError,
+    AttachmentNotSupportedError,
+    AttachmentProcessingError,
+    AttachmentScannerUnavailableError,
+    AttachmentScanRejectedError,
     ConnectedMailboxNotAvailableError,
     ConnectorAccountConflictError,
     ConnectorAccountNotFoundError,
+    MailboxAttachmentNotFoundError,
     MailboxAuthorizationSessionInvalidError,
     MailboxMessageNotFoundError,
     MailboxOAuthAuthorizationDeniedError,
@@ -129,6 +138,87 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("mailbox_message_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(MailboxAttachmentNotFoundError)
+    async def mailbox_attachment_not_found_handler(
+        _request: Request,
+        exc: MailboxAttachmentNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("mailbox_attachment_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentAnalysisNotFoundError)
+    async def attachment_analysis_not_found_handler(
+        _request: Request,
+        exc: AttachmentAnalysisNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_analysis_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentNotSupportedError)
+    async def attachment_not_supported_handler(
+        _request: Request,
+        exc: AttachmentNotSupportedError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_not_supported", error_class=error_class(exc))
+        return JSONResponse(status_code=422, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentExceedsLimitError)
+    async def attachment_exceeds_limit_handler(
+        _request: Request,
+        exc: AttachmentExceedsLimitError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_exceeds_limit", error_class=error_class(exc))
+        return JSONResponse(status_code=422, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentContentInvalidError)
+    async def attachment_content_invalid_handler(
+        _request: Request,
+        exc: AttachmentContentInvalidError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_content_invalid", error_class=error_class(exc))
+        return JSONResponse(status_code=422, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentScanRejectedError)
+    async def attachment_scan_rejected_handler(
+        _request: Request,
+        exc: AttachmentScanRejectedError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_scan_rejected", error_class=error_class(exc))
+        return JSONResponse(status_code=422, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentProcessingError)
+    async def attachment_processing_handler(
+        _request: Request,
+        exc: AttachmentProcessingError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_processing_failed", error_class=error_class(exc))
+        return JSONResponse(status_code=422, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentScannerUnavailableError)
+    async def attachment_scanner_unavailable_handler(
+        _request: Request,
+        exc: AttachmentScannerUnavailableError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.warning("attachment_scanner_unavailable", error_class=error_class(exc))
+        return JSONResponse(status_code=503, content={"detail": exc.message})
+
+    @application.exception_handler(AttachmentImageAnalysisNotAvailableError)
+    async def attachment_image_analysis_not_available_handler(
+        _request: Request,
+        exc: AttachmentImageAnalysisNotAvailableError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("attachment_image_analysis_not_available", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
 
     @application.exception_handler(MailboxPaginationCursorInvalidError)
     async def mailbox_pagination_cursor_invalid_handler(

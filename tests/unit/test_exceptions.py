@@ -4,6 +4,7 @@ from app.application.exceptions import (
     AnalysisFailedError,
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    AttachmentAnalysisNotFoundError,
     AttachmentContentInvalidError,
     AttachmentExceedsLimitError,
     AttachmentImageAnalysisNotAvailableError,
@@ -72,6 +73,7 @@ def test_exception_hierarchy() -> None:
     assert issubclass(UnsupportedCommunicationCredentialProviderError, ECIPlatformError)
     assert issubclass(AnalysisFailedError, ECIPlatformError)
     assert issubclass(AnalysisNotFoundError, ECIPlatformError)
+    assert issubclass(AttachmentAnalysisNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountNotFoundError, ECIPlatformError)
     assert issubclass(ConnectorAccountInvalidRequestError, ECIPlatformError)
     assert issubclass(ConnectorAccountConflictError, ECIPlatformError)
@@ -111,6 +113,10 @@ def test_analysis_not_found_has_generic_message() -> None:
     error = AnalysisNotFoundError()
     assert error.message == "Analysis not found."
     assert str(error) == "Analysis not found."
+    attachment_error = AttachmentAnalysisNotFoundError()
+    assert attachment_error.message == "Attachment analysis not found."
+    assert str(attachment_error) == "Attachment analysis not found."
+    assert "analysis_id" not in attachment_error.message.lower()
 
 
 def test_connector_account_not_found_has_generic_message() -> None:

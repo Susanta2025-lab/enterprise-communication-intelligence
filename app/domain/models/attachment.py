@@ -145,11 +145,12 @@ class ParsedAttachment(BaseModel):
 
 
 class AttachmentAnalysis(BaseModel):
-    """Structured attachment analysis. Not persisted in 18C and not a workflow input.
+    """Structured attachment analysis. Not a workflow input.
 
     Distinct from ``CommunicationAnalysis``: this record is bound to one
     attachment id, never carries a sendable draft, and must not be referenced
-    by ``workflow_actions.analysis_id``.
+    by ``workflow_actions.analysis_id``. Persistence stores this structured
+    result only, never raw bytes or extracted document text.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -18,6 +18,7 @@ _SETTINGS_ENV_VARS = (
     "API_V1_PREFIX",
     "AI_PROVIDER",
     "AI_IMAGE_INPUT_ENABLED",
+    "ATTACHMENT_SCANNER_BACKEND",
     "FOUNDRY_PROJECT_ENDPOINT",
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
@@ -66,6 +67,7 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.api_v1_prefix == "/api/v1"
     assert settings.ai_provider == "mock"
     assert settings.ai_image_input_enabled is False
+    assert settings.attachment_scanner_backend == "none"
     assert settings.foundry_project_endpoint is None
     assert settings.foundry_model_deployment is None
     assert settings.bedrock_region is None
@@ -177,6 +179,34 @@ def test_ai_image_input_can_be_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
     settings = Settings(_env_file=None)
     assert settings.ai_image_input_enabled is True
+
+
+def test_attachment_scanner_defaults_fail_closed(clear_settings_env: None) -> None:
+    """The default scanner backend is none, not FakeScanner."""
+    settings = Settings(_env_file=None)
+    assert settings.attachment_scanner_backend == "none"
+
+
+def test_attachment_scanner_fake_is_allowed_outside_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Development may opt into FakeScanner explicitly."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "FAKE")
+    settings = Settings(_env_file=None)
+    assert settings.attachment_scanner_backend == "fake"
+
+
+def test_production_rejects_fake_attachment_scanner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """APP_ENV=production must not accept FakeScanner as malware clearance."""
+    monkeypatch.setenv("APP_ENV", "production")
+    _complete_oidc_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "fake")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
 
 
 def test_mock_provider_does_not_require_foundry_or_bedrock_settings(

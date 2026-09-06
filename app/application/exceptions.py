@@ -14,6 +14,13 @@ class AnalysisNotFoundError(ECIPlatformError):
         super().__init__("Analysis not found.")
 
 
+class AttachmentAnalysisNotFoundError(ECIPlatformError):
+    """Raised when an attachment analysis is unknown or not owned by the caller."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment analysis not found.")
+
+
 class ConnectorAccountNotFoundError(ECIPlatformError):
     """Raised when a connector account is unknown or not owned by the caller."""
 

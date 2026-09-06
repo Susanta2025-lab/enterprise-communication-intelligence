@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.exceptions import PersistenceError
 from app.domain.interfaces.analysis_repository import AnalysisRepository
+from app.domain.interfaces.attachment_analysis_repository import (
+    AttachmentAnalysisRepository,
+)
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.mailbox_authorization_session_repository import (
@@ -19,6 +22,9 @@ from app.domain.interfaces.mailbox_authorization_session_repository import (
 from app.domain.interfaces.persistence_unit_of_work import PersistenceUnitOfWork
 from app.domain.interfaces.workflow_action_repository import WorkflowActionRepository
 from app.infrastructure.storage.repositories.analysis import SqlAlchemyAnalysisRepository
+from app.infrastructure.storage.repositories.attachment_analysis import (
+    SqlAlchemyAttachmentAnalysisRepository,
+)
 from app.infrastructure.storage.repositories.connector_account import (
     SqlAlchemyConnectorAccountRepository,
 )
@@ -48,6 +54,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._mailbox_authorization_sessions: (
             MailboxAuthorizationSessionRepository | None
         ) = None
+        self._attachment_analyses: AttachmentAnalysisRepository | None = None
 
     @property
     def identity_repository(self) -> IdentityRepository:
@@ -84,6 +91,13 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             raise PersistenceError(_INACTIVE)
         return self._mailbox_authorization_sessions
 
+    @property
+    def attachment_analyses(self) -> AttachmentAnalysisRepository:
+        """Attachment-analysis history repository bound to this unit of work."""
+        if self._attachment_analyses is None:
+            raise PersistenceError(_INACTIVE)
+        return self._attachment_analyses
+
     def commit(self) -> None:
         """Commit the current unit of work."""
         session = self._require_session()
@@ -118,6 +132,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._mailbox_authorization_sessions = (
                 SqlAlchemyMailboxAuthorizationSessionRepository(session)
             )
+            self._attachment_analyses = SqlAlchemyAttachmentAnalysisRepository(session)
             return self
         except SQLAlchemyError:
             if session is not None:
@@ -131,6 +146,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._connector_accounts = None
             self._workflow_actions = None
             self._mailbox_authorization_sessions = None
+            self._attachment_analyses = None
             raise PersistenceError(_GENERIC_OPERATION_FAILURE) from None
 
     def __exit__(
@@ -160,6 +176,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._connector_accounts = None
         self._workflow_actions = None
         self._mailbox_authorization_sessions = None
+        self._attachment_analyses = None
         if session is None:
             return
         session.close()

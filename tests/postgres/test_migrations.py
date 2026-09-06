@@ -61,6 +61,7 @@ def test_primary_keys(postgres_engine: Engine) -> None:
         "connector_accounts",
         "workflow_actions",
         "mailbox_authorization_sessions",
+        "attachment_analyses",
     ):
         pk = inspector.get_pk_constraint(table)
         assert pk["constrained_columns"] == ["id"]
@@ -74,6 +75,7 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
     connector_fks = inspector.get_foreign_keys("connector_accounts")
     workflow_fks = inspector.get_foreign_keys("workflow_actions")
     session_fks = inspector.get_foreign_keys("mailbox_authorization_sessions")
+    attachment_fks = inspector.get_foreign_keys("attachment_analyses")
     identity_ok = any(
         fk["referred_table"] == "users"
         and fk["constrained_columns"] == ["user_id"]
@@ -119,6 +121,16 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
     assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in analysis_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in workflow_fks)
+    attachment_user_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in attachment_fks
+    )
+    assert attachment_user_ok
+    assert all(fk["referred_table"] != "analyses" for fk in attachment_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in attachment_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in workflow_fks)
 
 
 def test_external_identity_unique_constraint_named(postgres_engine: Engine) -> None:
@@ -143,6 +155,9 @@ def test_expected_indexes(postgres_engine: Engine) -> None:
     assert "ix_external_identities_user_id" in identity_indexes
     assert "ix_analyses_user_id" in analysis_indexes
     assert "ix_workflow_actions_user_id_created_at_id" in workflow_indexes
+    attachment_indexes = {index["name"] for index in inspector.get_indexes("attachment_analyses")}
+    assert "ix_attachment_analyses_user_id_created_at_id" in attachment_indexes
+    assert "ix_attachment_analyses_user_connector_message" in attachment_indexes
 
 
 def test_nullability(postgres_engine: Engine) -> None:
@@ -228,6 +243,12 @@ def test_schema_excludes_sensitive_columns(postgres_engine: Engine) -> None:
         if table != "external_identities":
             assert "subject" not in columns
             assert "issuer" not in columns
+        if table == "attachment_analyses":
+            assert "content" not in columns
+            assert "content_bytes" not in columns
+            assert "extracted_text" not in columns
+            assert "draft_reply" not in columns
+            assert "raw_bytes" not in columns
 
 
 def test_python_uuid_round_trip_types(postgres_engine: Engine) -> None:

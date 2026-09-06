@@ -14,6 +14,10 @@ from app.domain.enums import (
     WorkflowActionStatus,
 )
 from app.domain.interfaces.analysis_repository import AnalysisRecord, NewAnalysis
+from app.domain.interfaces.attachment_analysis_repository import (
+    AttachmentAnalysisRecord,
+    NewAttachmentAnalysis,
+)
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     ConnectorAccountRepository,
@@ -109,6 +113,80 @@ class InMemoryAnalysisRepository:
             return False
         del self._analyses[analysis_id]
         return True
+
+
+class InMemoryAttachmentAnalysisRepository:
+    """Dict-backed attachment-analysis store used by unit tests."""
+
+    def __init__(self, analyses: dict[UUID, AttachmentAnalysisRecord]) -> None:
+        self._analyses = analyses
+        self.save_calls = 0
+        self.get_calls = 0
+
+    def save(self, analysis: NewAttachmentAnalysis) -> AttachmentAnalysisRecord:
+        self.save_calls += 1
+        now = datetime.now(UTC)
+        record = AttachmentAnalysisRecord(
+            id=analysis.attachment_analysis_id or uuid4(),
+            user_id=analysis.user_id,
+            created_at=now,
+            updated_at=now,
+            connector_account_id=analysis.connector_account_id,
+            provider_message_id=analysis.provider_message_id,
+            provider_attachment_id=analysis.provider_attachment_id,
+            filename=analysis.filename,
+            media_type=analysis.media_type,
+            kind=analysis.kind,
+            extracted_content_status=analysis.extracted_content_status,
+            truncated=analysis.truncated,
+            warnings=list(analysis.warnings),
+            reported_size=analysis.reported_size,
+            page_count=analysis.page_count,
+            character_count=analysis.character_count,
+            summary_text=analysis.summary_text,
+            summary_confidence=analysis.summary_confidence,
+            priority=analysis.priority,
+            category=analysis.category,
+            action_items=list(analysis.action_items),
+            provider=analysis.provider,
+            request_id=analysis.request_id,
+        )
+        self._analyses[record.id] = record
+        return record
+
+    def get_by_id_for_user(
+        self,
+        attachment_analysis_id: UUID,
+        user_id: UUID,
+    ) -> AttachmentAnalysisRecord | None:
+        self.get_calls += 1
+        record = self._analyses.get(attachment_analysis_id)
+        if record is None or record.user_id != user_id:
+            return None
+        return record
+
+    def list_for_user(
+        self,
+        user_id: UUID,
+        limit: int,
+        offset: int,
+        *,
+        connector_account_id: UUID | None = None,
+        provider_message_id: str | None = None,
+    ) -> list[AttachmentAnalysisRecord]:
+        owned = [item for item in self._analyses.values() if item.user_id == user_id]
+        if connector_account_id is not None:
+            owned = [
+                item for item in owned if item.connector_account_id == connector_account_id
+            ]
+        if provider_message_id is not None:
+            owned = [
+                item for item in owned if item.provider_message_id == provider_message_id
+            ]
+        owned.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        if limit < 1 or offset < 0:
+            return []
+        return owned[offset : offset + min(limit, 100)]
 
 
 class InMemoryConnectorAccountRepository(ConnectorAccountRepository):
@@ -440,6 +518,7 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         *,
         identities: dict[tuple[str, str], UUID] | None = None,
         analyses: dict[UUID, AnalysisRecord] | None = None,
+        attachment_analyses: dict[UUID, AttachmentAnalysisRecord] | None = None,
         connector_accounts: dict[UUID, ConnectorAccountRecord] | None = None,
         mailbox_authorization_sessions: (
             dict[UUID, MailboxAuthorizationSessionRecord] | None
@@ -451,6 +530,9 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     ) -> None:
         self.identities = identities if identities is not None else {}
         self.analyses = analyses if analyses is not None else {}
+        self.attachment_analysis_store = (
+            attachment_analyses if attachment_analyses is not None else {}
+        )
         self.connector_account_store = (
             connector_accounts if connector_accounts is not None else {}
         )
@@ -464,6 +546,9 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         )
         self._identity_repository = InMemoryIdentityRepository(self.identities)
         self._analysis_repository = InMemoryAnalysisRepository(self.analyses)
+        self._attachment_analyses = InMemoryAttachmentAnalysisRepository(
+            self.attachment_analysis_store
+        )
         self._connector_accounts = InMemoryConnectorAccountRepository(
             self.connector_account_store
         )
@@ -490,6 +575,10 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     @property
     def analysis_repository(self) -> InMemoryAnalysisRepository:
         return self._analysis_repository
+
+    @property
+    def attachment_analyses(self) -> InMemoryAttachmentAnalysisRepository:
+        return self._attachment_analyses
 
     @property
     def connector_accounts(self) -> InMemoryConnectorAccountRepository:

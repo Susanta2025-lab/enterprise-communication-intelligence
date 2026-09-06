@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.storage.models import (
     Analysis,
+    AttachmentAnalysisRow,
     Base,
     ConnectorAccount,
     ExternalIdentity,
@@ -49,6 +50,7 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
         "connector_accounts",
         "workflow_actions",
         "mailbox_authorization_sessions",
+        "attachment_analyses",
     } <= tables
     assert "messages" not in tables
     assert "connections" not in tables
@@ -104,6 +106,14 @@ def test_foreign_keys_cascade_to_users(sqlite_engine: Engine) -> None:
     assert all(fk["referred_table"] != "analyses" for fk in workflow_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in analysis_fks)
     assert all(fk["referred_table"] != "connector_accounts" for fk in workflow_fks)
+    attachment_fks = inspector.get_foreign_keys("attachment_analyses")
+    assert any(
+        fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
+        for fk in attachment_fks
+    )
+    assert all(fk["referred_table"] != "analyses" for fk in attachment_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in attachment_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in workflow_fks)
 
 
 def test_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -154,6 +164,7 @@ def test_orm_metadata_matches_mapped_classes() -> None:
         "connector_accounts",
         "workflow_actions",
         "mailbox_authorization_sessions",
+        "attachment_analyses",
     }
     assert User.__tablename__ == "users"
     assert ExternalIdentity.__tablename__ == "external_identities"
@@ -161,6 +172,7 @@ def test_orm_metadata_matches_mapped_classes() -> None:
     assert ConnectorAccount.__tablename__ == "connector_accounts"
     assert WorkflowAction.__tablename__ == "workflow_actions"
     assert MailboxAuthorizationSession.__tablename__ == "mailbox_authorization_sessions"
+    assert AttachmentAnalysisRow.__tablename__ == "attachment_analyses"
 
 
 def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -225,6 +237,41 @@ def test_mailbox_authorization_session_columns_are_minimized(sqlite_engine: Engi
     }
     assert "state" not in columns
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+
+
+def test_attachment_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
+    """Attachment analyses store structured results only, never bytes or extracted text."""
+    inspector = inspect(sqlite_engine)
+    columns = {column["name"] for column in inspector.get_columns("attachment_analyses")}
+    assert columns == {
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "connector_account_id",
+        "provider_message_id",
+        "provider_attachment_id",
+        "filename",
+        "media_type",
+        "kind",
+        "extracted_content_status",
+        "truncated",
+        "warnings",
+        "reported_size",
+        "page_count",
+        "character_count",
+        "summary_text",
+        "summary_confidence",
+        "priority",
+        "category",
+        "action_items",
+        "provider",
+        "request_id",
+    }
+    assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+    assert "extracted_text" not in columns
+    assert "content" not in columns
+    assert "draft_reply" not in columns
     fks = inspector.get_foreign_keys("mailbox_authorization_sessions")
     assert any(fk["referred_table"] == "users" for fk in fks)
     assert any(fk["referred_table"] == "connector_accounts" for fk in fks)

@@ -10,6 +10,7 @@ from app.domain.enums import PriorityLevel, SourceType, WorkflowActionType
 from app.domain.interfaces import (
     AIProvider,
     AnalysisRepository,
+    AttachmentAnalysisRepository,
     AttachmentParser,
     AttachmentScanner,
     CommunicationActionExecution,
@@ -83,6 +84,7 @@ def test_repository_interfaces_are_abstract() -> None:
     """Persistence ports must not be instantiable without implementations."""
     assert issubclass(IdentityRepository, ABC)
     assert issubclass(AnalysisRepository, ABC)
+    assert issubclass(AttachmentAnalysisRepository, ABC)
     assert issubclass(ConnectorAccountRepository, ABC)
     assert issubclass(WorkflowActionRepository, ABC)
     assert issubclass(MailboxAuthorizationSessionRepository, ABC)
@@ -92,6 +94,8 @@ def test_repository_interfaces_are_abstract() -> None:
         IdentityRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         AnalysisRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        AttachmentAnalysisRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         ConnectorAccountRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):

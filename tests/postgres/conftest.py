@@ -48,8 +48,8 @@ def _truncate(engine: Engine) -> None:
                 connection.execute(
                     text(
                         "TRUNCATE TABLE mailbox_authorization_sessions, "
-                        "workflow_actions, analyses, external_identities, "
-                        "connector_accounts, users CASCADE"
+                        "workflow_actions, attachment_analyses, analyses, "
+                        "external_identities, connector_accounts, users CASCADE"
                     )
                 )
 

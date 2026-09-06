@@ -74,6 +74,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    attachment_analyses: Mapped[list["AttachmentAnalysisRow"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class ExternalIdentity(Base):
@@ -333,3 +337,78 @@ class WorkflowAction(Base):
     provider_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="workflow_actions")
+
+
+class AttachmentAnalysisRow(Base):
+    """User-owned attachment-analysis history. Structured result only.
+
+    Distinct from ``analyses``. ``workflow_actions.analysis_id`` must not
+    reference this table. Raw bytes, extracted document text, image bytes,
+    prompts, tokens, and credentials are not stored.
+    """
+
+    __tablename__ = "attachment_analyses"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('pdf', 'docx', 'jpeg', 'png', 'txt')",
+            name="ck_attachment_analyses_kind",
+        ),
+        CheckConstraint(
+            "extracted_content_status IN ('text', 'truncated_text', 'image')",
+            name="ck_attachment_analyses_extracted_content_status",
+        ),
+        Index(
+            "ix_attachment_analyses_user_id_created_at_id",
+            "user_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_attachment_analyses_user_connector_message",
+            "user_id",
+            "connector_account_id",
+            "provider_message_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+    connector_account_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    provider_message_id: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_attachment_id: Mapped[str] = mapped_column(Text, nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    media_type: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    extracted_content_status: Mapped[str] = mapped_column(Text, nullable=False)
+    truncated: Mapped[bool] = mapped_column(nullable=False)
+    warnings: Mapped[list[str]] = mapped_column(PORTABLE_JSON, nullable=False)
+    reported_size: Mapped[int | None] = mapped_column(nullable=True)
+    page_count: Mapped[int | None] = mapped_column(nullable=True)
+    character_count: Mapped[int | None] = mapped_column(nullable=True)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_confidence: Mapped[float | None] = mapped_column(nullable=True)
+    priority: Mapped[str] = mapped_column(String(32), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    action_items: Mapped[list[dict[str, Any]]] = mapped_column(
+        PORTABLE_JSON,
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="attachment_analyses")

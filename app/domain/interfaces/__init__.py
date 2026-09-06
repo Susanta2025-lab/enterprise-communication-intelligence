@@ -6,6 +6,11 @@ from app.domain.interfaces.analysis_repository import (
     AnalysisRepository,
     NewAnalysis,
 )
+from app.domain.interfaces.attachment_analysis_repository import (
+    AttachmentAnalysisRecord,
+    AttachmentAnalysisRepository,
+    NewAttachmentAnalysis,
+)
 from app.domain.interfaces.attachment_parser import AttachmentParser
 from app.domain.interfaces.attachment_scanner import AttachmentScanner, AttachmentScanResult
 from app.domain.interfaces.communication_action_executor import (
@@ -60,6 +65,8 @@ from app.domain.interfaces.workflow_action_repository import (
 __all__ = [
     "AIProvider",
     "AccessTokenProvider",
+    "AttachmentAnalysisRecord",
+    "AttachmentAnalysisRepository",
     "AttachmentParser",
     "AttachmentScanResult",
     "AttachmentScanner",
@@ -87,6 +94,7 @@ __all__ = [
     "NewMailboxAuthorizationSession",
     "MessagePage",
     "NewAnalysis",
+    "NewAttachmentAnalysis",
     "NewCommunicationCredential",
     "NewConnectorAccount",
     "PersistenceUnitOfWork",

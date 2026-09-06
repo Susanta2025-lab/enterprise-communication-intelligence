@@ -12,6 +12,7 @@ AppEnvironment = Literal["development", "staging", "production"]
 AuthMode = Literal["disabled", "oidc"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 CredentialStoreBackend = Literal["memory", "azure_key_vault", "aws_secrets_manager"]
+AttachmentScannerBackend = Literal["none", "fake"]
 
 _PRODUCTION_DATABASE_SCHEME = "postgresql+psycopg"
 _ALLOWED_DATABASE_SCHEMES = frozenset(
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     ai_provider: str = "mock"
     ai_image_input_enabled: bool = False
+    attachment_scanner_backend: AttachmentScannerBackend = "none"
     foundry_project_endpoint: str | None = None
     foundry_model_deployment: str | None = None
     bedrock_region: str | None = None
@@ -107,6 +109,15 @@ class Settings(BaseSettings):
         """Treat blank image-capability flags as the fail-closed default."""
         if isinstance(value, str) and not value.strip():
             return False
+        return value
+
+    @field_validator("attachment_scanner_backend", mode="before")
+    @classmethod
+    def normalize_attachment_scanner_backend(cls, value: object) -> object:
+        """Treat blank scanner backends as the fail-closed default."""
+        if isinstance(value, str):
+            stripped = value.strip().lower()
+            return stripped or "none"
         return value
 
     @field_validator("foundry_project_endpoint", mode="before")
@@ -627,6 +638,15 @@ class Settings(BaseSettings):
         if missing:
             names = " and ".join(missing)
             raise ValueError(f"{names} must be set when AI_PROVIDER=amazon_bedrock.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_attachment_scanner_backend(self) -> Self:
+        """Production must not treat FakeScanner CLEAN as malware clearance."""
+        if self.app_env == "production" and self.attachment_scanner_backend == "fake":
+            raise ValueError(
+                "ATTACHMENT_SCANNER_BACKEND must not be fake when APP_ENV=production."
+            )
         return self
 
     @model_validator(mode="after")

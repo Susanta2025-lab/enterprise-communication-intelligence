@@ -360,3 +360,11 @@ def test_analyze_rejects_attachment_fields_on_email_endpoint(client: TestClient)
     response = client.post(_ANALYZE_URL, json=payload)
     assert response.status_code == 422
     assert response.json()["detail"] == "Attachment analysis is not available on this endpoint."
+
+    payload = _valid_payload("Sharing the notes from today's standup for visibility.")
+    payload["attachment_images"] = [
+        {"media_type": "image/png", "content": "QQ=="},
+    ]
+    images = client.post(_ANALYZE_URL, json=payload)
+    assert images.status_code == 422
+    assert images.json()["detail"] == "Attachment analysis is not available on this endpoint."

@@ -186,6 +186,27 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert "credential_ref" not in serialized_mailbox
     assert "refresh_token" not in serialized_mailbox
     assert "access_token" not in serialized_mailbox
+    attachment_analyze_path = (
+        "/api/v1/connector-accounts/{connector_account_id}/messages/attachments/analyze"
+    )
+    assert attachment_analyze_path in schema["paths"]
+    attachment_analyze = schema["paths"][attachment_analyze_path]["post"]
+    assert attachment_analyze.get("security") == [{"HTTPBearer": []}]
+    assert "requestBody" in attachment_analyze
+    assert "200" in attachment_analyze["responses"]
+    assert "401" in attachment_analyze["responses"]
+    assert "404" in attachment_analyze["responses"]
+    assert "422" in attachment_analyze["responses"]
+    assert "503" in attachment_analyze["responses"]
+    serialized_attachment = repr(attachment_analyze).lower()
+    assert "access_token" not in serialized_attachment
+    attachment_schema = schema["components"]["schemas"]["AttachmentAnalysisResponse"]
+    assert "attachment_analysis_id" in attachment_schema["properties"]
+    assert "analysis_id" not in attachment_schema["properties"]
+    assert "draft_reply" not in attachment_schema["properties"]
+    assert "extracted_text" not in attachment_schema["properties"]
+    assert "/api/v1/attachment-analyses" in schema["paths"]
+    assert "/api/v1/attachment-analyses/{attachment_analysis_id}" in schema["paths"]
 
     analyze_operation = schema["paths"]["/api/v1/communications/analyze"]["post"]
     assert analyze_operation["summary"] == "Analyze a business communication"

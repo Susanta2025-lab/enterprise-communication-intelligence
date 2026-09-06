@@ -20,6 +20,7 @@ APPLICATION_TABLES = frozenset(
         "connector_accounts",
         "workflow_actions",
         "mailbox_authorization_sessions",
+        "attachment_analyses",
     }
 )
 ALLOWED_TABLES = APPLICATION_TABLES | {"alembic_version"}

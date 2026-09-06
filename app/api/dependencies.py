@@ -8,12 +8,20 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.application.services.analysis_history import AnalysisHistoryService
+from app.application.services.attachment_analysis import AttachmentAnalysisService
+from app.application.services.attachment_analysis_history import (
+    AttachmentAnalysisHistoryService,
+)
+from app.application.services.attachment_inspection import AttachmentInspectionService
 from app.application.services.communication_analysis import CommunicationAnalysisService
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
 )
 from app.application.services.connected_mailbox_analysis import (
     ConnectedMailboxAnalysisService,
+)
+from app.application.services.connected_mailbox_attachment_analysis import (
+    ConnectedMailboxAttachmentAnalysisService,
 )
 from app.application.services.connected_mailbox_listing import (
     ConnectedMailboxMessageListingService,
@@ -40,11 +48,13 @@ from app.core.security import (
 )
 from app.domain.interfaces import (
     AIProvider,
+    AttachmentScanner,
     CommunicationActionExecutorFactory,
     CommunicationConnectorFactory,
     CommunicationCredentialResolver,
     PersistenceUnitOfWork,
 )
+from app.infrastructure.attachments import SafeAttachmentParser, create_attachment_scanner
 from app.providers.factory import create_ai_provider
 
 logger = get_logger(__name__)
@@ -651,6 +661,57 @@ def get_connected_mailbox_analysis_service(
         connector_factory,
         workflow,
     )
+
+
+def get_attachment_scanner() -> AttachmentScanner:
+    """Resolve the configured attachment scanner. Default is fail-closed."""
+    return create_attachment_scanner(get_settings())
+
+
+def get_connected_mailbox_attachment_analysis_service(
+    _principal: Annotated[
+        AuthenticatedPrincipal,
+        Depends(require_authenticated_communications_read_and_analyze),
+    ],
+    analysis_service: Annotated[
+        CommunicationAnalysisService,
+        Depends(get_communication_analysis_service),
+    ],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+    connector_factory: Annotated[
+        CommunicationConnectorFactory,
+        Depends(get_communication_connector_factory),
+    ],
+    scanner: Annotated[AttachmentScanner, Depends(get_attachment_scanner)],
+) -> ConnectedMailboxAttachmentAnalysisService:
+    """Compose attachment analyze after read+analyze authorization.
+
+    FakeAttachmentScanner is never implied. The configured scanner is used
+    as-is. Tests may override ``get_attachment_scanner``. Construction does
+    not fetch tokens, refresh OAuth, or call mailbox HTTP.
+    """
+    settings = get_settings()
+    inspection = AttachmentInspectionService(scanner)
+    attachment_analysis = AttachmentAnalysisService(
+        inspection,
+        SafeAttachmentParser(),
+        analysis_service,
+        image_input_enabled=settings.ai_image_input_enabled,
+    )
+    return ConnectedMailboxAttachmentAnalysisService(
+        IdentityResolver(uow_factory),
+        uow_factory,
+        connector_factory,
+        attachment_analysis,
+        AttachmentAnalysisHistoryService(uow_factory),
+    )
+
+
+def get_attachment_analysis_history_service(
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> AttachmentAnalysisHistoryService:
+    """Build attachment-analysis history after persistence is available."""
+    return AttachmentAnalysisHistoryService(uow_factory)
 
 
 def get_connected_mailbox_listing_service(

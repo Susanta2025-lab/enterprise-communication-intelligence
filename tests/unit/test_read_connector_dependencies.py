@@ -205,14 +205,19 @@ def test_mailbox_list_and_analyze_are_mounted() -> None:
     root = Path(__file__).resolve().parents[2] / "app" / "api"
     router = (root / "router.py").read_text(encoding="utf-8")
     mailbox_routes = (root / "routes" / "mailbox_messages.py").read_text(encoding="utf-8")
+    attachment_routes = (root / "routes" / "mailbox_attachments.py").read_text(encoding="utf-8")
     assert "mailbox_messages" in router
+    assert "mailbox_attachments" in router
     assert "messages/analyze" in mailbox_routes
     assert "@router.get(" in mailbox_routes
     assert "/connector-accounts/{connector_account_id}/messages" in mailbox_routes
+    assert "messages/attachments/analyze" in attachment_routes
     assert "GmailCommunicationConnector" not in mailbox_routes
     assert "MicrosoftGraphCommunicationConnector" not in mailbox_routes
+    assert "GmailCommunicationConnector" not in attachment_routes
+    assert "MicrosoftGraphCommunicationConnector" not in attachment_routes
     for path in (root / "routes").glob("*.py"):
-        if path.name == "mailbox_messages.py":
+        if path.name in {"mailbox_messages.py", "mailbox_attachments.py"}:
             continue
         source = path.read_text(encoding="utf-8")
         assert "/messages" not in source

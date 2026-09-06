@@ -18,6 +18,7 @@ _REQUIRED_TABLES = {
     "connector_accounts",
     "workflow_actions",
     "mailbox_authorization_sessions",
+    "attachment_analyses",
 }
 _FORBIDDEN_TABLES = {
     "messages",
@@ -40,15 +41,24 @@ def test_alembic_revision_graph_is_valid() -> None:
     config = Config(str(_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
     revisions = {revision.revision: revision for revision in script.walk_revisions()}
-    assert set(revisions) == {"9a0001", "10b0001", "11b0001", "12a0001", "13a0001", "16f0001"}
+    assert set(revisions) == {
+        "9a0001",
+        "10b0001",
+        "11b0001",
+        "12a0001",
+        "13a0001",
+        "16f0001",
+        "18d0001",
+    }
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
     assert revisions["11b0001"].down_revision == "10b0001"
     assert revisions["12a0001"].down_revision == "11b0001"
     assert revisions["13a0001"].down_revision == "12a0001"
     assert revisions["16f0001"].down_revision == "13a0001"
-    assert script.get_heads() == ["16f0001"]
-    assert script.get_current_head() == "16f0001"
+    assert revisions["18d0001"].down_revision == "16f0001"
+    assert script.get_heads() == ["18d0001"]
+    assert script.get_current_head() == "18d0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -258,6 +268,30 @@ def test_display_identity_connect_another_migration_creates_expected_schema() ->
         assert f'"{forbidden}"' not in migration
 
 
+def test_attachment_analyses_migration_creates_expected_schema() -> None:
+    """The 18D migration adds structured attachment-analysis history only."""
+    migration = (
+        _ROOT / "alembic" / "versions" / "18d0001_attachment_analyses.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "18d0001"' in migration
+    assert 'down_revision: str | None = "16f0001"' in migration
+    assert 'op.create_table(\n        "attachment_analyses"' in migration
+    assert "summary_text" in migration
+    assert "action_items" in migration
+    assert "extracted_content_status" in migration
+    assert "content_bytes" not in migration
+    assert "extracted_text" not in migration
+    assert "raw_bytes" not in migration
+    assert "draft_reply" not in migration
+    assert "access_token" not in migration
+    assert "refresh_token" not in migration
+    assert 'ForeignKeyConstraint(["analysis_id"]' not in migration
+    assert '["workflow_actions.id"]' not in migration
+    assert 'ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE")' in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
+
+
 def test_alembic_head_check_uses_script_directory_not_database_revision() -> None:
     """Head must come from migration scripts; current must come from the database."""
     source = (_ROOT / "tests" / "postgres" / "alembic_checks.py").read_text(
@@ -315,6 +349,7 @@ def test_assert_at_head_passes_when_current_matches_script_head(
             "connector_accounts",
             "workflow_actions",
             "mailbox_authorization_sessions",
+            "attachment_analyses",
             "alembic_version",
         },
     )
