@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentMetadataError,
     ConnectorMessageContentError,
     ConnectorUnavailableError,
@@ -301,13 +302,25 @@ def _decode_part_text(part: dict[str, Any]) -> str:
     return _decode_charset(raw, _declared_charset(part))
 
 
-def _decode_base64url(data: str) -> bytes:
-    padded = data + "=" * ((4 - len(data) % 4) % 4)
+def decode_gmail_base64url(data: str) -> bytes:
+    """Decode Gmail base64url. Raises ConnectorAttachmentContentError on malformed input."""
     try:
-        translated = padded.encode("ascii").translate(bytes.maketrans(b"-_", b"+/"))
-        return base64.b64decode(translated, validate=True)
+        return _decode_base64url_bytes(data)
+    except (ValueError, binascii.Error, UnicodeEncodeError):
+        raise ConnectorAttachmentContentError() from None
+
+
+def _decode_base64url(data: str) -> bytes:
+    try:
+        return _decode_base64url_bytes(data)
     except (ValueError, binascii.Error, UnicodeEncodeError):
         raise ConnectorMessageContentError() from None
+
+
+def _decode_base64url_bytes(data: str) -> bytes:
+    padded = data + "=" * ((4 - len(data) % 4) % 4)
+    translated = padded.encode("ascii").translate(bytes.maketrans(b"-_", b"+/"))
+    return base64.b64decode(translated, validate=True)
 
 
 def _decode_charset(raw: bytes, charset: str | None) -> str:

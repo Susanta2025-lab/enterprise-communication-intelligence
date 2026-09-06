@@ -8,6 +8,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentNotFoundError,
     ConnectorAuthenticationError,
     ConnectorError,
@@ -17,15 +18,17 @@ from app.core.exceptions import (
     ConnectorRateLimitError,
     ConnectorUnavailableError,
 )
+from app.domain.attachment_policy import MAX_ATTACHMENT_CONTENT_BYTES
 from app.domain.interfaces import (
     AttachmentMetadataPage,
     CommunicationConnector,
     ConnectorMessageQuery,
     MessagePage,
 )
-from app.domain.models import AttachmentContent, CommunicationMessage
+from app.domain.models import AttachmentContent, AttachmentMetadata, CommunicationMessage
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.gmail.normalization import (
+    decode_gmail_base64url,
     gmail_rate_limit_reason,
     list_gmail_attachment_metadata,
     normalize_gmail_message,
@@ -37,7 +40,7 @@ _LIST_URL = f"{_GMAIL_API_BASE}/users/me/messages"
 _OPERATION_LIST = "list"
 _OPERATION_FETCH = "fetch"
 _OPERATION_LIST_ATTACHMENTS = "list_attachments"
-_ATTACHMENT_CONTENT_UNAVAILABLE = "Attachment content is not available."
+_OPERATION_FETCH_ATTACHMENT = "fetch_attachment"
 _ATTACHMENT_METADATA_MIME_DEPTH = 8
 _ATTACHMENT_PART_FIELDS = "mimeType,filename,headers(name,value),body(size,attachmentId)"
 
@@ -131,10 +134,39 @@ class GmailCommunicationConnector(CommunicationConnector):
         provider_message_id: str,
         provider_attachment_id: str,
     ) -> AttachmentContent:
-        """Phase 18A stub: do not retrieve Gmail attachment bytes."""
-        _validated_message_id(provider_message_id)
-        _validated_attachment_id(provider_attachment_id)
-        raise ConnectorError(_ATTACHMENT_CONTENT_UNAVAILABLE)
+        """Retrieve exactly one Gmail attachment via ``users.messages.attachments.get``.
+
+        Revalidates metadata with the 18A fields mask (no ``body.data``) so
+        the attachment id is bound to this message before the content GET.
+        """
+        message_id = _validated_message_id(provider_message_id)
+        attachment_id = _validated_attachment_id(provider_attachment_id)
+        metadata = _metadata_for_attachment(self.list_attachments(message_id).items, attachment_id)
+        if metadata.reported_size > MAX_ATTACHMENT_CONTENT_BYTES:
+            raise ConnectorAttachmentContentError()
+        payload = self._get_json(
+            _attachment_url(message_id, attachment_id),
+            operation=_OPERATION_FETCH_ATTACHMENT,
+        )
+        if not isinstance(payload, dict):
+            raise ConnectorAttachmentContentError()
+        raw = payload.get("data")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ConnectorAttachmentContentError()
+        content = decode_gmail_base64url(raw.strip())
+        if not content:
+            raise ConnectorAttachmentContentError()
+        if len(content) > MAX_ATTACHMENT_CONTENT_BYTES:
+            raise ConnectorAttachmentContentError()
+        returned_id = payload.get("attachmentId")
+        if isinstance(returned_id, str) and returned_id.strip() and returned_id != attachment_id:
+            raise ConnectorAttachmentContentError()
+        return AttachmentContent(
+            metadata=metadata,
+            content=content,
+            source_message_id=message_id,
+            source_attachment_id=attachment_id,
+        )
 
     def _get_json(
         self,
@@ -189,6 +221,20 @@ def _message_url(message_id: str) -> str:
     return f"{_LIST_URL}/{quote(message_id, safe='')}"
 
 
+def _attachment_url(message_id: str, attachment_id: str) -> str:
+    return f"{_message_url(message_id)}/attachments/{quote(attachment_id, safe='')}"
+
+
+def _metadata_for_attachment(
+    items: list[AttachmentMetadata],
+    attachment_id: str,
+) -> AttachmentMetadata:
+    matches = [item for item in items if item.provider_attachment_id == attachment_id]
+    if len(matches) != 1:
+        raise ConnectorAttachmentNotFoundError()
+    return matches[0]
+
+
 def _raise_for_status(
     response: httpx.Response,
     *,
@@ -205,6 +251,8 @@ def _raise_for_status(
             raise ConnectorRateLimitError() from None
         raise ConnectorPermissionError() from None
     if status == 404:
+        if operation == _OPERATION_FETCH_ATTACHMENT:
+            raise ConnectorAttachmentNotFoundError() from None
         if operation in {_OPERATION_FETCH, _OPERATION_LIST_ATTACHMENTS}:
             raise ConnectorMessageNotFoundError() from None
         raise ConnectorUnavailableError() from None

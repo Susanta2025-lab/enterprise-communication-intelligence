@@ -4,10 +4,16 @@ from app.application.exceptions import (
     AnalysisFailedError,
     AnalysisHasNoDraftReplyError,
     AnalysisNotFoundError,
+    AttachmentContentInvalidError,
+    AttachmentExceedsLimitError,
+    AttachmentNotSupportedError,
+    AttachmentScannerUnavailableError,
+    AttachmentScanRejectedError,
     ConnectedMailboxNotAvailableError,
     ConnectorAccountConflictError,
     ConnectorAccountInvalidRequestError,
     ConnectorAccountNotFoundError,
+    MailboxAttachmentNotFoundError,
     MailboxAuthorizationSessionInvalidError,
     MailboxMessageNotFoundError,
     MailboxOAuthAuthorizationDeniedError,
@@ -24,6 +30,8 @@ from app.core.exceptions import (
     CommunicationCredentialReauthorizationRequiredError,
     CommunicationCredentialUnavailableError,
     ConfigurationError,
+    ConnectorAttachmentContentError,
+    ConnectorAttachmentNotFoundError,
     ConnectorAuthenticationError,
     ConnectorError,
     ConnectorInvalidCursorError,
@@ -38,7 +46,10 @@ from app.core.exceptions import (
     ServiceUnavailableError,
     UnsupportedCommunicationCredentialProviderError,
 )
-from app.domain.exceptions import InvalidWorkflowTransitionError
+from app.domain.exceptions import (
+    AttachmentUnsupportedError,
+    InvalidWorkflowTransitionError,
+)
 
 
 def test_exception_hierarchy() -> None:
@@ -71,7 +82,15 @@ def test_exception_hierarchy() -> None:
     assert issubclass(ConnectedMailboxNotAvailableError, ECIPlatformError)
     assert issubclass(MailboxMessageNotFoundError, ECIPlatformError)
     assert issubclass(MailboxPaginationCursorInvalidError, ECIPlatformError)
+    assert issubclass(MailboxAttachmentNotFoundError, ECIPlatformError)
+    assert issubclass(AttachmentNotSupportedError, ECIPlatformError)
+    assert issubclass(AttachmentExceedsLimitError, ECIPlatformError)
+    assert issubclass(AttachmentContentInvalidError, ECIPlatformError)
+    assert issubclass(AttachmentScanRejectedError, ECIPlatformError)
+    assert issubclass(AttachmentScannerUnavailableError, ECIPlatformError)
     assert issubclass(ConnectorError, ECIPlatformError)
+    assert issubclass(ConnectorAttachmentNotFoundError, ConnectorError)
+    assert issubclass(ConnectorAttachmentContentError, ConnectorError)
     assert issubclass(ConnectorAuthenticationError, ConnectorError)
     assert issubclass(ConnectorPermissionError, ConnectorError)
     assert issubclass(ConnectorRateLimitError, ConnectorError)
@@ -102,6 +121,14 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert MailboxPaginationCursorInvalidError().message == (
         "Mailbox pagination cursor is invalid."
     )
+    assert MailboxAttachmentNotFoundError().message == "Mailbox attachment not found."
+    assert AttachmentNotSupportedError().message == "Attachment is not supported."
+    assert AttachmentExceedsLimitError().message == "Attachment exceeds limits."
+    assert AttachmentContentInvalidError().message == "Attachment content is invalid."
+    assert AttachmentScanRejectedError().message == "Attachment could not be processed."
+    assert AttachmentScannerUnavailableError().message == "Attachment scanner is unavailable."
+    assert AttachmentUnsupportedError().message == "Attachment is not supported."
+    assert "token" not in MailboxAttachmentNotFoundError().message.lower()
     assert "disconnected" not in ConnectedMailboxNotAvailableError().message.lower()
     assert "credential_ref" not in repr(ConnectedMailboxNotAvailableError())
     assert "token" not in MailboxMessageNotFoundError().message.lower()
@@ -162,6 +189,8 @@ def test_connector_errors_use_generic_messages() -> None:
     assert ConnectorMessageNotFoundError().message == "Connector message not found."
     assert ConnectorInvalidCursorError().message == "Connector cursor is invalid."
     assert ConnectorMessageContentError().message == "Connector message content is invalid."
+    assert ConnectorAttachmentNotFoundError().message == "Connector attachment not found."
+    assert ConnectorAttachmentContentError().message == "Connector attachment content is invalid."
     for error in (
         ConnectorAuthenticationError(),
         ConnectorPermissionError(),
@@ -170,6 +199,8 @@ def test_connector_errors_use_generic_messages() -> None:
         ConnectorMessageNotFoundError(),
         ConnectorInvalidCursorError(),
         ConnectorMessageContentError(),
+        ConnectorAttachmentNotFoundError(),
+        ConnectorAttachmentContentError(),
     ):
         lowered = error.message.lower()
         assert "gmail" not in lowered

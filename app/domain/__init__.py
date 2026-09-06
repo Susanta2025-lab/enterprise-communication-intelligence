@@ -2,6 +2,8 @@
 
 from app.domain.enums import (
     AttachmentDisposition,
+    AttachmentKind,
+    AttachmentScanVerdict,
     CommunicationCapability,
     ConnectorAccountStatus,
     MailboxAuthorizationProvider,
@@ -13,7 +15,7 @@ from app.domain.enums import (
     WorkflowActionType,
 )
 from app.domain.exceptions import InvalidWorkflowTransitionError
-from app.domain.interfaces import AIProvider, CommunicationConnector
+from app.domain.interfaces import AIProvider, AttachmentScanner, CommunicationConnector
 from app.domain.models import (
     ActionItem,
     AttachmentContent,
@@ -33,7 +35,10 @@ __all__ = [
     "ActionItem",
     "AttachmentContent",
     "AttachmentDisposition",
+    "AttachmentKind",
     "AttachmentMetadata",
+    "AttachmentScanVerdict",
+    "AttachmentScanner",
     "CommunicationAnalysis",
     "CommunicationAnalysisResult",
     "CommunicationCapability",

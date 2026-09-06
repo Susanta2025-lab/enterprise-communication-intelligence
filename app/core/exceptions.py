@@ -168,3 +168,10 @@ class ConnectorUnsupportedAttachmentError(ConnectorError):
 
     def __init__(self, message: str = "Connector attachment is not supported.") -> None:
         super().__init__(message)
+
+
+class ConnectorAttachmentContentError(ConnectorError):
+    """Raised when explicit attachment content cannot be decoded safely."""
+
+    def __init__(self, message: str = "Connector attachment content is invalid.") -> None:
+        super().__init__(message)

@@ -103,6 +103,29 @@ class AttachmentDisposition(StrEnum):
     UNKNOWN = "unknown"
 
 
+class AttachmentKind(StrEnum):
+    """Phase 18 allowlisted attachment kinds. Extension alone is never sufficient."""
+
+    PDF = "pdf"
+    DOCX = "docx"
+    JPEG = "jpeg"
+    PNG = "png"
+    TXT = "txt"
+
+
+class AttachmentScanVerdict(StrEnum):
+    """Malware-scan outcome. Only CLEAN may proceed to later parse/AI slices.
+
+    ``ERROR`` is an operational scanner failure. ``UNKNOWN`` is a completed
+    but inconclusive scan. Both fail closed.
+    """
+
+    CLEAN = "clean"
+    MALICIOUS = "malicious"
+    UNKNOWN = "unknown"
+    ERROR = "error"
+
+
 class WorkflowActionStatus(StrEnum):
     """Lifecycle of a ``WorkflowAction``.
 

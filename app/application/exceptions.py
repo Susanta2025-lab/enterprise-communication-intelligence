@@ -122,3 +122,45 @@ class MailboxPaginationCursorInvalidError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Mailbox pagination cursor is invalid.")
+
+
+class MailboxAttachmentNotFoundError(ECIPlatformError):
+    """Raised when a provider attachment is unknown for an owned mailbox message."""
+
+    def __init__(self) -> None:
+        super().__init__("Mailbox attachment not found.")
+
+
+class AttachmentNotSupportedError(ECIPlatformError):
+    """Raised when attachment type, MIME, extension, or signature policy rejects."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment is not supported.")
+
+
+class AttachmentExceedsLimitError(ECIPlatformError):
+    """Raised when reported or actual attachment size exceeds ECI limits."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment exceeds limits.")
+
+
+class AttachmentContentInvalidError(ECIPlatformError):
+    """Raised when retrieved attachment bytes are malformed or inconsistent."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment content is invalid.")
+
+
+class AttachmentScanRejectedError(ECIPlatformError):
+    """Raised when a completed scan is not CLEAN."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment could not be processed.")
+
+
+class AttachmentScannerUnavailableError(ECIPlatformError):
+    """Raised when the scanner cannot complete an operational scan."""
+
+    def __init__(self) -> None:
+        super().__init__("Attachment scanner is unavailable.")

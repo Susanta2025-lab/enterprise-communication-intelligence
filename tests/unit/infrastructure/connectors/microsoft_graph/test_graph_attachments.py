@@ -4,9 +4,9 @@ import httpx
 import pytest
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentMetadataError,
     ConnectorAttachmentNotFoundError,
-    ConnectorError,
     ConnectorMessageNotFoundError,
     ConnectorUnsupportedAttachmentError,
 )
@@ -18,6 +18,12 @@ from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
     graph_file_attachment,
     graph_resource,
 )
+
+
+def _b64_bytes(payload: bytes) -> str:
+    import base64
+
+    return base64.b64encode(payload).decode("ascii")
 
 
 def _select_fields(request: httpx.Request) -> set[str]:
@@ -336,15 +342,147 @@ def test_attachment_pagination_rebuilds_select_and_does_not_follow_unsafe_link(
     _assert_metadata_only(stub)
 
 
-def test_fetch_attachment_content_is_unavailable_without_http(graph_connector: tuple) -> None:
+def test_fetch_attachment_content_requests_one_file_attachment(
+    graph_connector: tuple,
+) -> None:
     connector, stub, _client = graph_connector
-    stub.attachments["msg-1"] = [graph_file_attachment("att-1")]
+    pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+    encoded = _b64_bytes(pdf)
+    stub.attachments["msg-1"] = [
+        graph_file_attachment("att-pdf-1", extra={"contentBytes": encoded}, size=len(pdf)),
+        graph_file_attachment("att-sibling", name="other.pdf"),
+    ]
 
-    with pytest.raises(ConnectorError) as exc_info:
+    content = connector.fetch_attachment_content("msg-1", "att-pdf-1")
+
+    assert content.content == pdf
+    assert content.source_attachment_id == "att-pdf-1"
+    assert content.source_message_id == "msg-1"
+    content_requests = stub.attachment_content_requests
+    assert len(content_requests) == 1
+    assert content_requests[0].url.path == f"{GRAPH_API_PREFIX}/msg-1/attachments/att-pdf-1"
+    assert "contentBytes" in _select_fields(content_requests[0])
+    metadata_requests = [
+        request
+        for request in stub.requests
+        if request.url.path.endswith("/att-pdf-1")
+        and "contentBytes" not in _select_fields(request)
+    ]
+    assert len(metadata_requests) == 1
+    assert "contentBytes" not in _select_fields(metadata_requests[0])
+    assert all(not request.url.path.endswith("/att-sibling") for request in stub.requests)
+    assert all("$value" not in str(request.url) for request in stub.requests)
+
+
+def test_fetch_attachment_content_item_attachment_fails_before_content_bytes(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-item")] = {
+        "@odata.type": "#microsoft.graph.itemAttachment",
+        "id": "att-item",
+        "name": "embedded.msg",
+        "contentType": "message/rfc822",
+        "size": 100,
+        "isInline": False,
+    }
+
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
+        connector.fetch_attachment_content("msg-1", "att-item")
+
+    assert stub.attachment_content_requests == []
+
+
+def test_fetch_attachment_content_reference_attachment_fails_closed(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-ref")] = {
+        "@odata.type": "#microsoft.graph.referenceAttachment",
+        "id": "att-ref",
+        "name": "shared.docx",
+        "contentType": "application/octet-stream",
+        "size": 12,
+        "isInline": False,
+    }
+
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
+        connector.fetch_attachment_content("msg-1", "att-ref")
+
+    assert stub.attachment_content_requests == []
+
+
+def test_fetch_attachment_content_unknown_subtype_fails_closed(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment(
+        "att-1",
+        odata_type="#microsoft.graph.unexpectedAttachment",
+    )
+
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
         connector.fetch_attachment_content("msg-1", "att-1")
 
-    assert exc_info.value.message == "Attachment content is not available."
-    assert stub.requests == []
+    assert stub.attachment_content_requests == []
+
+
+def test_fetch_attachment_content_id_mismatch_fails(graph_connector: tuple) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment("att-other")
+
+    with pytest.raises(ConnectorAttachmentContentError):
+        connector.fetch_attachment_content("msg-1", "att-1")
+
+    assert stub.attachment_content_requests == []
+
+
+def test_fetch_attachment_content_rejects_malformed_base64(graph_connector: tuple) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachments["msg-1"] = [
+        graph_file_attachment("att-1", extra={"contentBytes": "not-base64***"}, size=4)
+    ]
+
+    with pytest.raises(ConnectorAttachmentContentError) as exc_info:
+        connector.fetch_attachment_content("msg-1", "att-1")
+
+    assert "not-base64" not in exc_info.value.message
+
+
+def test_fetch_attachment_content_rejects_oversized_metadata_without_content_bytes(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-huge")] = graph_file_attachment(
+        "att-huge",
+        size=5 * 1024 * 1024 + 1,
+        extra={"contentBytes": "UEsFBgAAAAA="},
+    )
+
+    with pytest.raises(ConnectorAttachmentContentError):
+        connector.fetch_attachment_content("msg-1", "att-huge")
+
+    assert stub.attachment_content_requests == []
+
+
+def test_list_attachments_still_omits_content_bytes_after_explicit_fetch(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    pdf = b"%PDF-1.4\n%%EOF\n"
+    stub.attachments["msg-1"] = [graph_file_attachment("att-1", size=len(pdf))]
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment(
+        "att-1",
+        extra={"contentBytes": _b64_bytes(pdf)},
+        size=len(pdf),
+    )
+    connector.fetch_attachment_content("msg-1", "att-1")
+    stub.requests.clear()
+    stub.attachment_content_requests.clear()
+
+    page = connector.list_attachments("msg-1")
+
+    assert page.items[0].provider_attachment_id == "att-1"
     _assert_metadata_only(stub)
 
 

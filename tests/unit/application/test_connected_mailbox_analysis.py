@@ -38,7 +38,7 @@ from app.core.security import AuthenticatedPrincipal
 from app.domain.enums import CommunicationCapability, ConnectorAccountStatus
 from app.domain.interfaces import CommunicationConnector, ConnectorMessageQuery, MessagePage
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRecord
-from app.domain.models import CommunicationMessage
+from app.domain.models import AttachmentMetadata, CommunicationMessage
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.infrastructure.connectors.fake import FakeCommunicationConnector
 from app.providers.mock.provider import MockAIProvider
@@ -219,6 +219,34 @@ def _service(
         workflow,
     )
     return service, connector_factory
+
+
+def test_analyze_does_not_retrieve_attachments_when_present() -> None:
+    unit = InMemoryUnitOfWork()
+    user_id = _seed_user(unit, _principal())
+    account = _seed_account(unit, user_id)
+    inner = FakeCommunicationConnector(
+        attachments={
+            "fake-msg-001": (
+                AttachmentMetadata(
+                    provider_attachment_id="att-1",
+                    filename="report.pdf",
+                    media_type="application/pdf",
+                    reported_size=32,
+                ),
+            )
+        },
+        attachment_contents={("fake-msg-001", "att-1"): b"%PDF-1.4"},
+    )
+    connector = _RecordingConnector(inner)
+    provider = _RecordingProvider()
+    service, _ = _service(unit, connector, provider=provider)
+
+    outcome = service.analyze(_principal(), account.id, _PROVIDER_MESSAGE_ID)
+
+    assert connector.fetch_ids == [_PROVIDER_MESSAGE_ID]
+    assert outcome.result.analysis.summary.text
+    assert len(provider.calls) == 1
 
 
 def test_owned_active_read_account_analyzes_and_persists_provenance() -> None:

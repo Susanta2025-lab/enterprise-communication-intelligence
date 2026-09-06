@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import ValidationError
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentMetadataError,
     ConnectorMessageContentError,
     ConnectorUnavailableError,
     ConnectorUnsupportedAttachmentError,
 )
 from app.domain.enums import AttachmentDisposition, SourceType
-from app.domain.models import AttachmentMetadata, CommunicationMessage, MessageMetadata
+from app.domain.models import (
+    AttachmentContent,
+    AttachmentMetadata,
+    CommunicationMessage,
+    MessageMetadata,
+)
 from app.infrastructure.connectors.common.html_text import html_to_plain_text
 
 _FILE_ATTACHMENT = "microsoft.graph.fileattachment"
@@ -68,6 +76,47 @@ def parse_attachment_page(payload: object) -> tuple[list[object], str | None]:
     if not isinstance(value, list):
         raise ConnectorUnavailableError()
     return value, _next_cursor(payload.get(_NEXT_LINK_KEY))
+
+
+def decode_graph_base64(data: str) -> bytes:
+    """Decode Graph ``contentBytes``. Rejects malformed standard or base64url input."""
+    padded = data + "=" * ((4 - len(data) % 4) % 4)
+    try:
+        translated = padded.encode("ascii").translate(bytes.maketrans(b"-_", b"+/"))
+        return base64.b64decode(translated, validate=True)
+    except (ValueError, binascii.Error, UnicodeEncodeError):
+        raise ConnectorAttachmentContentError() from None
+
+
+def normalize_graph_attachment_content(
+    item: object,
+    *,
+    requested_attachment_id: str,
+    source_message_id: str,
+) -> AttachmentContent:
+    """Normalize one explicit Graph attachment resource that may include ``contentBytes``."""
+    if not isinstance(item, dict):
+        raise ConnectorAttachmentContentError()
+    raw_bytes = item.get("contentBytes")
+    if not isinstance(raw_bytes, str) or not raw_bytes.strip():
+        raise ConnectorAttachmentContentError()
+    attachment_class = _graph_attachment_class(item.get("@odata.type"))
+    if attachment_class != _FILE_ATTACHMENT:
+        raise ConnectorUnsupportedAttachmentError()
+    returned_id = _required_text(item.get("id"))
+    if returned_id is None or returned_id != requested_attachment_id:
+        raise ConnectorAttachmentContentError()
+    metadata_item = {key: value for key, value in item.items() if key != "contentBytes"}
+    metadata = _file_attachment_metadata(metadata_item)
+    if metadata is None:
+        raise ConnectorAttachmentContentError()
+    content = decode_graph_base64(raw_bytes.strip())
+    return AttachmentContent(
+        metadata=metadata,
+        content=content,
+        source_message_id=source_message_id,
+        source_attachment_id=requested_attachment_id,
+    )
 
 
 def normalize_graph_attachment(item: object) -> AttachmentMetadata | None:

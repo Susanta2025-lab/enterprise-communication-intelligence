@@ -4,6 +4,8 @@ import pytest
 
 from app.domain.enums import (
     AttachmentDisposition,
+    AttachmentKind,
+    AttachmentScanVerdict,
     ConnectorAccountStatus,
     MessageCategory,
     PriorityLevel,
@@ -94,6 +96,24 @@ def test_attachment_disposition_values() -> None:
     assert "itemAttachment" not in {member.value for member in AttachmentDisposition}
 
 
+def test_attachment_kind_and_scan_verdict_values() -> None:
+    assert list(AttachmentKind) == [
+        AttachmentKind.PDF,
+        AttachmentKind.DOCX,
+        AttachmentKind.JPEG,
+        AttachmentKind.PNG,
+        AttachmentKind.TXT,
+    ]
+    assert list(AttachmentScanVerdict) == [
+        AttachmentScanVerdict.CLEAN,
+        AttachmentScanVerdict.MALICIOUS,
+        AttachmentScanVerdict.UNKNOWN,
+        AttachmentScanVerdict.ERROR,
+    ]
+    assert "zip" not in {member.value for member in AttachmentKind}
+    assert "docm" not in {member.value for member in AttachmentKind}
+
+
 def test_priority_level_values() -> None:
     """PriorityLevel should expose the supported business priorities."""
     assert list(PriorityLevel) == [
@@ -122,6 +142,8 @@ def test_message_category_values() -> None:
         (WorkflowActionType, "calendar_event"),
         (WorkflowActionStatus, "execution_unknown"),
         (AttachmentDisposition, "fileAttachment"),
+        (AttachmentKind, "zip"),
+        (AttachmentScanVerdict, "timeout"),
     ],
 )
 def test_invalid_enum_values_raise(enum_cls: type, invalid_value: str) -> None:

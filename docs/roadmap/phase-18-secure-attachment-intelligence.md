@@ -14,18 +14,18 @@ Phase 17D (Sally external verification) is **not** a technical dependency. This 
 
 ## Status
 
-Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slice **18A** is implemented. Later slices are not started. Phase 18 is **not** complete.
+Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slices **18A** and **18B** are implemented. Later slices are not started. Phase 18 is **not** complete.
 
 | Item | Status |
 |---|---|
 | Phase 18 assessment | Completed — accepted |
 | **18A** Domain ports + metadata-only connectors | Completed |
-| **18B** Attachment policy, explicit retrieval & scanner boundary | Not started |
+| **18B** Attachment policy, explicit retrieval & scanner boundary | Completed |
 | **18C** Parsers + AI request shape | Not started |
 | **18D** Application API + persistence | Not started |
 | **18E** Frontend attachment UX | Not started |
 | **18F** Hardening, telemetry, docs, offline regression | Not started |
-| Phase 18 implementation | In progress (18A only) |
+| Phase 18 implementation | In progress (18A and 18B) |
 | Phase 17D Sally verification | Deferred / not a Phase 18 dependency |
 | Live mailbox or attachment validation | Not performed |
 | Cloud resume / Foundry / Bedrock invocation | Not performed |
@@ -53,10 +53,63 @@ Distinguish two Gmail surfaces:
 - `list_attachments` never calls `users.messages.attachments.get`.
 - `fetch_message` / `list_messages` keep `format=full` **without** a `fields` mask. Gmail cannot guarantee text-part `body.data` while excluding attachment-part `body.data` in the same resource. ECI does not invent a workaround. Attachment-classified `body.data` is not decoded as email body, not returned as retrievable `AttachmentMetadata` unless `attachmentId` is present, not persisted, not sent to AI, and not treated as authorization to analyze.
 - Graph metadata uses `$select` that omits `contentBytes`, does not `$expand=attachments`, and does not request `/$value`.
-- Gmail and Graph `fetch_attachment_content` are 18A stubs that raise without HTTP.
+- 18A left Gmail and Graph `fetch_attachment_content` as no-network stubs. 18B implements those methods.
 - The fake connector can return in-memory bytes for later explicit-retrieval tests.
 
 Parsers, malware scanning, AI attachment analysis, persistence, and frontend attachment UI remain later Phase 18 execution slices.
+
+### 18B implementation close-out
+
+Explicit single-attachment retrieval, fail-closed file policy, and a provider-neutral scanner port are now implemented. Ordinary list/fetch/analyze paths still do not retrieve attachment content.
+
+#### Explicit retrieval boundary
+
+- `fetch_attachment_content(provider_message_id, provider_attachment_id)` retrieves exactly one attachment.
+- Gmail uses `users.messages.attachments.get` only on this path, after a metadata revalidation that still omits `body.data`.
+- Graph uses one metadata GET (no `contentBytes`) then one JSON GET that selects `contentBytes` for that same id. `$value` is not used so `@odata.type` and returned id can be fail-closed.
+- No background prefetch, batch download, download-all, or retrieval from list/open/Analyze Email.
+
+#### File policy
+
+Allowlist: PDF, DOCX, JPEG/JPG, PNG, TXT. Extension, declared MIME, and binary signature must agree.
+
+Fail closed: ZIP/RAR/7z/TAR and other archives, executables, scripts, `.docm` and other macro-enabled Office, OLE Compound File, encrypted PDF/Office markers detectable at this layer, Graph item/reference/unknown subclasses, arbitrary binaries, zero-length, polyglot/HTML-after-PDF, and extension/MIME/signature mismatch.
+
+ZIP local-file header alone is not accepted as DOCX. DOCX requires `[Content_Types].xml` and `word/document.xml`, rejects `word/vbaProject.bin`, and applies bounded ZIP entry/size checks without `extractall`.
+
+#### Size policy
+
+- Maximum attachment content: **5 MiB** reported and actual.
+- Reported size `> 5 MiB` is rejected before the content GET.
+- Actual decoded size `> 5 MiB` is rejected.
+- Actual size larger than reported size is rejected as a security-relevant divergence.
+- `AttachmentContentBudget` is an in-memory **10 MiB** processed-content budget for one message/session. It is not persisted. 18D can hold one instance per request.
+
+#### Scanner port and FakeScanner
+
+- `AttachmentScanner.scan(AttachmentContent) -> AttachmentScanResult`
+- Verdicts: `CLEAN`, `MALICIOUS`, `UNKNOWN`, `ERROR`
+- `ERROR` is operational failure. `UNKNOWN` is a completed inconclusive scan. Both fail closed.
+- `FakeAttachmentScanner` is deterministic for tests/offline development. It is **not** malware protection.
+- A real malware scanner is still required before Phase 18 production/cloud completion. ClamAV is not installed and is not in the API image.
+
+#### Ownership / authorization
+
+Connector methods bind `provider_message_id` + `provider_attachment_id` on the already-selected mailbox token. They cannot prove ECI user ownership.
+
+18D API/application-service wiring must:
+
+1. Authenticate the principal
+2. Resolve the owned connector account
+3. Require `ACTIVE` + `mail.read`
+4. Construct the connector for that account only
+5. Require the attachment id to appear in `list_attachments` for that message (already enforced by `AttachmentInspectionService`)
+
+Filename, display email, MIME type, and provider URLs are not authorization keys.
+
+#### Still future slices
+
+Parsers, OCR, AIProvider request shape, attachment analysis REST API, persistence, and frontend UX remain 18C–18E.
 
 ---
 

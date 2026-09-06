@@ -10,6 +10,7 @@ from app.domain.enums import PriorityLevel, SourceType, WorkflowActionType
 from app.domain.interfaces import (
     AIProvider,
     AnalysisRepository,
+    AttachmentScanner,
     CommunicationActionExecution,
     CommunicationActionExecutor,
     CommunicationActionExecutorFactory,
@@ -100,6 +101,13 @@ def test_repository_interfaces_are_abstract() -> None:
         CommunicationCredentialStore()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         PersistenceUnitOfWork()  # type: ignore[abstract]
+
+
+def test_attachment_scanner_interface_is_abstract() -> None:
+    """Scanner ports must not be instantiable without a scan implementation."""
+    assert issubclass(AttachmentScanner, ABC)
+    with pytest.raises(TypeError):
+        AttachmentScanner()  # type: ignore[abstract]
 
 
 def test_communication_connector_interface_is_abstract() -> None:
@@ -237,10 +245,12 @@ def test_communication_action_execution_is_immutable_and_validated() -> None:
 
 def test_domain_package_has_no_fastapi_dependency() -> None:
     """Domain modules must remain independent of FastAPI."""
+    import app.domain.attachment_policy as attachment_policy
     import app.domain.enums as enums
     import app.domain.exceptions as domain_exceptions
     import app.domain.interfaces.ai_provider as ai_provider
     import app.domain.interfaces.analysis_repository as analysis_repository
+    import app.domain.interfaces.attachment_scanner as attachment_scanner
     import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
     import app.domain.interfaces.communication_connector as communication_connector
@@ -259,8 +269,10 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
 
     for module in (
         enums,
+        attachment_policy,
         domain_exceptions,
         ai_provider,
+        attachment_scanner,
         analysis_repository,
         communication_action_executor,
         executor_factory_port,

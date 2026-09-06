@@ -8,6 +8,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentMetadataError,
     ConnectorAttachmentNotFoundError,
     ConnectorAuthenticationError,
@@ -18,6 +19,7 @@ from app.core.exceptions import (
     ConnectorRateLimitError,
     ConnectorUnavailableError,
 )
+from app.domain.attachment_policy import MAX_ATTACHMENT_CONTENT_BYTES
 from app.domain.interfaces import (
     AttachmentMetadataPage,
     CommunicationConnector,
@@ -28,6 +30,7 @@ from app.domain.models import AttachmentContent, AttachmentMetadata, Communicati
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.microsoft_graph.normalization import (
     normalize_graph_attachment,
+    normalize_graph_attachment_content,
     normalize_graph_message,
     parse_attachment_page,
     parse_list_page,
@@ -50,8 +53,10 @@ _PREFER_TEXT_BODY = 'outlook.body-content-type="text"'
 _OPERATION_LIST = "list"
 _OPERATION_FETCH = "fetch"
 _OPERATION_LIST_ATTACHMENTS = "list_attachments"
+_OPERATION_FETCH_ATTACHMENT = "fetch_attachment"
 _MAX_LISTED_ATTACHMENTS = 50
-_ATTACHMENT_CONTENT_UNAVAILABLE = "Attachment content is not available."
+_ATTACHMENT_ITEM_SELECT = "id,name,contentType,size,isInline,contentId,@odata.type"
+_ATTACHMENT_CONTENT_SELECT = f"{_ATTACHMENT_ITEM_SELECT},contentBytes"
 
 
 class MicrosoftGraphCommunicationConnector(CommunicationConnector):
@@ -140,10 +145,41 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
         provider_message_id: str,
         provider_attachment_id: str,
     ) -> AttachmentContent:
-        """Phase 18A stub: do not retrieve Graph attachment bytes."""
-        _validated_message_id(provider_message_id)
-        _validated_attachment_id(provider_attachment_id)
-        raise ConnectorError(_ATTACHMENT_CONTENT_UNAVAILABLE)
+        """Retrieve exactly one Graph file attachment, decoding ``contentBytes``.
+
+        Uses the JSON attachment resource (not ``$value``) so ``@odata.type``
+        and the returned id can be fail-closed before bytes are accepted.
+        Metadata listing still omits ``contentBytes``.
+        """
+        message_id = _validated_message_id(provider_message_id)
+        attachment_id = _validated_attachment_id(provider_attachment_id)
+        metadata_payload = self._get_json(
+            _attachment_item_url(message_id, attachment_id),
+            params={"$select": _ATTACHMENT_ITEM_SELECT},
+            operation=_OPERATION_FETCH_ATTACHMENT,
+        )
+        metadata = normalize_graph_attachment(metadata_payload)
+        if metadata is None:
+            raise ConnectorAttachmentNotFoundError()
+        if metadata.provider_attachment_id != attachment_id:
+            raise ConnectorAttachmentContentError()
+        if metadata.reported_size > MAX_ATTACHMENT_CONTENT_BYTES:
+            raise ConnectorAttachmentContentError()
+        payload = self._get_json(
+            _attachment_item_url(message_id, attachment_id),
+            params={"$select": _ATTACHMENT_CONTENT_SELECT},
+            operation=_OPERATION_FETCH_ATTACHMENT,
+        )
+        content = normalize_graph_attachment_content(
+            payload,
+            requested_attachment_id=attachment_id,
+            source_message_id=message_id,
+        )
+        if len(content.content) > MAX_ATTACHMENT_CONTENT_BYTES:
+            raise ConnectorAttachmentContentError()
+        if len(content.content) > metadata.reported_size:
+            raise ConnectorAttachmentContentError()
+        return content
 
     def _get_json(
         self,
@@ -206,6 +242,10 @@ def _attachments_url(message_id: str) -> str:
     return f"{_message_url(message_id)}/attachments"
 
 
+def _attachment_item_url(message_id: str, attachment_id: str) -> str:
+    return f"{_attachments_url(message_id)}/{quote(attachment_id, safe='')}"
+
+
 def _raise_for_status(
     response: httpx.Response,
     *,
@@ -220,6 +260,8 @@ def _raise_for_status(
     if status == 403:
         raise ConnectorPermissionError() from None
     if status == 404:
+        if operation == _OPERATION_FETCH_ATTACHMENT:
+            raise ConnectorAttachmentNotFoundError() from None
         if operation in {_OPERATION_FETCH, _OPERATION_LIST_ATTACHMENTS}:
             raise ConnectorMessageNotFoundError() from None
         raise ConnectorUnavailableError() from None

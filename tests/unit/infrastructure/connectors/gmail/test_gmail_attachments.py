@@ -3,9 +3,9 @@
 import pytest
 
 from app.core.exceptions import (
+    ConnectorAttachmentContentError,
     ConnectorAttachmentMetadataError,
     ConnectorAttachmentNotFoundError,
-    ConnectorError,
     ConnectorMessageNotFoundError,
 )
 from app.domain.enums import AttachmentDisposition
@@ -19,6 +19,12 @@ from tests.unit.infrastructure.connectors.gmail.conftest import (
     header,
     text_part,
 )
+
+
+def _b64url_bytes(payload: bytes) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
 
 def _mixed_payload(*parts: object) -> dict:
@@ -346,13 +352,112 @@ def test_blank_attachment_id_does_not_call_content_endpoint(gmail_connector: tup
     _assert_no_explicit_attachment_content_request(stub)
 
 
-def test_fetch_attachment_content_is_unavailable_without_http(gmail_connector: tuple) -> None:
+def test_fetch_attachment_content_uses_one_attachment_endpoint(
+    gmail_connector: tuple,
+) -> None:
     connector, stub, _client = gmail_connector
-    stub.messages["msg-1"] = gmail_resource("msg-1")
+    pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(
+                attachment_id="att-pdf-1",
+                filename="report.pdf",
+                mime_type="application/pdf",
+                size=len(pdf),
+            ),
+            attachment_part(attachment_id="att-sibling", filename="other.pdf"),
+        ),
+    )
+    stub.attachment_payloads[("msg-1", "att-pdf-1")] = {
+        "size": len(pdf),
+        "data": _b64url_bytes(pdf),
+        "attachmentId": "att-pdf-1",
+    }
 
-    with pytest.raises(ConnectorError) as exc_info:
+    content = connector.fetch_attachment_content("msg-1", "att-pdf-1")
+
+    assert content.content == pdf
+    assert content.source_message_id == "msg-1"
+    assert content.source_attachment_id == "att-pdf-1"
+    assert content.metadata.filename == "report.pdf"
+    assert [request.url.path for request in stub.attachment_content_requests] == [
+        f"{GMAIL_API_PREFIX}/msg-1/attachments/att-pdf-1"
+    ]
+    assert stub.requests[0].url.path == f"{GMAIL_API_PREFIX}/msg-1"
+    assert stub.requests[0].url.params.get("fields") == attachment_metadata_fields()
+    assert "data" not in (stub.requests[0].url.params.get("fields") or "")
+
+
+def test_fetch_attachment_content_rejects_malformed_base64(gmail_connector: tuple) -> None:
+    connector, stub, _client = gmail_connector
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(attachment_id="att-1", size=4),
+        ),
+    )
+    stub.attachment_payloads[("msg-1", "att-1")] = {"size": 4, "data": "not-base64***"}
+
+    with pytest.raises(ConnectorAttachmentContentError) as exc_info:
         connector.fetch_attachment_content("msg-1", "att-1")
 
-    assert exc_info.value.message == "Attachment content is not available."
-    assert stub.requests == []
+    assert exc_info.value.message == "Connector attachment content is invalid."
+    assert "not-base64" not in exc_info.value.message
+
+
+def test_fetch_attachment_content_rejects_oversized_metadata_without_content_get(
+    gmail_connector: tuple,
+) -> None:
+    connector, stub, _client = gmail_connector
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(attachment_id="att-huge", size=5 * 1024 * 1024 + 1),
+        ),
+    )
+
+    with pytest.raises(ConnectorAttachmentContentError):
+        connector.fetch_attachment_content("msg-1", "att-huge")
+
+    _assert_no_explicit_attachment_content_request(stub)
+
+
+def test_fetch_attachment_content_rejects_actual_oversize(gmail_connector: tuple) -> None:
+    connector, stub, _client = gmail_connector
+    huge = b"%PDF-" + b"A" * (5 * 1024 * 1024)
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(attachment_id="att-1", size=8),
+        ),
+    )
+    stub.attachment_payloads[("msg-1", "att-1")] = {
+        "size": len(huge),
+        "data": _b64url_bytes(huge),
+    }
+
+    with pytest.raises(ConnectorAttachmentContentError):
+        connector.fetch_attachment_content("msg-1", "att-1")
+
+
+def test_fetch_unknown_attachment_does_not_call_content_endpoint(
+    gmail_connector: tuple,
+) -> None:
+    connector, stub, _client = gmail_connector
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(attachment_id="att-keep"),
+        ),
+    )
+
+    with pytest.raises(ConnectorAttachmentNotFoundError):
+        connector.fetch_attachment_content("msg-1", "att-missing")
+
     _assert_no_explicit_attachment_content_request(stub)

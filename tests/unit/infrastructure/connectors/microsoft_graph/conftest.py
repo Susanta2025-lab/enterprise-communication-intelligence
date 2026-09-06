@@ -153,6 +153,10 @@ class GraphHttpStub:
         self.attachment_list_status: dict[str, int] = {}
         self.attachment_list_handler: Any = None
         self.attachment_content_requests: list[httpx.Request] = []
+        self.attachment_items: dict[tuple[str, str], dict[str, Any]] = {}
+        self.attachment_item_status: dict[tuple[str, str], int] = {}
+        self.attachment_item_json: dict[tuple[str, str], Any] = {}
+        self.attachment_item_text: dict[tuple[str, str], str] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -216,11 +220,7 @@ class GraphHttpStub:
         message_id = decoded[:split_at] if split_at >= 0 else decoded
         after = decoded[split_at + len(marker) :] if split_at >= 0 else ""
         if after not in {"", "/"}:
-            self.attachment_content_requests.append(request)
-            return httpx.Response(
-                599,
-                json={"error": {"code": "Forbidden", "message": "attachment content"}},
-            )
+            return self._attachment_item_response(request, message_id, after)
         if self.attachment_list_handler is not None:
             return self.attachment_list_handler(request, message_id)
         status = self.attachment_list_status.get(message_id, 200)
@@ -235,6 +235,56 @@ class GraphHttpStub:
             return httpx.Response(status, json=self._error_body(), headers=headers)
         body: dict[str, Any] = {"value": list(self.attachments.get(message_id, []))}
         return httpx.Response(200, json=body)
+
+    def _attachment_item_response(
+        self,
+        request: httpx.Request,
+        message_id: str,
+        after: str,
+    ) -> httpx.Response:
+        item_path = after.strip("/")
+        if item_path.endswith("/$value") or "$value" in str(request.url):
+            self.attachment_content_requests.append(request)
+            return httpx.Response(
+                599,
+                json={"error": {"code": "Forbidden", "message": "attachment $value"}},
+            )
+        attachment_id = item_path.split("/", 1)[0]
+        attachment_id = unquote(attachment_id)
+        select_fields = {
+            part.strip() for part in request.url.params.get("$select", "").split(",") if part
+        }
+        if "contentBytes" in select_fields:
+            self.attachment_content_requests.append(request)
+        key = (message_id, attachment_id)
+        status = self.attachment_item_status.get(key, 200)
+        headers = self._headers_for_status(status)
+        if key in self.attachment_item_text:
+            return httpx.Response(status, text=self.attachment_item_text[key], headers=headers)
+        if key in self.attachment_item_json:
+            return httpx.Response(status, json=self.attachment_item_json[key], headers=headers)
+        if status != 200:
+            return httpx.Response(status, json=self._error_body(), headers=headers)
+        resource = self.attachment_items.get(key)
+        if resource is None:
+            resource = next(
+                (
+                    item
+                    for item in self.attachments.get(message_id, [])
+                    if item.get("id") == attachment_id
+                ),
+                None,
+            )
+        if resource is None:
+            return httpx.Response(
+                404,
+                json={"error": {"code": "ErrorItemNotFound", "message": "not found"}},
+                headers=headers,
+            )
+        payload = dict(resource)
+        if "contentBytes" not in select_fields:
+            payload.pop("contentBytes", None)
+        return httpx.Response(200, json=payload, headers=headers)
 
 
 @pytest.fixture

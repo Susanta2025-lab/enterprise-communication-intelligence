@@ -164,6 +164,9 @@ class GmailHttpStub:
         self.error_json: dict[str, Any] | None = None
         self.transport_error: BaseException | None = None
         self.attachment_content_requests: list[httpx.Request] = []
+        self.attachment_payloads: dict[tuple[str, str], dict[str, Any]] = {}
+        self.attachment_status: dict[tuple[str, str], int] = {}
+        self.attachment_text: dict[tuple[str, str], str] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -171,11 +174,7 @@ class GmailHttpStub:
             raise self.transport_error
         path = request.url.path
         if "/attachments" in path.lower():
-            self.attachment_content_requests.append(request)
-            return httpx.Response(
-                599,
-                json={"error": {"message": "attachment content must not be requested"}},
-            )
+            return self._attachment_content_response(request, path)
         if path.rstrip("/") == GMAIL_API_PREFIX:
             return self._list_response()
         prefix = GMAIL_API_PREFIX + "/"
@@ -211,6 +210,27 @@ class GmailHttpStub:
         if resource is None:
             return httpx.Response(404, json={"error": {"message": "not found"}})
         return httpx.Response(200, json=resource)
+
+    def _attachment_content_response(self, request: httpx.Request, path: str) -> httpx.Response:
+        self.attachment_content_requests.append(request)
+        prefix = GMAIL_API_PREFIX + "/"
+        remainder = path[len(prefix) :] if path.startswith(prefix) else path
+        marker = "/attachments/"
+        split_at = remainder.lower().find(marker)
+        if split_at < 0:
+            return httpx.Response(404, json={"error": {"message": "not found"}})
+        message_id = unquote(remainder[:split_at])
+        attachment_id = unquote(remainder[split_at + len(marker) :])
+        key = (message_id, attachment_id)
+        status = self.attachment_status.get(key, 200)
+        if key in self.attachment_text:
+            return httpx.Response(status, text=self.attachment_text[key])
+        if status != 200:
+            return httpx.Response(status, json=self.error_json or {"error": {}})
+        payload = self.attachment_payloads.get(key)
+        if payload is None:
+            return httpx.Response(404, json={"error": {"message": "not found"}})
+        return httpx.Response(200, json=payload)
 
 
 @pytest.fixture
