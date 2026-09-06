@@ -37,7 +37,7 @@ Phase 17A is **Completed / PASS**. Phase 17B-A is **Completed / PASS**. Phase 17
 - **17B-E is Completed / PASS:** External ID development tenant, email OTP user flow, SPA/API registrations, five delegated scopes, and local ignored environment configuration. No Phase 17C product validation.
 - **17C is Completed / PASS:** local External ID customer signup/sign-in, isolated internal user, one Outlook mailbox connect, bounded list, one Analyze, one Propose, one Approve. Send was not executed.
 - **17C-G is Completed / PASS:** Gmail OAuth ID-token verification failed in 17C with `InvalidValue` after successful Google consent. Root cause was `google-auth` `verify_oauth2_token` default `clock_skew_in_seconds=0` against a drifting local/WSL clock, not Phase 17 identity architecture. A 60-second library leeway plus allowlisted `verify_error_reason` restored Gmail connect for the same External ID user. Send was not executed.
-- **17D:** not started. Sally external verification starts only after 17C PASS.
+- **17D:** not started. External business-user verification starts only after 17C PASS.
 
 Phase 16 remains **Completed**.
 
@@ -184,13 +184,13 @@ Safe validation facts:
 
 The sign-in experience now includes a short development/test privacy notice. External ID OTP placeholder display names such as `unknown` are ignored so the existing username fallback can be used.
 
-Do not start Sally testing from this slice.
+Do not start external-user testing from this slice.
 
 ### 17C privacy boundary
 
 The required short, plain-language test privacy/data-use notice is present on the ECI sign-in page.
 
-This is a product/test prerequisite, not a full legal or compliance review. Do not write Sally-specific material in this phase.
+This is a product/test prerequisite, not a full legal or compliance review. Do not write external-reviewer-specific material in this phase.
 
 ## 17C-G — Gmail OAuth ID-Token Regression
 
@@ -206,9 +206,9 @@ Fix: pass the documented 60-second `clock_skew_in_seconds` leeway and log an all
 
 Live retry on the same External ID session: Gmail callback succeeded; connector `2b61f24e-…` is `ACTIVE` with presentation-only display identity; durable Google `sub` is stored and not exposed publicly; connector belongs to CIAM user `f05c1ada-…`; workforce Gmail/Outlook connectors remained invisible (`result_count=2`); bounded Gmail first page (`maxResults=10`) returned 200. Outlook connector remained `ACTIVE`. Analyze / Propose / Approve were not repeated. Send was not executed.
 
-Do not start Sally testing from this slice.
+Do not start external-user testing from this slice.
 
-## 17D — Sally External Verification
+## 17D — External Business-User Verification
 
 Not started.
 
@@ -256,7 +256,7 @@ Existing workforce-mapped ECI users may remain in PostgreSQL and become unreacha
 - retry / outbox / `EXECUTION_UNKNOWN`
 - full 2×2×2 cloud / mailbox / AI certification
 - HA / DR / private networking
-- Sally testing before 17C passes
+- External-user testing before 17C passes
 
 ## Current Microsoft product assumptions
 

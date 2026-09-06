@@ -8,7 +8,7 @@ After this document is accepted, implementation may be divided into focused **ex
 
 This document does not implement Phase 18. It does not modify application source, create migrations, change cloud resources, resume Azure/AWS runtimes, invoke Foundry or Bedrock, connect a mailbox, download attachment bytes, create IAM/RBAC, change OAuth scopes, commit, or push.
 
-Phase 17D (Sally external verification) is **not** a technical dependency. This assessment does not involve Sally, create Sally-specific configuration, or access any external-user mailbox.
+Phase 17D (External Business-User Verification) is **not** a technical dependency. This assessment does not involve any external business reviewer, create reviewer-specific configuration, or access any external-user mailbox.
 
 ---
 
@@ -26,7 +26,7 @@ Phase 18 overall is **Completed** for the agreed offline/local scope. This asses
 | **18E** Frontend attachment UX | Completed |
 | **18F** Hardening, real ClamAV client, telemetry, docs, offline regression | Completed |
 | Phase 18 implementation | Completed (offline/local) |
-| Phase 17D Sally verification | Deferred / not a Phase 18 dependency |
+| Phase 17D External Business-User Verification | Deferred / not a Phase 18 dependency |
 | Live mailbox or attachment validation | Not performed |
 | Cloud resume / Foundry / Bedrock invocation | Not performed |
 | Live EICAR vs ClamAV malicious fixture | Not performed — authorization required |
@@ -1245,7 +1245,7 @@ Defined in section 26. **Not executed now.**
 
 ## 26. Eventual live-validation plan
 
-Owner-controlled test mailboxes and files only. No Sally. No external-user mailbox. No live run in this assessment.
+Owner-controlled test mailboxes and files only. No external business reviewer. No external-user mailbox. No live run in this assessment.
 
 Minimum later sequence (same mailbox already used for Phase 14/15/16/17C proofs):
 
@@ -1334,7 +1334,7 @@ No technical blocker prevents starting 18A after the architect accepts the locks
 11. **No workflow/send from attachment analysis.** No attachment draft-to-send.
 12. **Synchronous** bounded analyze; no workers/queues in Phase 18.
 13. **Branding:** text-first; no official Gmail/Outlook logos in Phase 18 unless separately authorized.
-14. **17D / Sally is out of scope.**
+14. **Phase 17D external business-user verification is out of scope.**
 
 **Still an owner action for live proofs (not required to close offline Phase 18):**
 
@@ -1372,7 +1372,7 @@ These are execution slices, not assessment phases.
 
 ### User decision required before the first implementation slice
 
-Yes: accept the section 29 locks (or record an explicit alternative). No mailbox access, cloud resume, OAuth change, or Sally involvement is required for 18A.
+Yes: accept the section 29 locks (or record an explicit alternative). No mailbox access, cloud resume, OAuth change, or external business-reviewer involvement is required for 18A.
 
 ### Exact files likely to change during implementation
 

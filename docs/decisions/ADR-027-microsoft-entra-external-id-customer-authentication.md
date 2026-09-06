@@ -316,7 +316,7 @@ Phase 17 does not include:
 - retry / outbox / `EXECUTION_UNKNOWN`
 - full 2×2×2 cloud / mailbox / AI certification
 - HA / DR / private networking
-- Sally testing before 17C passes
+- External-user testing before 17C passes
 
 ## Migration / cutover implications
 
