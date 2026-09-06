@@ -95,6 +95,11 @@ class ConnectedMailboxAttachmentAnalysisService:
     ) -> PersistedAttachmentAnalysisOutcome:
         """Retrieve, scan, parse, analyze, and persist exactly one attachment."""
         started_at = time.perf_counter()
+        logger.info(
+            "attachment_analysis_requested",
+            operation="analyze_attachment",
+            connector_id=str(connector_account_id),
+        )
         account = self._load_usable_owned_account(principal, connector_account_id, started_at)
         try:
             connector = self._connector_factory.create_for_account(account)
@@ -164,11 +169,12 @@ class ConnectedMailboxAttachmentAnalysisService:
             raise ServiceUnavailableError(_PERSISTENCE_UNAVAILABLE) from None
 
         logger.info(
-            "connected_mailbox_attachment_analysis_completed",
+            "attachment_analysis_persisted",
             operation="analyze_attachment",
             provider=account.provider,
             connector_id=str(account.id),
             attachment_analysis_id=str(saved.id),
+            kind=result.kind.value,
             duration_ms=elapsed_ms(started_at),
         )
         return PersistedAttachmentAnalysisOutcome(result=result, record=saved)

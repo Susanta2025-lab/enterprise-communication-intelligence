@@ -104,6 +104,8 @@ describe("presentProductError", () => {
       ["unsupported", 422, "This file type is not supported for analysis."],
       ["too_large", 422, "This file is too large to analyze."],
       ["invalid_content", 422, "Document extraction failed for this attachment."],
+      ["parse_failed", 422, "This document could not be read."],
+      ["security_blocked", 422, "A security check blocked processing of this attachment."],
       ["processing_rejected", 422, "A security check blocked processing of this attachment."],
       ["scanner_unavailable", 503, "The attachment security scanner is unavailable."],
       ["image_unavailable", 409, "Image analysis is not available with the current AI provider."],

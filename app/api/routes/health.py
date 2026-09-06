@@ -31,6 +31,7 @@ def get_health() -> HealthResponse:
         service=settings.app_name,
         version=settings.app_version,
         environment=settings.app_env,
+        attachment_scanner=settings.attachment_scanner_status,
     )
 
 

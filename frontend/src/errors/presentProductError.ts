@@ -289,7 +289,12 @@ function presentAttachmentAnalyzeError(
       message: "Document extraction failed for this attachment.",
     });
   }
-  if (detailClass === "processing_rejected") {
+  if (detailClass === "parse_failed") {
+    return presentation({
+      message: "This document could not be read.",
+    });
+  }
+  if (detailClass === "security_blocked" || detailClass === "processing_rejected") {
     return presentation({
       message: "A security check blocked processing of this attachment.",
     });

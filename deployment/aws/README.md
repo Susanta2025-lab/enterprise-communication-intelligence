@@ -825,6 +825,21 @@ Confirm running task count is 0. The public task IP will no longer exist. Leave 
 
 ---
 
+## Attachment scanner (Phase 18F — design only)
+
+Do not install ClamAV in the ECI API image. When attachment analysis is enabled in production, prefer a ClamAV sidecar in the same ECS task (or an internal service discovery name) and set:
+
+```text
+ATTACHMENT_SCANNER_BACKEND=clamav
+ATTACHMENT_SCANNER_HOST=localhost
+ATTACHMENT_SCANNER_PORT=3310
+ATTACHMENT_SCANNER_TIMEOUT_SECONDS=10
+```
+
+Security groups must allow API→3310 only on the internal path. Plan ~1–2 GiB for ClamAV. No scanner resources were deployed in Phase 18F.
+
+---
+
 ## Out of scope
 
 Historical Phase 6C scope for this runbook (not a current-architecture claim):

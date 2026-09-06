@@ -44,6 +44,7 @@ from app.core.logging import configure_logging, get_logger
 from app.core.telemetry import error_class
 from app.domain.exceptions import InvalidWorkflowTransitionError
 from app.infrastructure.storage.runtime import dispose_persistence_runtime
+from app.schemas.errors import error_payload
 
 
 @asynccontextmanager
@@ -164,7 +165,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_not_supported", error_class=error_class(exc))
-        return JSONResponse(status_code=422, content={"detail": exc.message})
+        return JSONResponse(status_code=422, content=error_payload(exc))
 
     @application.exception_handler(AttachmentExceedsLimitError)
     async def attachment_exceeds_limit_handler(
@@ -173,7 +174,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_exceeds_limit", error_class=error_class(exc))
-        return JSONResponse(status_code=422, content={"detail": exc.message})
+        return JSONResponse(status_code=422, content=error_payload(exc))
 
     @application.exception_handler(AttachmentContentInvalidError)
     async def attachment_content_invalid_handler(
@@ -182,7 +183,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_content_invalid", error_class=error_class(exc))
-        return JSONResponse(status_code=422, content={"detail": exc.message})
+        return JSONResponse(status_code=422, content=error_payload(exc))
 
     @application.exception_handler(AttachmentScanRejectedError)
     async def attachment_scan_rejected_handler(
@@ -191,7 +192,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_scan_rejected", error_class=error_class(exc))
-        return JSONResponse(status_code=422, content={"detail": exc.message})
+        return JSONResponse(status_code=422, content=error_payload(exc))
 
     @application.exception_handler(AttachmentProcessingError)
     async def attachment_processing_handler(
@@ -200,7 +201,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_processing_failed", error_class=error_class(exc))
-        return JSONResponse(status_code=422, content={"detail": exc.message})
+        return JSONResponse(status_code=422, content=error_payload(exc))
 
     @application.exception_handler(AttachmentScannerUnavailableError)
     async def attachment_scanner_unavailable_handler(
@@ -209,7 +210,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.warning("attachment_scanner_unavailable", error_class=error_class(exc))
-        return JSONResponse(status_code=503, content={"detail": exc.message})
+        return JSONResponse(status_code=503, content=error_payload(exc))
 
     @application.exception_handler(AttachmentImageAnalysisNotAvailableError)
     async def attachment_image_analysis_not_available_handler(
@@ -218,7 +219,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         logger = get_logger(__name__)
         logger.info("attachment_image_analysis_not_available", error_class=error_class(exc))
-        return JSONResponse(status_code=409, content={"detail": exc.message})
+        return JSONResponse(status_code=409, content=error_payload(exc))
 
     @application.exception_handler(MailboxPaginationCursorInvalidError)
     async def mailbox_pagination_cursor_invalid_handler(

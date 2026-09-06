@@ -256,7 +256,8 @@ async function readAttachmentDetailClass(response: Response) {
     if (typeof body !== "object" || body === null || !("detail" in body)) {
       return null;
     }
-    return classifyAttachmentDetail((body as { detail: unknown }).detail);
+    const payload = body as { detail: unknown; code?: unknown };
+    return classifyAttachmentDetail(payload.detail, payload.code);
   } catch {
     return null;
   }

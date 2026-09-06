@@ -137,12 +137,21 @@ def test_connector_account_not_found_has_generic_message() -> None:
     assert AttachmentNotSupportedError().message == "Attachment is not supported."
     assert AttachmentExceedsLimitError().message == "Attachment exceeds limits."
     assert AttachmentContentInvalidError().message == "Attachment content is invalid."
-    assert AttachmentScanRejectedError().message == "Attachment could not be processed."
+    assert AttachmentScanRejectedError().message == (
+        "Attachment was blocked by security policy."
+    )
+    assert AttachmentScanRejectedError.code == "attachment_security_blocked"
     assert AttachmentScannerUnavailableError().message == "Attachment scanner is unavailable."
+    assert AttachmentScannerUnavailableError.code == "attachment_scanner_unavailable"
     assert AttachmentProcessingError().message == "Attachment could not be processed."
+    assert AttachmentProcessingError.code == "attachment_parse_failed"
     assert AttachmentImageAnalysisNotAvailableError().message == (
         "Image analysis is not available."
     )
+    assert AttachmentImageAnalysisNotAvailableError.code == "attachment_image_unavailable"
+    assert AttachmentNotSupportedError.code == "attachment_unsupported"
+    assert AttachmentExceedsLimitError.code == "attachment_exceeds_limit"
+    assert AttachmentContentInvalidError.code == "attachment_content_invalid"
     assert AttachmentParseError().message == "Attachment could not be processed."
     assert AttachmentImageInputUnsupportedError().message == "Image analysis is not available."
     assert AttachmentUnsupportedError().message == "Attachment is not supported."

@@ -32,15 +32,28 @@ export type AttachmentDetailClass =
   | "unsupported"
   | "too_large"
   | "invalid_content"
+  | "security_blocked"
+  | "parse_failed"
   | "processing_rejected"
   | "scanner_unavailable"
   | "image_unavailable";
+
+const KNOWN_ATTACHMENT_CODES: Record<string, AttachmentDetailClass> = {
+  attachment_unsupported: "unsupported",
+  attachment_exceeds_limit: "too_large",
+  attachment_content_invalid: "invalid_content",
+  attachment_security_blocked: "security_blocked",
+  attachment_parse_failed: "parse_failed",
+  attachment_scanner_unavailable: "scanner_unavailable",
+  attachment_image_unavailable: "image_unavailable",
+};
 
 const KNOWN_ATTACHMENT_DETAILS: Record<string, AttachmentDetailClass> = {
   "Attachment is not supported.": "unsupported",
   "Attachment exceeds limits.": "too_large",
   "Attachment content is invalid.": "invalid_content",
-  "Attachment could not be processed.": "processing_rejected",
+  "Attachment was blocked by security policy.": "security_blocked",
+  "Attachment could not be processed.": "parse_failed",
   "Attachment scanner is unavailable.": "scanner_unavailable",
   "Image analysis is not available.": "image_unavailable",
 };
@@ -92,7 +105,13 @@ export function kindForStatus(status: number): ApiErrorKind {
   return "http_error";
 }
 
-export function classifyAttachmentDetail(detail: unknown): AttachmentDetailClass | null {
+export function classifyAttachmentDetail(
+  detail: unknown,
+  code?: unknown,
+): AttachmentDetailClass | null {
+  if (typeof code === "string" && code in KNOWN_ATTACHMENT_CODES) {
+    return KNOWN_ATTACHMENT_CODES[code];
+  }
   if (typeof detail !== "string") {
     return null;
   }

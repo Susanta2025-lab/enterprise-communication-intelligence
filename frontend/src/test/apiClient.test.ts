@@ -639,4 +639,25 @@ describe("attachment API client", () => {
       expect(apiError.message).not.toContain(ATTACHMENT_ID);
     }
   });
+
+  it("prefers attachment error codes over ambiguous detail text", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(422, {
+        detail: "Attachment could not be processed.",
+        code: "attachment_security_blocked",
+      }),
+    );
+    const client = attachmentClient(fetchImpl);
+    try {
+      await client.analyzeMailboxAttachment({
+        connectorAccountId: MAILBOX_ACCOUNT_ID,
+        providerMessageId: PROVIDER_MESSAGE_ID,
+        providerAttachmentId: ATTACHMENT_ID,
+      });
+      throw new Error("expected EciApiError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EciApiError);
+      expect((error as EciApiError).detailClass).toBe("security_blocked");
+    }
+  });
 });

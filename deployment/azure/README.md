@@ -578,6 +578,21 @@ az group delete --name rg-eci-dev
 
 ---
 
+## Attachment scanner (Phase 18F — design only)
+
+Do not install ClamAV in the ECI API image. When attachment analysis is enabled in production, run clamd as an ACA sidecar or separate internal Container App and set:
+
+```text
+ATTACHMENT_SCANNER_BACKEND=clamav
+ATTACHMENT_SCANNER_HOST=<internal hostname or localhost for sidecar>
+ATTACHMENT_SCANNER_PORT=3310
+ATTACHMENT_SCANNER_TIMEOUT_SECONDS=10
+```
+
+Keep clamd off public ingress. Plan ~1–2 GiB memory for ClamAV and allow definition download time on first start. No scanner resources were deployed in Phase 18F.
+
+---
+
 ## Out of scope
 
 - Terraform / Bicep / ARM templates / GitHub Actions

@@ -141,12 +141,16 @@ class MailboxAttachmentNotFoundError(ECIPlatformError):
 class AttachmentNotSupportedError(ECIPlatformError):
     """Raised when attachment type, MIME, extension, or signature policy rejects."""
 
+    code = "attachment_unsupported"
+
     def __init__(self) -> None:
         super().__init__("Attachment is not supported.")
 
 
 class AttachmentExceedsLimitError(ECIPlatformError):
     """Raised when reported or actual attachment size exceeds ECI limits."""
+
+    code = "attachment_exceeds_limit"
 
     def __init__(self) -> None:
         super().__init__("Attachment exceeds limits.")
@@ -155,6 +159,8 @@ class AttachmentExceedsLimitError(ECIPlatformError):
 class AttachmentContentInvalidError(ECIPlatformError):
     """Raised when retrieved attachment bytes are malformed or inconsistent."""
 
+    code = "attachment_content_invalid"
+
     def __init__(self) -> None:
         super().__init__("Attachment content is invalid.")
 
@@ -162,12 +168,16 @@ class AttachmentContentInvalidError(ECIPlatformError):
 class AttachmentScanRejectedError(ECIPlatformError):
     """Raised when a completed scan is not CLEAN."""
 
+    code = "attachment_security_blocked"
+
     def __init__(self) -> None:
-        super().__init__("Attachment could not be processed.")
+        super().__init__("Attachment was blocked by security policy.")
 
 
 class AttachmentScannerUnavailableError(ECIPlatformError):
     """Raised when the scanner cannot complete an operational scan."""
+
+    code = "attachment_scanner_unavailable"
 
     def __init__(self) -> None:
         super().__init__("Attachment scanner is unavailable.")
@@ -176,12 +186,16 @@ class AttachmentScannerUnavailableError(ECIPlatformError):
 class AttachmentProcessingError(ECIPlatformError):
     """Raised when a CLEAN attachment cannot be parsed or prepared for AI."""
 
+    code = "attachment_parse_failed"
+
     def __init__(self) -> None:
         super().__init__("Attachment could not be processed.")
 
 
 class AttachmentImageAnalysisNotAvailableError(ECIPlatformError):
     """Raised when image analysis is disabled or the provider cannot accept images."""
+
+    code = "attachment_image_unavailable"
 
     def __init__(self) -> None:
         super().__init__("Image analysis is not available.")

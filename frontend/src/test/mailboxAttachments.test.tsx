@@ -319,7 +319,12 @@ describe("attachment state and error mapping", () => {
   it.each([
     [422, "Attachment is not supported.", "This file type is not supported for analysis."],
     [422, "Attachment exceeds limits.", "This file is too large to analyze."],
-    [422, "Attachment could not be processed.", "A security check blocked processing of this attachment."],
+    [
+      422,
+      "Attachment was blocked by security policy.",
+      "A security check blocked processing of this attachment.",
+    ],
+    [422, "Attachment could not be processed.", "This document could not be read."],
     [422, "Attachment content is invalid.", "Document extraction failed for this attachment."],
     [503, "Attachment scanner is unavailable.", "The attachment security scanner is unavailable."],
     [409, "Image analysis is not available.", "Image analysis is not available with the current AI provider."],

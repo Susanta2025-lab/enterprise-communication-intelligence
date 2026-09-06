@@ -80,6 +80,14 @@ Allowed bounded metadata may include `request_id`, `message_id`, provider, model
 
 Privacy sentinel tests exist in the Phase 7A suite. This is not a compliance certification.
 
+## Attachment telemetry (Phase 18F)
+
+Attachment analysis emits additional structured events on the same stdout JSON path: metadata listed, analysis requested, retrieval started/completed, policy rejected, scan started/clean/blocked/error, parse completed/failed, AI started/completed/failed, and analysis persisted.
+
+Do not log attachment filenames, raw bytes, base64, extracted text, image bytes, prompts containing attachment content, OAuth tokens, mailbox bodies, complete provider payloads, scanner byte streams, or malware signature names. Prefer opaque ids, provider enum, attachment kind, size buckets, and verdict/result enums.
+
+`GET /health` may include `attachment_scanner` as a capability label (`unavailable` / `test_only` / `configured`) without host, port, or liveness probe details.
+
 ## Azure (Phase 7B)
 
 ```text

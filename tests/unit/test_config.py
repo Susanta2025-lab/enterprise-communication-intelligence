@@ -19,6 +19,9 @@ _SETTINGS_ENV_VARS = (
     "AI_PROVIDER",
     "AI_IMAGE_INPUT_ENABLED",
     "ATTACHMENT_SCANNER_BACKEND",
+    "ATTACHMENT_SCANNER_HOST",
+    "ATTACHMENT_SCANNER_PORT",
+    "ATTACHMENT_SCANNER_TIMEOUT_SECONDS",
     "FOUNDRY_PROJECT_ENDPOINT",
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
@@ -68,6 +71,10 @@ def test_settings_defaults(clear_settings_env: None) -> None:
     assert settings.ai_provider == "mock"
     assert settings.ai_image_input_enabled is False
     assert settings.attachment_scanner_backend == "none"
+    assert settings.attachment_scanner_host is None
+    assert settings.attachment_scanner_port == 3310
+    assert settings.attachment_scanner_timeout_seconds == 10.0
+    assert settings.attachment_scanner_status == "unavailable"
     assert settings.foundry_project_endpoint is None
     assert settings.foundry_model_deployment is None
     assert settings.bedrock_region is None
@@ -185,6 +192,8 @@ def test_attachment_scanner_defaults_fail_closed(clear_settings_env: None) -> No
     """The default scanner backend is none, not FakeScanner."""
     settings = Settings(_env_file=None)
     assert settings.attachment_scanner_backend == "none"
+    assert settings.attachment_scanner_host is None
+    assert settings.attachment_scanner_status == "unavailable"
 
 
 def test_attachment_scanner_fake_is_allowed_outside_production(
@@ -195,6 +204,7 @@ def test_attachment_scanner_fake_is_allowed_outside_production(
     monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "FAKE")
     settings = Settings(_env_file=None)
     assert settings.attachment_scanner_backend == "fake"
+    assert settings.attachment_scanner_status == "test_only"
 
 
 def test_production_rejects_fake_attachment_scanner(
@@ -205,6 +215,50 @@ def test_production_rejects_fake_attachment_scanner(
     _complete_oidc_env(monkeypatch)
     monkeypatch.setenv("DATABASE_URL", _TEST_POSTGRES_URL)
     monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "fake")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_unknown_attachment_scanner_backend_fails_configuration(
+    clear_settings_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "virustotal")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_clamav_scanner_requires_host(
+    clear_settings_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "clamav")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_clamav_scanner_accepts_explicit_host(
+    clear_settings_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "clamav")
+    monkeypatch.setenv("ATTACHMENT_SCANNER_HOST", "clamav")
+    monkeypatch.setenv("ATTACHMENT_SCANNER_PORT", "3310")
+    monkeypatch.setenv("ATTACHMENT_SCANNER_TIMEOUT_SECONDS", "8")
+    settings = Settings(_env_file=None)
+    assert settings.attachment_scanner_backend == "clamav"
+    assert settings.attachment_scanner_host == "clamav"
+    assert settings.attachment_scanner_port == 3310
+    assert settings.attachment_scanner_timeout_seconds == 8.0
+    assert settings.attachment_scanner_status == "configured"
+
+
+def test_clamav_scanner_host_rejects_url(
+    clear_settings_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ATTACHMENT_SCANNER_BACKEND", "clamav")
+    monkeypatch.setenv("ATTACHMENT_SCANNER_HOST", "tcp://clamav:3310")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
 

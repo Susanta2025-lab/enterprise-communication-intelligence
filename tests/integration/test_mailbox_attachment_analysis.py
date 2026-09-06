@@ -370,16 +370,34 @@ def test_default_scanner_is_fail_closed(
             headers=bearer_header(_token(private_key, _READ_ANALYZE)),
         )
     assert response.status_code == 503
-    assert response.json() == {"detail": "Attachment scanner is unavailable."}
+    assert response.json() == {
+        "detail": "Attachment scanner is unavailable.",
+        "code": "attachment_scanner_unavailable",
+    }
     assert unit.attachment_analysis_store == {}
 
 
 @pytest.mark.parametrize(
-    ("suffix", "status", "detail"),
+    ("suffix", "status", "detail", "code"),
     [
-        (MALICIOUS_FIXTURE_LABEL, 422, "Attachment could not be processed."),
-        (UNKNOWN_FIXTURE_LABEL, 422, "Attachment could not be processed."),
-        (FAILURE_FIXTURE_LABEL, 503, "Attachment scanner is unavailable."),
+        (
+            MALICIOUS_FIXTURE_LABEL,
+            422,
+            "Attachment was blocked by security policy.",
+            "attachment_security_blocked",
+        ),
+        (
+            UNKNOWN_FIXTURE_LABEL,
+            422,
+            "Attachment was blocked by security policy.",
+            "attachment_security_blocked",
+        ),
+        (
+            FAILURE_FIXTURE_LABEL,
+            503,
+            "Attachment scanner is unavailable.",
+            "attachment_scanner_unavailable",
+        ),
     ],
 )
 def test_non_clean_scan_does_not_persist(
@@ -388,6 +406,7 @@ def test_non_clean_scan_does_not_persist(
     suffix: bytes,
     status: int,
     detail: str,
+    code: str,
 ) -> None:
     _clear_settings_env(monkeypatch)
     _enable_oidc_env(monkeypatch)
@@ -418,29 +437,52 @@ def test_non_clean_scan_does_not_persist(
             headers=bearer_header(_token(private_key, _READ_ANALYZE)),
         )
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    assert response.json() == {"detail": detail, "code": code}
     assert unit.attachment_analysis_store == {}
 
 
 @pytest.mark.parametrize(
-    ("filename", "media_type", "payload", "status", "detail"),
+    ("filename", "media_type", "payload", "status", "detail", "code"),
     [
-        ("archive.zip", "application/zip", b"PK\x03\x04", 422, "Attachment is not supported."),
+        (
+            "archive.zip",
+            "application/zip",
+            b"PK\x03\x04",
+            422,
+            "Attachment is not supported.",
+            "attachment_unsupported",
+        ),
         (
             "huge.pdf",
             "application/pdf",
             pdf_with_text("x"),
             422,
             "Attachment exceeds limits.",
+            "attachment_exceeds_limit",
         ),
-        ("secret.pdf", "application/pdf", pdf_encrypted(), 422, "Attachment is not supported."),
-        ("empty.pdf", "application/pdf", pdf_blank_pages(1), 422, "Attachment is not supported."),
+        (
+            "secret.pdf",
+            "application/pdf",
+            pdf_encrypted(),
+            422,
+            "Attachment is not supported.",
+            "attachment_unsupported",
+        ),
+        (
+            "empty.pdf",
+            "application/pdf",
+            pdf_blank_pages(1),
+            422,
+            "Attachment is not supported.",
+            "attachment_unsupported",
+        ),
         (
             "notes.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             b"not-a-docx",
             422,
             "Attachment is not supported.",
+            "attachment_unsupported",
         ),
         (
             "bomb.png",
@@ -448,6 +490,7 @@ def test_non_clean_scan_does_not_persist(
             png_with_dimensions(9000, 9000),
             422,
             "Attachment exceeds limits.",
+            "attachment_exceeds_limit",
         ),
     ],
 )
@@ -459,6 +502,7 @@ def test_policy_and_parser_failures_do_not_persist(
     payload: bytes,
     status: int,
     detail: str,
+    code: str,
 ) -> None:
     _clear_settings_env(monkeypatch)
     _enable_oidc_env(monkeypatch)
@@ -492,7 +536,7 @@ def test_policy_and_parser_failures_do_not_persist(
             headers=bearer_header(_token(private_key, _READ_ANALYZE)),
         )
     assert response.status_code == status
-    assert response.json()["detail"] == detail
+    assert response.json() == {"detail": detail, "code": code}
     assert unit.attachment_analysis_store == {}
 
 
@@ -563,7 +607,10 @@ def test_image_requires_capability_flag(
             headers=bearer_header(_token(private_key, _READ_ANALYZE)),
         )
     assert disabled.status_code == 409
-    assert disabled.json() == {"detail": "Image analysis is not available."}
+    assert disabled.json() == {
+        "detail": "Image analysis is not available.",
+        "code": "attachment_image_unavailable",
+    }
     assert unit.attachment_analysis_store == {}
 
     monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")

@@ -18,6 +18,8 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_V1_PREFIX",
     "AI_PROVIDER",
+    "ATTACHMENT_SCANNER_BACKEND",
+    "ATTACHMENT_SCANNER_HOST",
     "FOUNDRY_PROJECT_ENDPOINT",
     "FOUNDRY_MODEL_DEPLOYMENT",
     "BEDROCK_REGION",
@@ -59,6 +61,7 @@ def test_versioned_health_endpoint(client: TestClient) -> None:
         "service": "Enterprise Communication Intelligence Platform",
         "version": "0.1.0",
         "environment": "development",
+        "attachment_scanner": "unavailable",
     }
 
 

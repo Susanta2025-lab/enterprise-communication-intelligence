@@ -100,12 +100,21 @@ class AttachmentInspectionService:
         try:
             evaluate_attachment_metadata(metadata)
         except AttachmentUnsupportedError:
+            _log_policy_rejected(connector.provider, "unsupported", metadata.reported_size)
             raise AttachmentNotSupportedError() from None
         except AttachmentExceedsLimitError:
+            _log_policy_rejected(connector.provider, "exceeds_limit", metadata.reported_size)
             raise ApplicationAttachmentExceedsLimitError() from None
         except AttachmentContentInvalidError:
+            _log_policy_rejected(connector.provider, "invalid_content", metadata.reported_size)
             raise ApplicationAttachmentContentInvalidError() from None
 
+        logger.info(
+            "attachment_retrieval_started",
+            operation="inspect_attachment",
+            provider=connector.provider,
+            reported_size=metadata.reported_size,
+        )
         try:
             content = connector.fetch_attachment_content(message_id, attachment_id)
         except ConnectorMessageNotFoundError:
@@ -122,53 +131,92 @@ class AttachmentInspectionService:
         if content.source_attachment_id != attachment_id:
             raise MailboxAttachmentNotFoundError()
 
+        actual_size = len(content.content)
+        logger.info(
+            "attachment_retrieval_completed",
+            operation="inspect_attachment",
+            provider=connector.provider,
+            reported_size=content.metadata.reported_size,
+            actual_size=actual_size,
+            size_bucket=attachment_size_bucket(actual_size),
+        )
+
         try:
             kind = evaluate_attachment_content(content)
         except AttachmentUnsupportedError:
+            _log_policy_rejected(connector.provider, "unsupported", actual_size)
             raise AttachmentNotSupportedError() from None
         except AttachmentExceedsLimitError:
+            _log_policy_rejected(connector.provider, "exceeds_limit", actual_size)
             raise ApplicationAttachmentExceedsLimitError() from None
         except AttachmentContentInvalidError:
+            _log_policy_rejected(connector.provider, "invalid_content", actual_size)
             raise ApplicationAttachmentContentInvalidError() from None
 
         active_budget = budget if budget is not None else AttachmentContentBudget()
         try:
-            active_budget.consume(len(content.content))
+            active_budget.consume(actual_size)
         except AttachmentExceedsLimitError:
+            _log_policy_rejected(connector.provider, "exceeds_budget", actual_size)
             raise ApplicationAttachmentExceedsLimitError() from None
 
+        logger.info(
+            "attachment_scan_started",
+            operation="inspect_attachment",
+            provider=connector.provider,
+            kind=kind.value,
+            size_bucket=attachment_size_bucket(actual_size),
+        )
         try:
             scan = self._scanner.scan(content)
         except DomainScannerUnavailableError:
+            logger.warning(
+                "attachment_scan_error",
+                operation="inspect_attachment",
+                provider=connector.provider,
+                result="scanner_unavailable",
+                size_bucket=attachment_size_bucket(actual_size),
+                kind=kind.value,
+            )
             raise AttachmentScannerUnavailableError() from None
         except Exception:
             logger.warning(
-                "attachment_scan_failed",
+                "attachment_scan_error",
                 operation="inspect_attachment",
                 provider=connector.provider,
                 result="scanner_error",
-                size_bucket=attachment_size_bucket(len(content.content)),
+                size_bucket=attachment_size_bucket(actual_size),
+                kind=kind.value,
             )
             raise AttachmentScannerUnavailableError() from None
 
         if scan.verdict is AttachmentScanVerdict.ERROR:
-            raise AttachmentScannerUnavailableError()
-        if scan.verdict is not AttachmentScanVerdict.CLEAN:
-            logger.info(
-                "attachment_scan_rejected",
+            logger.warning(
+                "attachment_scan_error",
                 operation="inspect_attachment",
                 provider=connector.provider,
                 result=scan.verdict.value,
-                size_bucket=attachment_size_bucket(len(content.content)),
+                size_bucket=attachment_size_bucket(actual_size),
+                kind=kind.value,
+            )
+            raise AttachmentScannerUnavailableError()
+        if scan.verdict is not AttachmentScanVerdict.CLEAN:
+            logger.info(
+                "attachment_scan_blocked",
+                operation="inspect_attachment",
+                provider=connector.provider,
+                result=scan.verdict.value,
+                size_bucket=attachment_size_bucket(actual_size),
+                kind=kind.value,
             )
             raise AttachmentScanRejectedError()
 
         logger.info(
-            "attachment_inspection_completed",
+            "attachment_scan_clean",
             operation="inspect_attachment",
             provider=connector.provider,
             result="clean",
-            size_bucket=attachment_size_bucket(len(content.content)),
+            size_bucket=attachment_size_bucket(actual_size),
             kind=kind.value,
         )
         return InspectedAttachment(content=content, kind=kind, scan=scan)
@@ -184,6 +232,16 @@ def _attachment_on_message(
     if len(matches) != 1:
         raise MailboxAttachmentNotFoundError()
     return matches[0]
+
+
+def _log_policy_rejected(provider: str, reason: str, size: int | None) -> None:
+    logger.info(
+        "attachment_policy_rejected",
+        operation="inspect_attachment",
+        provider=provider,
+        reason=reason,
+        size_bucket=attachment_size_bucket(size or 0),
+    )
 
 
 def _require_id(value: str, *, missing_message: bool) -> str:

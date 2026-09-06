@@ -12,7 +12,7 @@ AppEnvironment = Literal["development", "staging", "production"]
 AuthMode = Literal["disabled", "oidc"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 CredentialStoreBackend = Literal["memory", "azure_key_vault", "aws_secrets_manager"]
-AttachmentScannerBackend = Literal["none", "fake"]
+AttachmentScannerBackend = Literal["none", "fake", "clamav"]
 
 _PRODUCTION_DATABASE_SCHEME = "postgresql+psycopg"
 _ALLOWED_DATABASE_SCHEMES = frozenset(
@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"
     ai_image_input_enabled: bool = False
     attachment_scanner_backend: AttachmentScannerBackend = "none"
+    attachment_scanner_host: str | None = None
+    attachment_scanner_port: int = Field(default=3310, ge=1, le=65535)
+    attachment_scanner_timeout_seconds: float = Field(default=10.0, ge=0.1, le=60.0)
     foundry_project_endpoint: str | None = None
     foundry_model_deployment: str | None = None
     bedrock_region: str | None = None
@@ -118,6 +121,40 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             stripped = value.strip().lower()
             return stripped or "none"
+        return value
+
+    @field_validator("attachment_scanner_host", mode="before")
+    @classmethod
+    def normalize_attachment_scanner_host(cls, value: object) -> object:
+        """Treat blank scanner hosts as unset. Do not invent a hostname."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("attachment_scanner_host")
+    @classmethod
+    def validate_attachment_scanner_host(cls, value: str | None) -> str | None:
+        """Accept a hostname or service name. Reject URLs and userinfo."""
+        if value is None:
+            return None
+        if (
+            len(value) > 253
+            or "://" in value
+            or "/" in value
+            or "@" in value
+            or " " in value
+            or "\\" in value
+        ):
+            raise ValueError("ATTACHMENT_SCANNER_HOST must be a hostname or service name.")
+        return value
+
+    @field_validator("attachment_scanner_timeout_seconds", mode="before")
+    @classmethod
+    def normalize_attachment_scanner_timeout_seconds(cls, value: object) -> object:
+        """Treat blank scanner timeouts as the default."""
+        if isinstance(value, str) and not value.strip():
+            return 10.0
         return value
 
     @field_validator("foundry_project_endpoint", mode="before")
@@ -466,6 +503,15 @@ class Settings(BaseSettings):
         """Return the parsed CORS origin allowlist."""
         return _parse_cors_allowed_origins(self.cors_allowed_origins)
 
+    @property
+    def attachment_scanner_status(self) -> str:
+        """Return a public scanner-capability label. Never includes host or port."""
+        if self.attachment_scanner_backend == "clamav":
+            return "configured"
+        if self.attachment_scanner_backend == "fake":
+            return "test_only"
+        return "unavailable"
+
     @model_validator(mode="after")
     def validate_frontend_oauth_return_url_for_environment(self) -> Self:
         """Production mailbox-return URLs must be https."""
@@ -642,10 +688,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_attachment_scanner_backend(self) -> Self:
-        """Production must not treat FakeScanner CLEAN as malware clearance."""
+        """Production must not treat FakeScanner CLEAN as malware clearance.
+
+        ``none`` remains a valid fail-closed default. ``clamav`` requires an
+        explicit host so the API never guesses a scanner address.
+        """
         if self.app_env == "production" and self.attachment_scanner_backend == "fake":
             raise ValueError(
                 "ATTACHMENT_SCANNER_BACKEND must not be fake when APP_ENV=production."
+            )
+        if self.attachment_scanner_backend == "clamav" and self.attachment_scanner_host is None:
+            raise ValueError(
+                "ATTACHMENT_SCANNER_HOST must be set when ATTACHMENT_SCANNER_BACKEND=clamav."
             )
         return self
 

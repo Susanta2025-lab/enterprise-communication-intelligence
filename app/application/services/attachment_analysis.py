@@ -76,17 +76,58 @@ class AttachmentAnalysisService:
         if inspected.scan.verdict is not AttachmentScanVerdict.CLEAN:
             raise AttachmentScanRejectedError()
 
+        size_bucket = attachment_size_bucket(len(inspected.content.content))
         try:
             parsed = self._parser.parse(inspected.content, inspected.kind)
         except AttachmentEncryptedError as exc:
+            logger.info(
+                "attachment_parse_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="encrypted",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise AttachmentNotSupportedError() from exc
         except AttachmentNoExtractableTextError as exc:
+            logger.info(
+                "attachment_parse_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="no_extractable_text",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise AttachmentNotSupportedError() from exc
         except AttachmentUnsupportedError as exc:
+            logger.info(
+                "attachment_parse_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="unsupported",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise AttachmentNotSupportedError() from exc
         except AttachmentExceedsLimitError as exc:
+            logger.info(
+                "attachment_parse_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="exceeds_limit",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise ApplicationAttachmentExceedsLimitError() from exc
         except AttachmentParseError as exc:
+            logger.info(
+                "attachment_parse_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="parser_error",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise AttachmentProcessingError() from exc
         except Exception:
             logger.warning(
@@ -94,30 +135,63 @@ class AttachmentAnalysisService:
                 operation="analyze_attachment",
                 provider=connector.provider,
                 result="parser_error",
-                size_bucket=attachment_size_bucket(len(inspected.content.content)),
+                size_bucket=size_bucket,
                 kind=inspected.kind.value,
             )
             raise AttachmentProcessingError() from None
+
+        logger.info(
+            "attachment_parse_completed",
+            operation="analyze_attachment",
+            provider=connector.provider,
+            result="parsed",
+            size_bucket=size_bucket,
+            kind=inspected.kind.value,
+            truncated=parsed.truncated,
+        )
 
         request = _build_untrusted_request(message, parsed)
         if request.attachment_images:
             if not self._image_input_enabled or not self._analysis.supports_image_input():
                 raise AttachmentImageAnalysisNotAvailableError()
 
+        logger.info(
+            "attachment_ai_started",
+            operation="analyze_attachment",
+            provider=connector.provider,
+            size_bucket=size_bucket,
+            kind=inspected.kind.value,
+        )
         try:
             result = self._analysis.analyze(request)
         except AnalysisFailedError:
+            logger.warning(
+                "attachment_ai_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="analysis_failed",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise
         except AttachmentImageInputUnsupportedError as exc:
+            logger.info(
+                "attachment_ai_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="image_unavailable",
+                size_bucket=size_bucket,
+                kind=inspected.kind.value,
+            )
             raise AttachmentImageAnalysisNotAvailableError() from exc
 
         status = _extracted_status(parsed)
         logger.info(
-            "attachment_analysis_completed",
+            "attachment_ai_completed",
             operation="analyze_attachment",
             provider=result.provider,
             result="analyzed",
-            size_bucket=attachment_size_bucket(len(inspected.content.content)),
+            size_bucket=size_bucket,
             kind=inspected.kind.value,
             extracted_status=status.value,
             truncated=parsed.truncated,

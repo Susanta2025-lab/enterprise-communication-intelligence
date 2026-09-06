@@ -14,7 +14,7 @@ Phase 17D (Sally external verification) is **not** a technical dependency. This 
 
 ## Status
 
-Phase 18 overall is **In progress**. This assessment is complete and accepted. Execution slices **18A**, **18B**, **18C**, **18D**, and **18E** are implemented. Phase 18 is **not** complete.
+Phase 18 overall is **Completed** for the agreed offline/local scope. This assessment is complete and accepted. Execution slices **18A**–**18F** are implemented. Live mailbox, live Foundry/Bedrock attachment inference, cloud scanner deployment, and live EICAR-vs-ClamAV fixture validation remain operator-authorized follow-ups and are **not** required to close the offline Phase 18 Definition of Done.
 
 | Item | Status |
 |---|---|
@@ -24,11 +24,12 @@ Phase 18 overall is **In progress**. This assessment is complete and accepted. E
 | **18C** Parsers + AI request shape | Completed |
 | **18D** Application API + persistence | Completed |
 | **18E** Frontend attachment UX | Completed |
-| **18F** Hardening, telemetry, docs, offline regression | Next |
-| Phase 18 implementation | In progress (18A–18E) |
+| **18F** Hardening, real ClamAV client, telemetry, docs, offline regression | Completed |
+| Phase 18 implementation | Completed (offline/local) |
 | Phase 17D Sally verification | Deferred / not a Phase 18 dependency |
 | Live mailbox or attachment validation | Not performed |
 | Cloud resume / Foundry / Bedrock invocation | Not performed |
+| Live EICAR vs ClamAV malicious fixture | Not performed — authorization required |
 
 ### 18A implementation close-out
 
@@ -91,7 +92,7 @@ ZIP local-file header alone is not accepted as DOCX. DOCX requires `[Content_Typ
 - Verdicts: `CLEAN`, `MALICIOUS`, `UNKNOWN`, `ERROR`
 - `ERROR` is operational failure. `UNKNOWN` is a completed inconclusive scan. Both fail closed.
 - `FakeAttachmentScanner` is deterministic for tests/offline development. It is **not** malware protection.
-- A real malware scanner is still required before Phase 18 production/cloud completion. ClamAV is not installed and is not in the API image.
+- 18F delivers `ClamAVAttachmentScanner` (client only). ClamAV binaries remain outside the API image.
 
 #### Ownership / authorization
 
@@ -240,11 +241,11 @@ Each explicit Analyze Attachment request creates a new history row, matching ema
 
 #### Scanner production limitation
 
-`ATTACHMENT_SCANNER_BACKEND` defaults to `none` and wires `UnavailableAttachmentScanner` (always ERROR → 503). `fake` is allowed only when `APP_ENV` is not `production`, and only as an explicit configuration/test injection. Production must not interpret FakeScanner CLEAN as malware clearance. **Phase 18 must not be declared production/cloud complete until a real malware scanner backend has been implemented and validated.** ClamAV is not installed and is not in the API image.
+`ATTACHMENT_SCANNER_BACKEND` defaults to `none` and wires `UnavailableAttachmentScanner` (always ERROR → 503). `fake` is allowed only when `APP_ENV` is not `production`, and only as an explicit configuration/test injection. Production must not interpret FakeScanner CLEAN as malware clearance. **18F** adds `clamav` → `ClamAVAttachmentScanner` talking to an external clamd. ClamAV is not installed in the API image.
 
 #### Remaining work
 
-**18E — Frontend Attachment UX & Product/Connector Branding** is implemented below. Do not commission another Phase 18 readiness assessment for it. A real scanner backend remains required before Phase 18 production/cloud completion.
+**18E — Frontend Attachment UX & Product/Connector Branding** is implemented below. Do not commission another Phase 18 readiness assessment for it. Real scanner backend is delivered in 18F.
 
 ### 18E implementation close-out
 
@@ -300,7 +301,104 @@ Analyze controls are labeled buttons, loading uses `role="status"` / `aria-busy`
 
 #### Remaining work after 18E
 
-**18F — Security Hardening, Real Scanner Integration, Telemetry, Documentation & Final Regression** is the next implementation slice. Do not commission another Phase 18 readiness assessment for it. Phase 18 overall remains incomplete until a real malware scanner backend exists and 18F closes documentation and offline regression.
+**18F — Security Hardening, Real Scanner Integration, Telemetry, Documentation & Final Regression** is implemented below. Do not commission another Phase 18 readiness assessment.
+
+### 18F implementation close-out
+
+Phase 18F closes the production-security gap left by FakeAttachmentScanner: a real provider-neutral ClamAV client adapter talks to a separate clamd service. ClamAV binaries and virus databases stay out of the ECI API image.
+
+#### Real scanner architecture
+
+```text
+ECI API (AttachmentScanner port)
+→ ClamAVAttachmentScanner (stdlib TCP client)
+→ separate clamd service (Compose / sidecar / internal service)
+```
+
+| Backend | Behavior |
+|---|---|
+| `none` (default) | `UnavailableAttachmentScanner` → ERROR → 503 fail closed |
+| `fake` | Deterministic test scanner; rejected when `APP_ENV=production` |
+| `clamav` | Real INSTREAM client; requires `ATTACHMENT_SCANNER_HOST` |
+| unknown | Configuration failure |
+
+Configuration: `ATTACHMENT_SCANNER_BACKEND`, `ATTACHMENT_SCANNER_HOST`, `ATTACHMENT_SCANNER_PORT` (default 3310), `ATTACHMENT_SCANNER_TIMEOUT_SECONDS` (default 10). No new Python package: the client uses the clamd null-terminated protocol over stdlib sockets.
+
+#### Streaming / verdict mapping
+
+- Scan only the already retrieved selected attachment (≤ 5 MiB).
+- INSTREAM frames stream from memory; no durable temp file by default.
+- Bounded connect/read/write timeouts and a 512-byte response cap.
+- Connection closed deterministically after each exchange.
+- `stream: OK` / `OK` → CLEAN; `… FOUND` → MALICIOUS (signature names discarded); protocol/timeout/unavailable → ERROR; inconclusive → UNKNOWN.
+- Only CLEAN continues to parser/AI. Failures never become CLEAN.
+- Public API never returns signature names.
+
+#### Health / capability
+
+`GET /health` remains application-healthy when the scanner is optional. It includes `attachment_scanner` as a capability label only (`unavailable` / `test_only` / `configured`). Host and port are never exposed. Production attachment analysis still fails closed when the scanner is unavailable.
+
+#### Local Compose scanner
+
+Optional profile `scanner` runs `clamav/clamav:1.4` with a named volume for definitions (`clamav-defs`), 2 GiB mem limit, and clamd healthcheck. Example:
+
+```bash
+ATTACHMENT_SCANNER_BACKEND=clamav ATTACHMENT_SCANNER_HOST=clamav \
+  docker compose --profile scanner up --build
+```
+
+First-start definition download can take several minutes. Stop containers after local validation. Do not leave unnecessary scanners running.
+
+#### Malicious-detection validation
+
+Unit/protocol tests simulate clamd `FOUND` without a live malware fixture. Live EICAR/fixture validation against a running daemon requires explicit operator authorization and was **not** performed in 18F.
+
+#### Cloud topology (documentation only — no live deploy)
+
+Minimum viable design is an internal scanner service or sidecar reachable only from the API:
+
+- **Azure Container Apps:** API container + ClamAV sidecar (or separate internal Container App) on private networking; set `ATTACHMENT_SCANNER_BACKEND=clamav` and the internal hostname; allocate ~1–2 GiB for ClamAV; start ClamAV before accepting attachment analysis; definition volume optional; ingress to ClamAV must not be public.
+- **AWS ECS/Fargate:** API task with ClamAV sidecar (preferred) or internal service discovery name; same env vars; security group allows API→3310 only; definition volume via task volume when persistent updates are desired.
+
+No Azure/AWS resources were created or mutated in 18F.
+
+#### Telemetry and privacy
+
+Structured attachment events (existing structlog): `attachment_metadata_listed`, `attachment_analysis_requested`, `attachment_retrieval_started`, `attachment_retrieval_completed`, `attachment_policy_rejected`, `attachment_scan_started`, `attachment_scan_clean`, `attachment_scan_blocked`, `attachment_scan_error`, `attachment_parse_completed`, `attachment_parse_failed`, `attachment_ai_started`, `attachment_ai_completed`, `attachment_ai_failed`, `attachment_analysis_persisted`.
+
+Not logged: attachment bytes, base64, extracted text, filenames, OAuth tokens, mailbox bodies, prompts containing attachment content, scanner streams, signature names. Allowed: request id, connector id, provider enum, kind, size buckets / bounded sizes, verdict/result enums.
+
+#### Public error contract
+
+Attachment analysis failures now include a stable machine-readable `code` alongside `detail`:
+
+| code | Typical HTTP | Meaning |
+|---|---|---|
+| `attachment_unsupported` | 422 | Type/MIME/signature/unsupported document |
+| `attachment_exceeds_limit` | 422 | Size / page / image bound |
+| `attachment_content_invalid` | 422 | Malformed retrieved content |
+| `attachment_security_blocked` | 422 | Non-CLEAN scan (malware / unknown) |
+| `attachment_parse_failed` | 422 | Parser failure after CLEAN |
+| `attachment_scanner_unavailable` | 503 | Scanner operational failure |
+| `attachment_image_unavailable` | 409 | Image AI capability disabled |
+
+Frontend prefers `code` over message matching. Signature names and parser internals remain private.
+
+#### Persistence / schema
+
+Alembic head remains **`18d0001`**. No new migration. `attachment_analyses` still stores structured results and display filename only; never raw bytes, extracted text, prompts, or credentials. Filename is display metadata only and is not used for authorization or telemetry.
+
+#### Branding
+
+18E ECI mark retained. Official Gmail/Microsoft marks remain deferred; text-first labels stay acceptable.
+
+#### Offline regression
+
+Focused scanner/protocol tests, full backend pytest, frontend typecheck/lint/test/build, `pip check`, `ruff`, and `git diff --check` are required before declaring this slice closed. Live mailbox, cloud resume, Foundry/Bedrock attachment inference, and live EICAR are out of scope for this offline close-out.
+
+#### Phase 18 closure
+
+With 18F, Phase 18 meets the agreed **offline/local** Definition of Done. Remaining live proofs require separate operator authorization and do not reopen a Phase 18 readiness assessment.
 
 ---
 
@@ -1182,7 +1280,7 @@ These are **execution slices, not assessment phases**. Do not commission another
 
 18C may internally sequence documents first, then images, without a new assessment.
 
-Optional later work **outside** Phase 18 DoD: ClamAV sidecar deploy, cloud timeout/memory bump, official connector logos after license review, OCR, 10 MiB limit raise.
+Optional later work **outside** Phase 18 offline DoD: cloud ClamAV sidecar deploy, live EICAR-vs-ClamAV authorization, cloud timeout/memory bump, official connector logos after license review, OCR, 10 MiB limit raise.
 
 ---
 
@@ -1190,28 +1288,30 @@ Optional later work **outside** Phase 18 DoD: ClamAV sidecar deploy, cloud timeo
 
 Phase 18 is complete when all of the following are true:
 
-- [ ] Gmail attachment metadata works without `attachments.get` and without selecting `body.data`
-- [ ] Graph attachment metadata works without `contentBytes` / `$expand` / `$value`
-- [ ] Listing or opening an email does not explicitly retrieve, decode, persist, or analyze attachment content. Gmail `format=full` may still include incidental MIME `body.data`; that is not treated as attachment content.
-- [ ] Explicit Analyze attachment is required for bytes, scan, parse, and AI
-- [ ] Only one selected attachment is retrieved per analyze
-- [ ] PDF text extraction works; encrypted/image-only PDFs fail closed; no OCR
-- [ ] DOCX works; `.docm` / macros / zip bombs fail closed
-- [ ] JPEG/PNG work on Mock and on capability-enabled providers; fail closed otherwise
-- [ ] Optional TXT works
-- [ ] Unsupported formats fail closed
-- [ ] Size / pixel / decompression limits enforced
-- [ ] Type / signature / mismatch policy enforced
-- [ ] Scanner port implemented; fail closed on malicious / unknown / unavailable
-- [ ] Prompt-injection boundary implemented; no attachment-triggered Send or workflow
-- [ ] Cross-user and attachment-id tampering return 404
-- [ ] Raw bytes are not persisted
-- [ ] Local Mock path works offline
-- [ ] Foundry and Bedrock paths have offline contract coverage
-- [ ] Frontend shows attachment status and the explicit action
-- [ ] Branding remains professional; no implied vendor endorsement
-- [ ] `python -m pip check`, `python -m ruff check .`, `python -m pytest` pass
-- [ ] Phase 18 roadmap documentation updated; README unchanged unless the owner instructs
+- [x] Gmail attachment metadata works without `attachments.get` and without selecting `body.data`
+- [x] Graph attachment metadata works without `contentBytes` / `$expand` / `$value`
+- [x] Listing or opening an email does not explicitly retrieve, decode, persist, or analyze attachment content. Gmail `format=full` may still include incidental MIME `body.data`; that is not treated as attachment content.
+- [x] Explicit Analyze attachment is required for bytes, scan, parse, and AI
+- [x] Only one selected attachment is retrieved per analyze
+- [x] PDF text extraction works; encrypted/image-only PDFs fail closed; no OCR
+- [x] DOCX works; `.docm` / macros / zip bombs fail closed
+- [x] JPEG/PNG work on Mock and on capability-enabled providers; fail closed otherwise
+- [x] Optional TXT works
+- [x] Unsupported formats fail closed
+- [x] Size / pixel / decompression limits enforced
+- [x] Type / signature / mismatch policy enforced
+- [x] Real malware scanner backend implemented (ClamAV client → external clamd); production without scanner fails closed; malicious/unknown/unavailable fail closed
+- [x] Prompt-injection boundary implemented; no attachment-triggered Send or workflow
+- [x] Cross-user and attachment-id tampering return 404
+- [x] Raw bytes are not persisted; extracted text is not persisted
+- [x] Local Mock path works offline
+- [x] Foundry and Bedrock paths have offline contract coverage
+- [x] Frontend shows attachment status and the explicit action; no auto-download
+- [x] Branding remains professional; no implied vendor endorsement
+- [x] `python -m pip check`, `python -m ruff check .`, `python -m pytest` pass
+- [x] Phase 18 roadmap documentation updated; README unchanged unless the owner instructs
+
+Live mailbox, cloud scanner deployment, live Foundry/Bedrock attachment inference, and live EICAR-vs-ClamAV remain operator-authorized follow-ups outside the offline DoD.
 
 ---
 
@@ -1227,7 +1327,7 @@ No technical blocker prevents starting 18A after the architect accepts the locks
 4. **Connector port** gains `list_attachments` + `fetch_attachment_content`; bytes stay off `CommunicationMessage`.
 5. **Fail-closed type policy** including ZIP/exec/macros/encrypted/item/reference/polyglot.
 6. **Limits:** 5 MiB / 10 MiB / 50 pages / 20 MP (not 10/20 MiB per file).
-7. **Scanner:** domain port + FakeScanner for tests/dev; production fail closed without a real backend; ClamAV sidecar later, not in the API image.
+7. **Scanner:** domain port + FakeScanner for tests/dev; production fail closed without a real backend; ClamAV client → separate clamd (not in the API image) delivered in 18F.
 8. **PDF text-only; OCR deferred.**
 9. **Images:** optional multimodal via Settings flag; Mock stub for offline DoD.
 10. **No durable raw bytes.** New `attachment_analyses` table for structured results only.
@@ -1236,12 +1336,13 @@ No technical blocker prevents starting 18A after the architect accepts the locks
 13. **Branding:** text-first; no official Gmail/Outlook logos in Phase 18 unless separately authorized.
 14. **17D / Sally is out of scope.**
 
-**Still an owner action before live proofs (not before 18A):**
+**Still an owner action for live proofs (not required to close offline Phase 18):**
 
 - Authorize owner-controlled mailbox fixtures later.
 - Authorize cloud resume and Foundry/Bedrock live attachment proofs later.
 - Authorize EICAR-vs-real-scanner later.
 - Confirm `AI_IMAGE_INPUT_ENABLED` per environment after model capability is known.
+- Authorize cloud ClamAV sidecar/service deployment later.
 
 If the architect rejects a lock (for example wants 10 MiB files or validation-without-scanner), state the alternative in the same implementation chat. That is a decision change, not a new readiness assessment, unless it contradicts this architecture (for example automatic download, background prefetch, or attachment-triggered Send).
 

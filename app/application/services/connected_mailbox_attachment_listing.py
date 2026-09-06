@@ -123,10 +123,12 @@ class ConnectedMailboxAttachmentListingService:
             raise
 
         logger.info(
-            "connected_mailbox_attachment_list_completed",
+            "attachment_metadata_listed",
             operation="list_attachments",
             provider=account.provider,
             connector_id=str(account.id),
+            item_count=len(response.items),
+            truncated=response.truncated,
             duration_ms=elapsed_ms(started_at),
         )
         return response

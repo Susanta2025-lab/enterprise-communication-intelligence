@@ -8,3 +8,33 @@ services:
     environment:
       AI_PROVIDER: mock
       APP_ENV: production
+      # Default none is fail-closed. For a local real scanner:
+      # ATTACHMENT_SCANNER_BACKEND=clamav ATTACHMENT_SCANNER_HOST=clamav \
+      #   docker compose --profile scanner up --build
+      ATTACHMENT_SCANNER_BACKEND: ${ATTACHMENT_SCANNER_BACKEND:-none}
+      ATTACHMENT_SCANNER_HOST: ${ATTACHMENT_SCANNER_HOST:-}
+      ATTACHMENT_SCANNER_PORT: ${ATTACHMENT_SCANNER_PORT:-3310}
+      ATTACHMENT_SCANNER_TIMEOUT_SECONDS: ${ATTACHMENT_SCANNER_TIMEOUT_SECONDS:-10}
+
+  # Optional local ClamAV daemon. Not part of the ECI API image.
+  # Pin major.minor; avoid floating latest. Fresh defs download on first start
+  # can take several minutes and typically needs ~1–2 GiB RAM.
+  clamav:
+    profiles: ["scanner"]
+    image: clamav/clamav:1.4
+    expose:
+      - "3310"
+    environment:
+      CLAMD_STARTUP_TIMEOUT: "1800"
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 12
+      start_period: 300s
+    mem_limit: 2g
+    volumes:
+      - clamav-defs:/var/lib/clamav
+
+volumes:
+  clamav-defs:

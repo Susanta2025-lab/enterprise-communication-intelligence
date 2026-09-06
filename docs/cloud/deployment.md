@@ -285,6 +285,29 @@ See [Observability](observability.md).
 
 See [GitHub Actions](#github-actions).
 
+## Attachment malware scanner topology (Phase 18F — design only)
+
+Production attachment analysis requires an external ClamAV/clamd service. The ECI API image contains only a lightweight TCP client (`ATTACHMENT_SCANNER_BACKEND=clamav`). ClamAV binaries and virus databases must not be installed in the API image.
+
+```text
+ECI API container
+→ ATTACHMENT_SCANNER_HOST:ATTACHMENT_SCANNER_PORT (default 3310)
+→ ClamAV clamd (sidecar or internal service)
+```
+
+| Concern | Guidance |
+|---|---|
+| Networking | Internal only; no public ingress to clamd |
+| Discovery | Compose service name, ACA sidecar localhost/internal DNS, or ECS service discovery / sidecar `localhost` |
+| Memory | Plan ~1–2 GiB for ClamAV; API memory unchanged |
+| Startup | Clamd definition load can take minutes on first start; attachment analysis fails closed until reachable |
+| Health | API `/health` reports `attachment_scanner=configured` without probing; analysis path still fails closed on scanner ERROR |
+| Definitions | Prefer a persistent volume for `/var/lib/clamav` when available; otherwise ephemeral defs re-download on restart |
+| Cost | Extra container CPU/memory; definition updates are periodic background work inside ClamAV |
+| Local | `docker compose --profile scanner` with `clamav/clamav:1.4` |
+
+No Azure or AWS scanner resources were created in Phase 18F. Cloud deployment requires separate operator authorization.
+
 ## Not implemented
 
 - Azure App Service / AWS App Runner (not used; hosting is Container Apps and ECS Fargate)
