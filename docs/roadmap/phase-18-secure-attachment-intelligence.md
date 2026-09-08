@@ -67,7 +67,7 @@ Explicit single-attachment retrieval, fail-closed file policy, and a provider-ne
 
 - `fetch_attachment_content(provider_message_id, provider_attachment_id)` retrieves exactly one attachment.
 - Gmail uses `users.messages.attachments.get` only on this path, after a metadata revalidation that still omits `body.data`.
-- Graph uses one metadata GET (no `contentBytes`) then one JSON GET that selects `contentBytes` for that same id. `$value` is not used so `@odata.type` and returned id can be fail-closed.
+- Graph uses one metadata GET (no `contentBytes`) then one JSON GET that selects `contentBytes` for that same id. `$value` is not used so returned `@odata.type` and id can be fail-closed. Outgoing `$select` must not include `@odata.type` (Graph annotation; selecting it returns 400).
 - No background prefetch, batch download, download-all, or retrieval from list/open/Analyze Email.
 
 #### File policy
@@ -701,10 +701,10 @@ Do not add attachment metadata to the mailbox list contract. Gmail list already 
 
 ```text
 GET https://graph.microsoft.com/v1.0/me/messages/{id}/attachments
-  ?$select=id,name,contentType,size,isInline,contentId,@odata.type
+  ?$select=id,name,contentType,size,isInline,contentId
 ```
 
-**Critical:** default Graph attachment list can include `contentBytes` for `fileAttachment`. `$select` must omit `contentBytes`. Never `$expand=attachments` on the message. Never request `$value` during metadata.
+**Critical:** default Graph attachment list can include `contentBytes` for `fileAttachment`. `$select` must omit `contentBytes`. Never `$expand=attachments` on the message. Never request `$value` during metadata. Never put `@odata.type` in `$select` — Graph returns it as an OData annotation automatically, and selecting it yields `400 Bad Request`. Parsers still read the returned `@odata.type` and fail closed for `itemAttachment`, `referenceAttachment`, and missing/unknown subtypes.
 
 Also select `hasAttachments` on a future message fetch only if useful as a hint. It is not authoritative (inline items can set it). Metadata list is the source of truth.
 

@@ -43,6 +43,7 @@ def _assert_metadata_only(stub) -> None:
             fields = _select_fields(request)
             assert fields == ATTACHMENT_SELECT_FIELDS
             assert "contentBytes" not in fields
+            assert "@odata.type" not in fields
 
 
 def test_list_messages_does_not_retrieve_attachment_content(graph_connector: tuple) -> None:
@@ -104,7 +105,51 @@ def test_list_attachments_selects_metadata_without_content_bytes(
     assert request.method == "GET"
     assert request.url.path == f"{GRAPH_API_PREFIX}/msg-1/attachments"
     assert request.headers.get("prefer") is None
+    select = request.url.params.get("$select", "")
+    assert "@odata.type" not in select
+    assert "contentBytes" not in select
+    assert _select_fields(request) == ATTACHMENT_SELECT_FIELDS
     _assert_metadata_only(stub)
+
+
+def test_outgoing_attachment_select_excludes_odata_type_annotation(
+    graph_connector: tuple,
+) -> None:
+    """Graph rejects @odata.type in $select; it is returned as an annotation."""
+    connector, stub, _client = graph_connector
+    stub.attachments["msg-1"] = [graph_file_attachment("att-1")]
+
+    page = connector.list_attachments("msg-1")
+
+    assert len(page.items) == 1
+    list_request = stub.requests[0]
+    assert "@odata.type" not in list_request.url.params.get("$select", "")
+    assert "@odata.type" not in _select_fields(list_request)
+
+    pdf = b"%PDF-1.4\n%%EOF\n"
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment(
+        "att-1",
+        extra={"contentBytes": _b64_bytes(pdf)},
+        size=len(pdf),
+    )
+    stub.requests.clear()
+    stub.attachment_content_requests.clear()
+
+    content = connector.fetch_attachment_content("msg-1", "att-1")
+
+    assert content.content == pdf
+    for request in stub.requests:
+        fields = _select_fields(request)
+        assert "@odata.type" not in fields
+        assert "@odata.type" not in request.url.params.get("$select", "")
+    metadata_request = next(
+        request
+        for request in stub.requests
+        if "contentBytes" not in _select_fields(request)
+    )
+    content_request = stub.attachment_content_requests[0]
+    assert _select_fields(metadata_request) == ATTACHMENT_SELECT_FIELDS
+    assert _select_fields(content_request) == ATTACHMENT_SELECT_FIELDS | {"contentBytes"}
 
 
 def test_list_attachments_belongs_to_selected_message(graph_connector: tuple) -> None:
@@ -185,6 +230,18 @@ def test_unknown_odata_type_fails_closed(graph_connector: tuple) -> None:
     stub.attachments["msg-1"] = [
         graph_file_attachment("att-1", odata_type="#microsoft.graph.unexpectedAttachment")
     ]
+
+    with pytest.raises(ConnectorUnsupportedAttachmentError):
+        connector.list_attachments("msg-1")
+
+    _assert_metadata_only(stub)
+
+
+def test_missing_odata_type_fails_closed(graph_connector: tuple) -> None:
+    connector, stub, _client = graph_connector
+    resource = graph_file_attachment("att-1")
+    del resource["@odata.type"]
+    stub.attachments["msg-1"] = [resource]
 
     with pytest.raises(ConnectorUnsupportedAttachmentError):
         connector.list_attachments("msg-1")
@@ -325,6 +382,7 @@ def test_attachment_pagination_rebuilds_select_and_does_not_follow_unsafe_link(
         if request.url.params.get("$skiptoken") == "page-2":
             assert _select_fields(request) == ATTACHMENT_SELECT_FIELDS
             assert "contentBytes" not in _select_fields(request)
+            assert "@odata.type" not in _select_fields(request)
         return httpx.Response(200, json=payload)
 
     stub.attachment_list_handler = handler
@@ -369,7 +427,9 @@ def test_fetch_attachment_content_requests_one_file_attachment(
         and "contentBytes" not in _select_fields(request)
     ]
     assert len(metadata_requests) == 1
-    assert "contentBytes" not in _select_fields(metadata_requests[0])
+    assert _select_fields(metadata_requests[0]) == ATTACHMENT_SELECT_FIELDS
+    assert "@odata.type" not in _select_fields(metadata_requests[0])
+    assert "@odata.type" not in _select_fields(content_requests[0])
     assert all(not request.url.path.endswith("/att-sibling") for request in stub.requests)
     assert all("$value" not in str(request.url) for request in stub.requests)
 

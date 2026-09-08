@@ -38,7 +38,6 @@ ATTACHMENT_SELECT_FIELDS = frozenset(
         "size",
         "isInline",
         "contentId",
-        "@odata.type",
     }
 )
 

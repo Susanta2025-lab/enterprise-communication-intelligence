@@ -55,7 +55,7 @@ _OPERATION_FETCH = "fetch"
 _OPERATION_LIST_ATTACHMENTS = "list_attachments"
 _OPERATION_FETCH_ATTACHMENT = "fetch_attachment"
 _MAX_LISTED_ATTACHMENTS = 50
-_ATTACHMENT_ITEM_SELECT = "id,name,contentType,size,isInline,contentId,@odata.type"
+_ATTACHMENT_ITEM_SELECT = "id,name,contentType,size,isInline,contentId"
 _ATTACHMENT_CONTENT_SELECT = f"{_ATTACHMENT_ITEM_SELECT},contentBytes"
 
 
@@ -147,8 +147,9 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
     ) -> AttachmentContent:
         """Retrieve exactly one Graph file attachment, decoding ``contentBytes``.
 
-        Uses the JSON attachment resource (not ``$value``) so ``@odata.type``
-        and the returned id can be fail-closed before bytes are accepted.
+        Uses the JSON attachment resource (not ``$value``) so returned
+        ``@odata.type`` and id can be fail-closed before bytes are accepted.
+        ``@odata.type`` is never placed in ``$select`` (Graph annotation).
         Metadata listing still omits ``contentBytes``.
         """
         message_id = _validated_message_id(provider_message_id)

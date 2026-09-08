@@ -17,13 +17,15 @@ _LIST_PATH = "/v1.0/me/messages"
 _ALLOWED_PORTS = frozenset({None, 443})
 _SKIPTOKEN_PREFIX = "st."
 _SKIP_PREFIX = "sk."
-_ATTACHMENT_SELECT = "id,name,contentType,size,isInline,contentId,@odata.type"
+_ATTACHMENT_SELECT = "id,name,contentType,size,isInline,contentId"
 
 
 def attachment_list_query_params() -> dict[str, str]:
     """Build the metadata-only Graph attachment list query.
 
     ``contentBytes`` is intentionally omitted from ``$select``.
+    ``@odata.type`` is omitted because Graph returns it as an OData
+    annotation; selecting it causes ``400 Bad Request``.
     """
     return {"$select": _ATTACHMENT_SELECT}
 
@@ -36,7 +38,7 @@ def attachment_pagination_params_from_next_link(
 
     The nextLink host and path are validated. ``$select`` is always replaced
     with the metadata-only field list so a provider nextLink cannot reintroduce
-    ``contentBytes``.
+    ``contentBytes`` or ``@odata.type``.
     """
     parsed = _parsed_graph_attachment_list_url(next_link, provider_message_id)
     if parsed is None:
