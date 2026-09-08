@@ -20,12 +20,6 @@ from tests.unit.infrastructure.connectors.microsoft_graph.conftest import (
 )
 
 
-def _b64_bytes(payload: bytes) -> str:
-    import base64
-
-    return base64.b64encode(payload).decode("ascii")
-
-
 def _select_fields(request: httpx.Request) -> set[str]:
     return {part.strip() for part in request.url.params.get("$select", "").split(",") if part}
 
@@ -43,6 +37,7 @@ def _assert_metadata_only(stub) -> None:
             fields = _select_fields(request)
             assert fields == ATTACHMENT_SELECT_FIELDS
             assert "contentBytes" not in fields
+            assert "contentId" not in fields
             assert "@odata.type" not in fields
 
 
@@ -76,9 +71,10 @@ def test_fetch_message_does_not_retrieve_attachment_content(graph_connector: tup
     _assert_metadata_only(stub)
 
 
-def test_list_attachments_selects_metadata_without_content_bytes(
+def test_list_attachments_selects_only_base_attachment_properties(
     graph_connector: tuple,
 ) -> None:
+    """Live Azure 400: collection $select must not include derived contentId."""
     connector, stub, _client = graph_connector
     stub.attachments["msg-1"] = [
         graph_file_attachment(
@@ -86,6 +82,7 @@ def test_list_attachments_selects_metadata_without_content_bytes(
             name="report.pdf",
             content_type="application/pdf",
             size=4096,
+            content_id="cid-ignored-unless-returned",
         )
     ]
 
@@ -100,22 +97,45 @@ def test_list_attachments_selects_metadata_without_content_bytes(
     assert item.reported_size == 4096
     assert item.disposition is AttachmentDisposition.ATTACHMENT
     assert item.is_inline is False
+    assert item.content_id == "cid-ignored-unless-returned"
     assert len(stub.requests) == 1
     request = stub.requests[0]
     assert request.method == "GET"
     assert request.url.path == f"{GRAPH_API_PREFIX}/msg-1/attachments"
     assert request.headers.get("prefer") is None
     select = request.url.params.get("$select", "")
+    assert select == "id,name,contentType,size,isInline"
+    assert "contentId" not in select
     assert "@odata.type" not in select
     assert "contentBytes" not in select
     assert _select_fields(request) == ATTACHMENT_SELECT_FIELDS
     _assert_metadata_only(stub)
 
 
-def test_outgoing_attachment_select_excludes_odata_type_annotation(
+def test_list_attachments_accepts_returned_odata_type_and_optional_content_id(
     graph_connector: tuple,
 ) -> None:
-    """Graph rejects @odata.type in $select; it is returned as an annotation."""
+    connector, stub, _client = graph_connector
+    stub.attachments["msg-1"] = [
+        graph_file_attachment(
+            "att-1",
+            content_id="logo@cid",
+            odata_type="#microsoft.graph.fileAttachment",
+        )
+    ]
+
+    page = connector.list_attachments("msg-1")
+
+    assert page.items[0].content_id == "logo@cid"
+    assert "contentId" not in stub.requests[0].url.params.get("$select", "")
+    assert "@odata.type" not in stub.requests[0].url.params.get("$select", "")
+    _assert_metadata_only(stub)
+
+
+def test_outgoing_attachment_select_excludes_derived_and_annotation_fields(
+    graph_connector: tuple,
+) -> None:
+    """Graph rejects derived/annotation fields in attachment $select."""
     connector, stub, _client = graph_connector
     stub.attachments["msg-1"] = [graph_file_attachment("att-1")]
 
@@ -123,33 +143,33 @@ def test_outgoing_attachment_select_excludes_odata_type_annotation(
 
     assert len(page.items) == 1
     list_request = stub.requests[0]
-    assert "@odata.type" not in list_request.url.params.get("$select", "")
-    assert "@odata.type" not in _select_fields(list_request)
+    list_select = list_request.url.params.get("$select", "")
+    assert "contentId" not in list_select
+    assert "@odata.type" not in list_select
+    assert "contentBytes" not in list_select
+    assert _select_fields(list_request) == ATTACHMENT_SELECT_FIELDS
 
     pdf = b"%PDF-1.4\n%%EOF\n"
     stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment(
         "att-1",
-        extra={"contentBytes": _b64_bytes(pdf)},
         size=len(pdf),
     )
+    stub.attachment_value_bodies[("msg-1", "att-1")] = pdf
     stub.requests.clear()
     stub.attachment_content_requests.clear()
 
     content = connector.fetch_attachment_content("msg-1", "att-1")
 
     assert content.content == pdf
-    for request in stub.requests:
-        fields = _select_fields(request)
-        assert "@odata.type" not in fields
-        assert "@odata.type" not in request.url.params.get("$select", "")
     metadata_request = next(
-        request
-        for request in stub.requests
-        if "contentBytes" not in _select_fields(request)
+        request for request in stub.requests if not request.url.path.endswith("/$value")
     )
-    content_request = stub.attachment_content_requests[0]
     assert _select_fields(metadata_request) == ATTACHMENT_SELECT_FIELDS
-    assert _select_fields(content_request) == ATTACHMENT_SELECT_FIELDS | {"contentBytes"}
+    assert "contentId" not in metadata_request.url.params.get("$select", "")
+    content_request = stub.attachment_content_requests[0]
+    assert content_request.url.path.endswith("/att-1/$value")
+    assert content_request.url.params.get("$select") is None
+    assert "contentBytes" not in str(content_request.url)
 
 
 def test_list_attachments_belongs_to_selected_message(graph_connector: tuple) -> None:
@@ -382,6 +402,7 @@ def test_attachment_pagination_rebuilds_select_and_does_not_follow_unsafe_link(
         if request.url.params.get("$skiptoken") == "page-2":
             assert _select_fields(request) == ATTACHMENT_SELECT_FIELDS
             assert "contentBytes" not in _select_fields(request)
+            assert "contentId" not in _select_fields(request)
             assert "@odata.type" not in _select_fields(request)
         return httpx.Response(200, json=payload)
 
@@ -400,16 +421,16 @@ def test_attachment_pagination_rebuilds_select_and_does_not_follow_unsafe_link(
     _assert_metadata_only(stub)
 
 
-def test_fetch_attachment_content_requests_one_file_attachment(
+def test_fetch_attachment_content_uses_value_after_file_attachment_precheck(
     graph_connector: tuple,
 ) -> None:
     connector, stub, _client = graph_connector
     pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
-    encoded = _b64_bytes(pdf)
     stub.attachments["msg-1"] = [
-        graph_file_attachment("att-pdf-1", extra={"contentBytes": encoded}, size=len(pdf)),
+        graph_file_attachment("att-pdf-1", size=len(pdf)),
         graph_file_attachment("att-sibling", name="other.pdf"),
     ]
+    stub.attachment_value_bodies[("msg-1", "att-pdf-1")] = pdf
 
     content = connector.fetch_attachment_content("msg-1", "att-pdf-1")
 
@@ -418,23 +439,27 @@ def test_fetch_attachment_content_requests_one_file_attachment(
     assert content.source_message_id == "msg-1"
     content_requests = stub.attachment_content_requests
     assert len(content_requests) == 1
-    assert content_requests[0].url.path == f"{GRAPH_API_PREFIX}/msg-1/attachments/att-pdf-1"
-    assert "contentBytes" in _select_fields(content_requests[0])
+    assert content_requests[0].url.path == (
+        f"{GRAPH_API_PREFIX}/msg-1/attachments/att-pdf-1/$value"
+    )
+    assert content_requests[0].url.params.get("$select") is None
+    assert "contentBytes" not in str(content_requests[0].url)
     metadata_requests = [
         request
         for request in stub.requests
         if request.url.path.endswith("/att-pdf-1")
-        and "contentBytes" not in _select_fields(request)
     ]
     assert len(metadata_requests) == 1
     assert _select_fields(metadata_requests[0]) == ATTACHMENT_SELECT_FIELDS
+    assert "contentId" not in _select_fields(metadata_requests[0])
     assert "@odata.type" not in _select_fields(metadata_requests[0])
-    assert "@odata.type" not in _select_fields(content_requests[0])
     assert all(not request.url.path.endswith("/att-sibling") for request in stub.requests)
-    assert all("$value" not in str(request.url) for request in stub.requests)
+    assert all(
+        not request.url.path.endswith("/att-sibling/$value") for request in stub.requests
+    )
 
 
-def test_fetch_attachment_content_item_attachment_fails_before_content_bytes(
+def test_fetch_attachment_content_item_attachment_fails_before_value(
     graph_connector: tuple,
 ) -> None:
     connector, stub, _client = graph_connector
@@ -497,27 +522,26 @@ def test_fetch_attachment_content_id_mismatch_fails(graph_connector: tuple) -> N
     assert stub.attachment_content_requests == []
 
 
-def test_fetch_attachment_content_rejects_malformed_base64(graph_connector: tuple) -> None:
+def test_fetch_attachment_content_rejects_empty_value_body(graph_connector: tuple) -> None:
     connector, stub, _client = graph_connector
-    stub.attachments["msg-1"] = [
-        graph_file_attachment("att-1", extra={"contentBytes": "not-base64***"}, size=4)
-    ]
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment("att-1", size=4)
+    stub.attachment_value_bodies[("msg-1", "att-1")] = b""
 
-    with pytest.raises(ConnectorAttachmentContentError) as exc_info:
+    with pytest.raises(ConnectorAttachmentContentError):
         connector.fetch_attachment_content("msg-1", "att-1")
 
-    assert "not-base64" not in exc_info.value.message
+    assert len(stub.attachment_content_requests) == 1
 
 
-def test_fetch_attachment_content_rejects_oversized_metadata_without_content_bytes(
+def test_fetch_attachment_content_rejects_oversized_metadata_without_value(
     graph_connector: tuple,
 ) -> None:
     connector, stub, _client = graph_connector
     stub.attachment_items[("msg-1", "att-huge")] = graph_file_attachment(
         "att-huge",
         size=5 * 1024 * 1024 + 1,
-        extra={"contentBytes": "UEsFBgAAAAA="},
     )
+    stub.attachment_value_bodies[("msg-1", "att-huge")] = b"x"
 
     with pytest.raises(ConnectorAttachmentContentError):
         connector.fetch_attachment_content("msg-1", "att-huge")
@@ -525,7 +549,20 @@ def test_fetch_attachment_content_rejects_oversized_metadata_without_content_byt
     assert stub.attachment_content_requests == []
 
 
-def test_list_attachments_still_omits_content_bytes_after_explicit_fetch(
+def test_fetch_attachment_content_rejects_body_larger_than_reported_size(
+    graph_connector: tuple,
+) -> None:
+    connector, stub, _client = graph_connector
+    stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment("att-1", size=2)
+    stub.attachment_value_bodies[("msg-1", "att-1")] = b"abcd"
+
+    with pytest.raises(ConnectorAttachmentContentError):
+        connector.fetch_attachment_content("msg-1", "att-1")
+
+    assert len(stub.attachment_content_requests) == 1
+
+
+def test_list_attachments_still_omits_content_after_explicit_fetch(
     graph_connector: tuple,
 ) -> None:
     connector, stub, _client = graph_connector
@@ -533,9 +570,9 @@ def test_list_attachments_still_omits_content_bytes_after_explicit_fetch(
     stub.attachments["msg-1"] = [graph_file_attachment("att-1", size=len(pdf))]
     stub.attachment_items[("msg-1", "att-1")] = graph_file_attachment(
         "att-1",
-        extra={"contentBytes": _b64_bytes(pdf)},
         size=len(pdf),
     )
+    stub.attachment_value_bodies[("msg-1", "att-1")] = pdf
     connector.fetch_attachment_content("msg-1", "att-1")
     stub.requests.clear()
     stub.attachment_content_requests.clear()

@@ -18,6 +18,7 @@ from app.core.exceptions import (
     ConnectorPermissionError,
     ConnectorRateLimitError,
     ConnectorUnavailableError,
+    ConnectorUnsupportedAttachmentError,
 )
 from app.domain.attachment_policy import MAX_ATTACHMENT_CONTENT_BYTES
 from app.domain.interfaces import (
@@ -30,7 +31,6 @@ from app.domain.models import AttachmentContent, AttachmentMetadata, Communicati
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.microsoft_graph.normalization import (
     normalize_graph_attachment,
-    normalize_graph_attachment_content,
     normalize_graph_message,
     parse_attachment_page,
     parse_list_page,
@@ -55,8 +55,9 @@ _OPERATION_FETCH = "fetch"
 _OPERATION_LIST_ATTACHMENTS = "list_attachments"
 _OPERATION_FETCH_ATTACHMENT = "fetch_attachment"
 _MAX_LISTED_ATTACHMENTS = 50
-_ATTACHMENT_ITEM_SELECT = "id,name,contentType,size,isInline,contentId"
-_ATTACHMENT_CONTENT_SELECT = f"{_ATTACHMENT_ITEM_SELECT},contentBytes"
+# Base ``attachment`` properties only. Do not $select derived fileAttachment
+# fields (``contentId``, ``contentBytes``) or the ``@odata.type`` annotation.
+_ATTACHMENT_ITEM_SELECT = "id,name,contentType,size,isInline"
 
 
 class MicrosoftGraphCommunicationConnector(CommunicationConnector):
@@ -145,12 +146,12 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
         provider_message_id: str,
         provider_attachment_id: str,
     ) -> AttachmentContent:
-        """Retrieve exactly one Graph file attachment, decoding ``contentBytes``.
+        """Retrieve exactly one Graph file attachment via ``/$value``.
 
-        Uses the JSON attachment resource (not ``$value``) so returned
-        ``@odata.type`` and id can be fail-closed before bytes are accepted.
-        ``@odata.type`` is never placed in ``$select`` (Graph annotation).
-        Metadata listing still omits ``contentBytes``.
+        Metadata is prechecked first with a base-property ``$select`` (no
+        ``contentBytes``, ``contentId``, or ``@odata.type``). Only after
+        ``fileAttachment`` validation and size binding does this path call
+        ``/$value``. Listing never requests content.
         """
         message_id = _validated_message_id(provider_message_id)
         attachment_id = _validated_attachment_id(provider_attachment_id)
@@ -166,21 +167,19 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
             raise ConnectorAttachmentContentError()
         if metadata.reported_size > MAX_ATTACHMENT_CONTENT_BYTES:
             raise ConnectorAttachmentContentError()
-        payload = self._get_json(
-            _attachment_item_url(message_id, attachment_id),
-            params={"$select": _ATTACHMENT_CONTENT_SELECT},
+        raw = self._get_bytes(
+            _attachment_value_url(message_id, attachment_id),
             operation=_OPERATION_FETCH_ATTACHMENT,
+            max_bytes=MAX_ATTACHMENT_CONTENT_BYTES,
         )
-        content = normalize_graph_attachment_content(
-            payload,
-            requested_attachment_id=attachment_id,
+        if len(raw) > metadata.reported_size:
+            raise ConnectorAttachmentContentError()
+        return AttachmentContent(
+            metadata=metadata,
+            content=raw,
             source_message_id=message_id,
+            source_attachment_id=attachment_id,
         )
-        if len(content.content) > MAX_ATTACHMENT_CONTENT_BYTES:
-            raise ConnectorAttachmentContentError()
-        if len(content.content) > metadata.reported_size:
-            raise ConnectorAttachmentContentError()
-        return content
 
     def _get_json(
         self,
@@ -216,6 +215,40 @@ class MicrosoftGraphCommunicationConnector(CommunicationConnector):
             raise ConnectorUnavailableError() from None
         return payload
 
+    def _get_bytes(
+        self,
+        url: str,
+        *,
+        operation: str,
+        max_bytes: int,
+    ) -> bytes:
+        headers = {
+            "Authorization": f"Bearer {resolve_access_token(self._access_token_provider)}",
+            "Accept": "*/*",
+        }
+        try:
+            response = self._http.get(url, headers=headers, follow_redirects=False)
+        except httpx.TimeoutException:
+            raise ConnectorUnavailableError() from None
+        except httpx.RequestError:
+            raise ConnectorUnavailableError() from None
+        if response.status_code == 405 and operation == _OPERATION_FETCH_ATTACHMENT:
+            raise ConnectorUnsupportedAttachmentError() from None
+        _raise_for_status(response, operation=operation, has_cursor=False)
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                declared = int(content_length)
+            except ValueError:
+                raise ConnectorAttachmentContentError() from None
+            if declared < 0 or declared > max_bytes:
+                raise ConnectorAttachmentContentError() from None
+        # Bound raw attachment bytes after metadata precheck; do not log the body.
+        body = response.read()
+        if not body or len(body) > max_bytes:
+            raise ConnectorAttachmentContentError() from None
+        return body
+
 
 def _validated_message_id(provider_message_id: str) -> str:
     if not isinstance(provider_message_id, str):
@@ -245,6 +278,10 @@ def _attachments_url(message_id: str) -> str:
 
 def _attachment_item_url(message_id: str, attachment_id: str) -> str:
     return f"{_attachments_url(message_id)}/{quote(attachment_id, safe='')}"
+
+
+def _attachment_value_url(message_id: str, attachment_id: str) -> str:
+    return f"{_attachment_item_url(message_id, attachment_id)}/$value"
 
 
 def _raise_for_status(

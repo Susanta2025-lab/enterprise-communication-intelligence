@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Iterator
 from typing import Any
 from urllib.parse import unquote
@@ -37,7 +38,6 @@ ATTACHMENT_SELECT_FIELDS = frozenset(
         "contentType",
         "size",
         "isInline",
-        "contentId",
     }
 )
 
@@ -156,6 +156,9 @@ class GraphHttpStub:
         self.attachment_item_status: dict[tuple[str, str], int] = {}
         self.attachment_item_json: dict[tuple[str, str], Any] = {}
         self.attachment_item_text: dict[tuple[str, str], str] = {}
+        self.attachment_value_bodies: dict[tuple[str, str], bytes] = {}
+        self.attachment_value_status: dict[tuple[str, str], int] = {}
+        self.attachment_value_headers: dict[tuple[str, str], dict[str, str]] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -242,19 +245,12 @@ class GraphHttpStub:
         after: str,
     ) -> httpx.Response:
         item_path = after.strip("/")
-        if item_path.endswith("/$value") or "$value" in str(request.url):
-            self.attachment_content_requests.append(request)
-            return httpx.Response(
-                599,
-                json={"error": {"code": "Forbidden", "message": "attachment $value"}},
-            )
-        attachment_id = item_path.split("/", 1)[0]
-        attachment_id = unquote(attachment_id)
+        if item_path.endswith("/$value") or item_path == "$value":
+            return self._attachment_value_response(request, message_id, item_path)
+        attachment_id = unquote(item_path.split("/", 1)[0])
         select_fields = {
             part.strip() for part in request.url.params.get("$select", "").split(",") if part
         }
-        if "contentBytes" in select_fields:
-            self.attachment_content_requests.append(request)
         key = (message_id, attachment_id)
         status = self.attachment_item_status.get(key, 200)
         headers = self._headers_for_status(status)
@@ -281,9 +277,56 @@ class GraphHttpStub:
                 headers=headers,
             )
         payload = dict(resource)
+        # Metadata GETs never include contentBytes even if the fixture stored them.
         if "contentBytes" not in select_fields:
             payload.pop("contentBytes", None)
         return httpx.Response(200, json=payload, headers=headers)
+
+    def _attachment_value_response(
+        self,
+        request: httpx.Request,
+        message_id: str,
+        item_path: str,
+    ) -> httpx.Response:
+        self.attachment_content_requests.append(request)
+        attachment_id = unquote(item_path.removesuffix("/$value").removesuffix("$value").strip("/"))
+        key = (message_id, attachment_id)
+        status = self.attachment_value_status.get(key, 200)
+        headers = dict(self._headers_for_status(status))
+        headers.update(self.attachment_value_headers.get(key, {}))
+        if status != 200:
+            return httpx.Response(status, json=self._error_body(), headers=headers)
+        if key in self.attachment_value_bodies:
+            body = self.attachment_value_bodies[key]
+            return httpx.Response(200, content=body, headers=headers)
+        resource = self.attachment_items.get(key)
+        if resource is None:
+            resource = next(
+                (
+                    item
+                    for item in self.attachments.get(message_id, [])
+                    if item.get("id") == attachment_id
+                ),
+                None,
+            )
+        if resource is None:
+            return httpx.Response(
+                404,
+                json={"error": {"code": "ErrorItemNotFound", "message": "not found"}},
+                headers=headers,
+            )
+        encoded = resource.get("contentBytes")
+        if not isinstance(encoded, str) or not encoded.strip():
+            return httpx.Response(200, content=b"", headers=headers)
+        try:
+            raw = base64.b64decode(encoded.encode("ascii"), validate=False)
+        except (ValueError, UnicodeEncodeError):
+            return httpx.Response(
+                400,
+                json={"error": {"code": "Error", "message": "invalid contentBytes fixture"}},
+                headers=headers,
+            )
+        return httpx.Response(200, content=raw, headers=headers)
 
 
 @pytest.fixture

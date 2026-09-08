@@ -53,7 +53,7 @@ Distinguish two Gmail surfaces:
 - `list_attachments` (Gmail) uses `format=full` plus a `fields` mask that keeps `attachmentId`, `size`, `filename`, `mimeType`, disposition / Content-ID headers, and nested `parts`, and **does not select `body.data`**.
 - `list_attachments` never calls `users.messages.attachments.get`.
 - `fetch_message` / `list_messages` keep `format=full` **without** a `fields` mask. Gmail cannot guarantee text-part `body.data` while excluding attachment-part `body.data` in the same resource. ECI does not invent a workaround. Attachment-classified `body.data` is not decoded as email body, not returned as retrievable `AttachmentMetadata` unless `attachmentId` is present, not persisted, not sent to AI, and not treated as authorization to analyze.
-- Graph metadata uses `$select` that omits `contentBytes`, does not `$expand=attachments`, and does not request `/$value`.
+- Graph metadata uses base-property `$select` only (`id,name,contentType,size,isInline`), does not `$expand=attachments`, and does not request `/$value`.
 - 18A left Gmail and Graph `fetch_attachment_content` as no-network stubs. 18B implements those methods.
 - The fake connector can return in-memory bytes for later explicit-retrieval tests.
 
@@ -67,7 +67,7 @@ Explicit single-attachment retrieval, fail-closed file policy, and a provider-ne
 
 - `fetch_attachment_content(provider_message_id, provider_attachment_id)` retrieves exactly one attachment.
 - Gmail uses `users.messages.attachments.get` only on this path, after a metadata revalidation that still omits `body.data`.
-- Graph uses one metadata GET (no `contentBytes`) then one JSON GET that selects `contentBytes` for that same id. `$value` is not used so returned `@odata.type` and id can be fail-closed. Outgoing `$select` must not include `@odata.type` (Graph annotation; selecting it returns 400).
+- Graph uses one metadata GET with base-property `$select` only (no `contentBytes`, `contentId`, or `@odata.type`), then — only after `fileAttachment` validation — one `GET .../attachments/{id}/$value` for raw bytes. Selecting derived `fileAttachment` fields on the base attachment collection/item `$select` yields Graph `400`. Listing never calls `$value`.
 - No background prefetch, batch download, download-all, or retrieval from list/open/Analyze Email.
 
 #### File policy
@@ -502,7 +502,7 @@ Attachment capability should enter at the **connector port** (metadata list + ex
 | Attachment bytes model | None | Transient `AttachmentContent`, never on `CommunicationMessage` |
 | Connector port | Fetch message only | `list_attachments` + `fetch_attachment_content` |
 | Gmail metadata surface | Detected and discarded | Walk MIME; emit metadata; never call `attachments.get` until explicit analyze |
-| Graph metadata | Not requested | Dedicated attachments list with `$select` that excludes `contentBytes` |
+| Graph metadata | Not requested | Dedicated attachments list with base-property `$select` (no `contentBytes` / `contentId`) |
 | Graph attachment classes | Unhandled | Fail closed for `itemAttachment` and `referenceAttachment` |
 | Type policy | None | Allowlist + magic-byte verification |
 | Size / pixel limits | None | ECI limits, not provider maxima |
@@ -701,10 +701,10 @@ Do not add attachment metadata to the mailbox list contract. Gmail list already 
 
 ```text
 GET https://graph.microsoft.com/v1.0/me/messages/{id}/attachments
-  ?$select=id,name,contentType,size,isInline,contentId
+  ?$select=id,name,contentType,size,isInline
 ```
 
-**Critical:** default Graph attachment list can include `contentBytes` for `fileAttachment`. `$select` must omit `contentBytes`. Never `$expand=attachments` on the message. Never request `$value` during metadata. Never put `@odata.type` in `$select` — Graph returns it as an OData annotation automatically, and selecting it yields `400 Bad Request`. Parsers still read the returned `@odata.type` and fail closed for `itemAttachment`, `referenceAttachment`, and missing/unknown subtypes.
+**Critical:** default Graph attachment list can include `contentBytes` for `fileAttachment`. `$select` must use only base `attachment` properties and must omit `contentBytes`. Never `$expand=attachments` on the message. Never request `$value` during metadata. Never put `@odata.type` in `$select` (OData annotation; selecting it yields `400`). Never put derived `fileAttachment` properties such as `contentId` or `contentBytes` in the collection `$select` (also `400`). Parsers still read returned `@odata.type` and optional `contentId` when Graph provides them, and fail closed for `itemAttachment`, `referenceAttachment`, and missing/unknown subtypes.
 
 Also select `hasAttachments` on a future message fetch only if useful as a hint. It is not authoritative (inline items can set it). Metadata list is the source of truth.
 
@@ -713,10 +713,12 @@ Also select `hasAttachments` on a future message fetch only if useful as a hint.
 Prefer:
 
 ```text
+GET /v1.0/me/messages/{messageId}/attachments/{attachmentId}
+  ?$select=id,name,contentType,size,isInline
 GET /v1.0/me/messages/{messageId}/attachments/{attachmentId}/$value
 ```
 
-This returns raw bytes and avoids a second base64 expansion in JSON. If the adapter must use the JSON resource, discard any unexpected extra fields and keep only bytes + declared metadata.
+The metadata GET confirms `fileAttachment`, id binding, and reported size before any bytes are fetched. `/$value` is used only on this explicit path. Do not select `contentBytes` on the JSON attachment resource for retrieval — it is a derived `fileAttachment` property and is less reliable than the documented raw-content route after a successful subtype precheck.
 
 **Pagination**
 
@@ -1202,7 +1204,7 @@ This matrix is the Phase 18 test contract. Later execution slices implement rows
 - Gmail: metadata from `format=full` with a `fields` mask that omits `body.data`, and without `attachments.get`
 - Gmail: analyze calls `attachments.get` once for one id; base64url decode
 - Gmail: nested multipart ids; missing attachmentId omitted
-- Graph: `$select` excludes `contentBytes`; no `$expand`; no `$value` on list
+- Graph: base-property `$select` only; no `$expand`; no `$value` on list; explicit retrieve uses metadata precheck then `/$value`
 - Graph: file vs item vs reference
 - Graph: `$value` once on analyze
 - Both: 404/401/429 mapping; rate limits
