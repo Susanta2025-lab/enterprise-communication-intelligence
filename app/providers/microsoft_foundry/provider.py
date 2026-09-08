@@ -63,12 +63,11 @@ class MicrosoftFoundryProvider(AIProvider):
         """Analyze a communication through Microsoft Foundry and map domain results."""
         if request.attachment_images:
             raise AttachmentImageInputUnsupportedError()
-        message_id = request.message.message_id
         logger.info(
             "microsoft_foundry_analysis_requested",
             provider=self.PROVIDER_NAME,
             deployment=self._model_deployment,
-            message_id=message_id,
+            operation="analyze",
         )
         started_at = time.perf_counter()
 
@@ -103,7 +102,7 @@ class MicrosoftFoundryProvider(AIProvider):
                 "microsoft_foundry_analysis_failed",
                 provider=self.PROVIDER_NAME,
                 deployment=self._model_deployment,
-                message_id=message_id,
+                operation="analyze",
                 duration_ms=elapsed_ms(started_at),
                 error_class=error_class(exc),
             )
@@ -113,7 +112,7 @@ class MicrosoftFoundryProvider(AIProvider):
             "microsoft_foundry_analysis_completed",
             provider=self.PROVIDER_NAME,
             deployment=self._model_deployment,
-            message_id=message_id,
+            operation="analyze",
             duration_ms=elapsed_ms(started_at),
         )
         return result

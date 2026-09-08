@@ -59,3 +59,20 @@ def create_ai_provider(settings: Settings | None = None) -> AIProvider:
     raise ConfigurationError(
         f"Unsupported AI provider '{resolved.ai_provider}'. Supported providers: {supported}"
     )
+
+
+def ai_image_input_status(settings: Settings | None = None) -> str:
+    """Return a public AI image-input capability label.
+
+    Values are ``available`` or ``unavailable``. Reflects the operator flag and
+    the configured provider's ``supports_image_input()`` declaration. Does not
+    probe cloud networks. Configuration errors fail closed to ``unavailable``.
+    """
+    resolved = settings or get_settings()
+    if not resolved.ai_image_input_enabled:
+        return "unavailable"
+    try:
+        provider = create_ai_provider(resolved)
+    except ConfigurationError:
+        return "unavailable"
+    return "available" if provider.supports_image_input() else "unavailable"

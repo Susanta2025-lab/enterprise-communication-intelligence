@@ -11,6 +11,8 @@ export const ATTACHMENT_TRUNCATED_LIST_COPY =
   "Additional attachments may exist. Only the returned metadata is shown.";
 export const NOT_ANALYZED_STATUS = "Not analyzed";
 export const UNSUPPORTED_STATUS = "Unsupported for analysis";
+export const IMAGE_ANALYSIS_UNAVAILABLE_STATUS =
+  "Image analysis unavailable with current AI provider";
 export const TOO_LARGE_STATUS = "Too large to analyze";
 export const INLINE_STATUS = "Inline";
 export const COMPLETED_STATUS = "Analyzed";

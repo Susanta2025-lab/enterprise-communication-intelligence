@@ -16,6 +16,8 @@ in the 18D application/API wiring that constructs the connector.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pydantic import BaseModel, ConfigDict
 
 from app.application.exceptions import (
@@ -84,8 +86,14 @@ class AttachmentInspectionService:
         provider_attachment_id: str,
         *,
         budget: AttachmentContentBudget | None = None,
+        before_retrieve: Callable[[AttachmentKind], None] | None = None,
     ) -> InspectedAttachment:
-        """Retrieve and scan exactly one attachment already bound to ``connector``."""
+        """Retrieve and scan exactly one attachment already bound to ``connector``.
+
+        ``before_retrieve`` runs after metadata policy accepts the attachment and
+        before any provider content GET (Graph ``/$value`` or Gmail attachment
+        bytes). Callers use it for capability preflight without retrieving bytes.
+        """
         message_id = _require_id(provider_message_id, missing_message=True)
         attachment_id = _require_id(provider_attachment_id, missing_message=False)
         try:
@@ -98,7 +106,7 @@ class AttachmentInspectionService:
             raise ApplicationAttachmentContentInvalidError() from None
         metadata = _attachment_on_message(page.items, attachment_id)
         try:
-            evaluate_attachment_metadata(metadata)
+            declared_kind = evaluate_attachment_metadata(metadata)
         except AttachmentUnsupportedError:
             _log_policy_rejected(connector.provider, "unsupported", metadata.reported_size)
             raise AttachmentNotSupportedError() from None
@@ -109,10 +117,14 @@ class AttachmentInspectionService:
             _log_policy_rejected(connector.provider, "invalid_content", metadata.reported_size)
             raise ApplicationAttachmentContentInvalidError() from None
 
+        if before_retrieve is not None:
+            before_retrieve(declared_kind)
+
         logger.info(
             "attachment_retrieval_started",
             operation="inspect_attachment",
             provider=connector.provider,
+            kind=declared_kind.value,
             reported_size=metadata.reported_size,
         )
         try:

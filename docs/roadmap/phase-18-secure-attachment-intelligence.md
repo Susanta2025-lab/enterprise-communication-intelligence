@@ -27,9 +27,25 @@ Phase 18 overall is **Completed** for the agreed offline/local scope. This asses
 | **18F** Hardening, real ClamAV client, telemetry, docs, offline regression | Completed |
 | Phase 18 implementation | Completed (offline/local) |
 | Phase 17D External Business-User Verification | Deferred / not a Phase 18 dependency |
-| Live mailbox or attachment validation | Not performed |
-| Cloud resume / Foundry / Bedrock invocation | Not performed |
+| Live mailbox or attachment validation | Azure live validation completed (see below) |
+| Cloud resume / Foundry / Bedrock invocation | Azure Foundry attachment live path exercised |
 | Live EICAR vs ClamAV malicious fixture | Not performed — authorization required |
+
+### Azure live-validation results (post-18F cleanup)
+
+Owner-controlled Outlook mailbox against Azure runtime + Microsoft Foundry + ClamAV:
+
+| Fixture | Result |
+|---|---|
+| PDF | **PASS** — explicit Graph `/$value` → ClamAV CLEAN → PDF parser → Foundry → structured persistence |
+| DOCX | **PASS** — analysis → Foundry → structured persistence |
+| XLSX | **PASS** (fail-closed) — metadata visible as unsupported; no Analyze action; no content retrieval |
+| PNG | **PASS** (controlled image-unavailable) — with current Foundry text adapter, image analysis is unavailable; **pre-retrieval capability gating** added so JPEG/PNG reject before Graph/Gmail content GET, ClamAV, parse, or AI |
+| Automatic retrieval | **PASS** — list/open still do not retrieve attachment bytes |
+| Workflow / Send isolation | **PASS** — attachment analyze does not create workflow or send |
+
+Live follow-up cleanup (this slice): image-provider capability preflight, frontend image availability UX via `GET /api/v1/health` `ai_image_input`, duplicate “Analyzing attachment” fix, and privacy-safe removal of mailbox `message_id` from Foundry/Bedrock/mock/application analysis logs plus muted HTTP client URL logging.
+
 
 ### 18A implementation close-out
 
@@ -1247,14 +1263,27 @@ Defined in section 26. **Not executed now.**
 
 ## 26. Eventual live-validation plan
 
-Owner-controlled test mailboxes and files only. No external business reviewer. No external-user mailbox. No live run in this assessment.
+Owner-controlled test mailboxes and files only. No external business reviewer. No external-user mailbox.
+
+### Azure results (executed)
+
+| Check | Result |
+|---|---|
+| 1. Metadata appears; list/open does not create attachment-content HTTP | **PASS** |
+| 2. Small clean PDF → Analyze attachment → structured result (Foundry) | **PASS** |
+| 3. Small DOCX → same | **PASS** |
+| 4. PNG / JPEG with current Foundry text adapter | **PASS** controlled image-unavailable; pre-retrieval capability gating added |
+| 5. Unsupported extension (XLSX) → unsupported UI / no retrieval | **PASS** |
+| Workflow / Send isolation | **PASS** |
+
+Remaining optional later: Bedrock attachment live proof; oversized / MIME-mismatch fixtures; prompt-injection PDF; **explicitly authorized** EICAR vs real scanner.
 
 Minimum later sequence (same mailbox already used for Phase 14/15/16/17C proofs):
 
 1. Metadata appears for a message with attachments; list/open does not create attachment-content HTTP.
 2. Small clean PDF → Analyze attachment → structured result.
 3. Small DOCX → same.
-4. PNG and JPEG → same when image flag is appropriate for that runtime.
+4. PNG and JPEG → same when image flag is appropriate for that runtime; otherwise controlled image-unavailable before content retrieval.
 5. Unsupported extension → 422, no AI.
 6. Oversized fixture → 422.
 7. MIME/extension/magic mismatch → 422.
@@ -1263,7 +1292,7 @@ Minimum later sequence (same mailbox already used for Phase 14/15/16/17C proofs)
 
 Send remains a separate control. Attachment content must not send.
 
-Foundry/Bedrock live proofs are optional later slices after offline contracts pass and the owner authorizes cloud resume. They are not required to start implementation.
+Foundry/Bedrock live proofs are optional later slices after offline contracts pass and the owner authorizes cloud resume. Azure PDF/DOCX/XLSX/PNG controlled paths above are completed for the Foundry runtime.
 
 ---
 

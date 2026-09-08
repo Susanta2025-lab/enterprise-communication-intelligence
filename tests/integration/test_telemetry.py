@@ -153,11 +153,12 @@ def test_request_id_correlates_api_service_and_provider_logs(
 
     service_completed = _events_named(correlated, "communication_analysis_completed")[0]
     assert service_completed["provider"] == "mock"
-    assert service_completed["message_id"] == "msg-001"
+    assert "message_id" not in service_completed
     assert service_completed["duration_ms"] >= 0
 
     provider_completed = _events_named(correlated, "mock_analysis_completed")[0]
     assert provider_completed["provider"] == "mock"
+    assert "message_id" not in provider_completed
     assert provider_completed["duration_ms"] >= 0
 
 
@@ -177,7 +178,7 @@ def test_request_without_message_id_still_has_request_id(
     started = _events_named(log_events, "communication_analysis_started")
     assert started
     assert started[-1]["request_id"] == request_id
-    assert started[-1]["message_id"] is None
+    assert "message_id" not in started[-1]
 
 
 def test_validation_error_includes_request_id(

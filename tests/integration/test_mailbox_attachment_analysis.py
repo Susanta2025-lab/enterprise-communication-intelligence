@@ -63,6 +63,7 @@ from tests.unit.infrastructure.attachments.fixtures import (
     pdf_with_text,
     png_with_dimensions,
     tiny_jpeg,
+    tiny_png,
 )
 
 _ANALYZE = "/api/v1/connector-accounts/{connector_account_id}/messages/attachments/analyze"
@@ -488,9 +489,9 @@ def test_non_clean_scan_does_not_persist(
             "bomb.png",
             "image/png",
             png_with_dimensions(9000, 9000),
-            422,
-            "Attachment exceeds limits.",
-            "attachment_exceeds_limit",
+            409,
+            "Image analysis is not available.",
+            "attachment_image_unavailable",
         ),
     ],
 )
@@ -537,6 +538,49 @@ def test_policy_and_parser_failures_do_not_persist(
         )
     assert response.status_code == status
     assert response.json() == {"detail": detail, "code": code}
+    assert unit.attachment_analysis_store == {}
+    if filename == "bomb.png":
+        assert connector.fetch_content_calls == []
+
+
+def test_image_dimension_limit_still_enforced_when_image_ai_available(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    """With image AI enabled, oversized PNG still fails closed after retrieve."""
+    _clear_settings_env(monkeypatch)
+    _enable_oidc_env(monkeypatch)
+    monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
+    unit = InMemoryUnitOfWork()
+    connector = _connector_for("bomb.png", "image/png", png_with_dimensions(9000, 9000))
+    application = create_app()
+    application.dependency_overrides[get_token_validator] = lambda: make_test_validator(private_key)
+    application.dependency_overrides[get_unit_of_work_factory] = lambda: UnitOfWorkFactory(unit)
+    application.dependency_overrides[get_communication_connector_factory] = (
+        lambda: StaticCommunicationConnectorFactory(connector)
+    )
+    application.dependency_overrides[get_ai_provider] = lambda: MockAIProvider(
+        supports_image_input=True
+    )
+    application.dependency_overrides[get_attachment_scanner] = lambda: FakeAttachmentScanner()
+    application.dependency_overrides[get_communication_action_executor_factory] = (
+        lambda: _ForbiddenExecutorFactory()
+    )
+    owner_id = _seed_owner(unit)
+    account = _usable_account(owner_id)
+    unit.connector_account_store[account.id] = account
+    with TestClient(application) as client:
+        response = client.post(
+            _ANALYZE.format(connector_account_id=account.id),
+            json={"provider_message_id": "fake-msg-001", "provider_attachment_id": "att-1"},
+            headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+        )
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Attachment exceeds limits.",
+        "code": "attachment_exceeds_limit",
+    }
+    assert connector.fetch_content_calls == [("fake-msg-001", "att-1")]
     assert unit.attachment_analysis_store == {}
 
 
@@ -612,6 +656,8 @@ def test_image_requires_capability_flag(
         "code": "attachment_image_unavailable",
     }
     assert unit.attachment_analysis_store == {}
+    assert connector.fetch_content_calls == []
+    assert connector.list_attachment_calls == ["fake-msg-001"]
 
     monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
     get_settings.cache_clear()
@@ -624,6 +670,45 @@ def test_image_requires_capability_flag(
     assert enabled.status_code == 200
     assert enabled.json()["kind"] == "jpeg"
     assert enabled.json()["extracted_content_status"] == "image"
+    assert connector.fetch_content_calls == [("fake-msg-001", "att-1")]
+
+
+def test_foundry_like_provider_rejects_images_before_content_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+    private_key,
+) -> None:
+    """Backend enforcement: unsupported image providers never fetch attachment bytes."""
+    _clear_settings_env(monkeypatch)
+    _enable_oidc_env(monkeypatch)
+    monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
+    unit = InMemoryUnitOfWork()
+    connector = _connector_for("chart.png", "image/png", tiny_png())
+    provider = MagicMock()
+    provider.supports_image_input.return_value = False
+    application = create_app()
+    application.dependency_overrides[get_token_validator] = lambda: make_test_validator(private_key)
+    application.dependency_overrides[get_unit_of_work_factory] = lambda: UnitOfWorkFactory(unit)
+    application.dependency_overrides[get_communication_connector_factory] = (
+        lambda: StaticCommunicationConnectorFactory(connector)
+    )
+    application.dependency_overrides[get_ai_provider] = lambda: provider
+    application.dependency_overrides[get_attachment_scanner] = lambda: FakeAttachmentScanner()
+    application.dependency_overrides[get_communication_action_executor_factory] = (
+        lambda: _ForbiddenExecutorFactory()
+    )
+    owner_id = _seed_owner(unit)
+    account = _usable_account(owner_id)
+    unit.connector_account_store[account.id] = account
+    with TestClient(application) as client:
+        response = client.post(
+            _ANALYZE.format(connector_account_id=account.id),
+            json={"provider_message_id": "fake-msg-001", "provider_attachment_id": "att-1"},
+            headers=bearer_header(_token(private_key, _READ_ANALYZE)),
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "attachment_image_unavailable"
+    assert connector.fetch_content_calls == []
+    provider.analyze.assert_not_called()
 
 
 def test_cross_user_connector_message_attachment_and_history_are_404(

@@ -54,7 +54,7 @@ def test_mock_provider_emits_requested_and_completed_events(
     requested = _events_named(log_events, "mock_analysis_requested")[-1]
     completed = _events_named(log_events, "mock_analysis_completed")[-1]
     assert requested["provider"] == "mock"
-    assert requested["message_id"] == "msg-001"
+    assert "message_id" not in requested
     assert completed["provider"] == "mock"
     assert isinstance(completed["duration_ms"], float)
     assert completed["duration_ms"] >= 0
@@ -105,9 +105,40 @@ def test_foundry_provider_emits_requested_and_completed_events(
     completed = _events_named(log_events, "microsoft_foundry_analysis_completed")[-1]
     assert requested["provider"] == "microsoft_foundry"
     assert requested["deployment"] == _FOUNDRY_DEPLOYMENT
+    assert "message_id" not in requested
     assert completed["provider"] == "microsoft_foundry"
+    assert "message_id" not in completed
     assert completed["duration_ms"] >= 0
     mock_openai.responses.create.assert_called_once()
+
+
+def test_foundry_provider_does_not_log_mailbox_message_identifiers(
+    make_request: RequestFactory,
+    log_events: list[dict],
+) -> None:
+    """Foundry telemetry must not emit Graph/Gmail message identifiers."""
+    secret_message_id = "AAMkAGI2THVLLTIw-secret-mailbox-id=="
+    mock_openai = MagicMock()
+    mock_openai.responses.create.return_value = SimpleNamespace(
+        output_text=json.dumps(_valid_payload())
+    )
+    provider = MicrosoftFoundryProvider(
+        project_endpoint=_FOUNDRY_ENDPOINT,
+        model_deployment=_FOUNDRY_DEPLOYMENT,
+        openai_client=mock_openai,
+    )
+
+    provider.analyze(
+        make_request(
+            "Please review the weekly status report.",
+            message_id=secret_message_id,
+        )
+    )
+
+    blob = repr(log_events)
+    assert secret_message_id not in blob
+    assert "message_id" not in _events_named(log_events, "microsoft_foundry_analysis_requested")[-1]
+    assert "message_id" not in _events_named(log_events, "microsoft_foundry_analysis_completed")[-1]
 
 
 def test_foundry_provider_emits_failed_event(

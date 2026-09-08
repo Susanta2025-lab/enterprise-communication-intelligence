@@ -58,13 +58,12 @@ class AmazonBedrockProvider(AIProvider):
         """Analyze a communication through Amazon Bedrock and map domain results."""
         if request.attachment_images:
             raise AttachmentImageInputUnsupportedError()
-        message_id = request.message.message_id
         logger.info(
             "amazon_bedrock_analysis_requested",
             provider=self.PROVIDER_NAME,
             model_id=self._model_id,
             region=self._region,
-            message_id=message_id,
+            operation="analyze",
         )
         started_at = time.perf_counter()
 
@@ -104,7 +103,7 @@ class AmazonBedrockProvider(AIProvider):
                 provider=self.PROVIDER_NAME,
                 model_id=self._model_id,
                 region=self._region,
-                message_id=message_id,
+                operation="analyze",
                 duration_ms=elapsed_ms(started_at),
                 error_class=error_class(exc),
             )
@@ -115,7 +114,7 @@ class AmazonBedrockProvider(AIProvider):
             provider=self.PROVIDER_NAME,
             model_id=self._model_id,
             region=self._region,
-            message_id=message_id,
+            operation="analyze",
             duration_ms=elapsed_ms(started_at),
         )
         return result

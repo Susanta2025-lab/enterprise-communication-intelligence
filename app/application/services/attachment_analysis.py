@@ -20,7 +20,11 @@ from app.application.services.attachment_inspection import AttachmentInspectionS
 from app.application.services.communication_analysis import CommunicationAnalysisService
 from app.core.logging import get_logger
 from app.domain.attachment_policy import AttachmentContentBudget, attachment_size_bucket
-from app.domain.enums import AttachmentExtractedContentStatus, AttachmentScanVerdict
+from app.domain.enums import (
+    AttachmentExtractedContentStatus,
+    AttachmentKind,
+    AttachmentScanVerdict,
+)
 from app.domain.exceptions import (
     AttachmentEncryptedError,
     AttachmentExceedsLimitError,
@@ -39,6 +43,8 @@ from app.domain.models import (
 from app.domain.schemas import CommunicationRequest
 
 logger = get_logger(__name__)
+
+_IMAGE_KINDS = frozenset({AttachmentKind.JPEG, AttachmentKind.PNG})
 
 
 class AttachmentAnalysisService:
@@ -72,6 +78,7 @@ class AttachmentAnalysisService:
             provider_message_id,
             provider_attachment_id,
             budget=budget,
+            before_retrieve=self._reject_unavailable_image_kind,
         )
         if inspected.scan.verdict is not AttachmentScanVerdict.CLEAN:
             raise AttachmentScanRejectedError()
@@ -151,9 +158,9 @@ class AttachmentAnalysisService:
         )
 
         request = _build_untrusted_request(message, parsed)
+        # Defense in depth: capability was already gated before content retrieval.
         if request.attachment_images:
-            if not self._image_input_enabled or not self._analysis.supports_image_input():
-                raise AttachmentImageAnalysisNotAvailableError()
+            self._reject_unavailable_image_kind(inspected.kind)
 
         logger.info(
             "attachment_ai_started",
@@ -210,6 +217,20 @@ class AttachmentAnalysisService:
             analysis=result.analysis.model_copy(update={"draft_reply": None}),
             provider=result.provider,
         )
+
+    def _reject_unavailable_image_kind(self, kind: AttachmentKind) -> None:
+        """Fail closed for JPEG/PNG when image AI is not configured or not declared."""
+        if kind not in _IMAGE_KINDS:
+            return
+        if self._image_input_enabled and self._analysis.supports_image_input():
+            return
+        logger.info(
+            "attachment_image_capability_rejected",
+            operation="analyze_attachment",
+            result="image_unavailable",
+            kind=kind.value,
+        )
+        raise AttachmentImageAnalysisNotAvailableError()
 
 
 def _build_untrusted_request(

@@ -51,11 +51,10 @@ class MockAIProvider(AIProvider):
 
     def analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Analyze a communication using deterministic keyword heuristics."""
-        message_id = request.message.message_id
         logger.info(
             "mock_analysis_requested",
             provider=self.PROVIDER_NAME,
-            message_id=message_id,
+            operation="analyze",
         )
         started_at = time.perf_counter()
 
@@ -65,7 +64,7 @@ class MockAIProvider(AIProvider):
             logger.error(
                 "mock_analysis_failed",
                 provider=self.PROVIDER_NAME,
-                message_id=message_id,
+                operation="analyze",
                 duration_ms=elapsed_ms(started_at),
                 error_class=error_class(exc),
             )
@@ -74,7 +73,7 @@ class MockAIProvider(AIProvider):
         logger.info(
             "mock_analysis_completed",
             provider=self.PROVIDER_NAME,
-            message_id=message_id,
+            operation="analyze",
             duration_ms=elapsed_ms(started_at),
         )
         return result

@@ -13,6 +13,7 @@ import {
 
 type AttachmentsSectionProps = {
   canAnalyze: boolean;
+  imageAnalysisAvailable: boolean;
   loading: boolean;
   listError: unknown;
   onRetryList: () => void;
@@ -27,6 +28,7 @@ type AttachmentsSectionProps = {
 
 export function AttachmentsSection({
   canAnalyze,
+  imageAnalysisAvailable,
   loading,
   listError,
   onRetryList,
@@ -74,6 +76,7 @@ export function AttachmentsSection({
               key={item.provider_attachment_id}
               item={item}
               canAnalyze={canAnalyze}
+              imageAnalysisAvailable={imageAnalysisAvailable}
               pending={pendingId === item.provider_attachment_id}
               result={resultFor(item.provider_attachment_id)}
               history={historyFor(item.provider_attachment_id)}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   friendlyAttachmentType,
+  isImageAttachmentType,
   isOversizedReportedSize,
   isSupportedAttachmentType,
 } from "../lib/attachmentType";
@@ -14,6 +15,12 @@ describe("attachment type helpers", () => {
     expect(friendlyAttachmentType("scan.jpg", "image/jpeg")).toBe("JPEG");
     expect(friendlyAttachmentType("diagram.png", "image/png")).toBe("PNG");
     expect(friendlyAttachmentType("payload.zip", "application/zip")).toBe("Other");
+  });
+
+  it("identifies JPEG/PNG for image-capability UX gating", () => {
+    expect(isImageAttachmentType("scan.jpg", "image/jpeg")).toBe(true);
+    expect(isImageAttachmentType("diagram.png", "image/png")).toBe(true);
+    expect(isImageAttachmentType("Contract.pdf", "application/pdf")).toBe(false);
   });
 
   it("treats frontend type checks as display-only, not security", () => {

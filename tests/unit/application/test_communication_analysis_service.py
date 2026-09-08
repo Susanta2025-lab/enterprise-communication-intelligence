@@ -112,7 +112,7 @@ def test_service_success_telemetry_uses_stable_provider_and_duration(
     ]
     assert started[-1]["provider"] == "mock"
     assert completed[-1]["provider"] == "mock"
-    assert completed[-1]["message_id"] == "msg-001"
+    assert "message_id" not in completed[-1]
     assert isinstance(completed[-1]["duration_ms"], float)
     assert completed[-1]["duration_ms"] >= 0
 

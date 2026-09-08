@@ -35,13 +35,12 @@ class CommunicationAnalysisService:
                 the communication.
         """
         provider_name = resolve_provider_name(self._provider)
-        message_id = request.message.message_id
         started_at = time.perf_counter()
 
         logger.info(
             "communication_analysis_started",
             provider=provider_name,
-            message_id=message_id,
+            operation="analyze",
             source_type=request.message.metadata.source_type.value,
         )
 
@@ -51,7 +50,7 @@ class CommunicationAnalysisService:
             logger.error(
                 "communication_analysis_failed",
                 provider=provider_name,
-                message_id=message_id,
+                operation="analyze",
                 duration_ms=elapsed_ms(started_at),
                 error_class=error_class(exc),
             )
@@ -63,7 +62,7 @@ class CommunicationAnalysisService:
         logger.info(
             "communication_analysis_completed",
             provider=provider_name,
-            message_id=message_id,
+            operation="analyze",
             priority=result.analysis.priority.level.value,
             category=result.analysis.category.value,
             duration_ms=elapsed_ms(started_at),

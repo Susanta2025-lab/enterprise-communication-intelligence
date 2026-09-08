@@ -18,6 +18,7 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_V1_PREFIX",
     "AI_PROVIDER",
+    "AI_IMAGE_INPUT_ENABLED",
     "ATTACHMENT_SCANNER_BACKEND",
     "ATTACHMENT_SCANNER_HOST",
     "FOUNDRY_PROJECT_ENDPOINT",
@@ -62,7 +63,43 @@ def test_versioned_health_endpoint(client: TestClient) -> None:
         "version": "0.1.0",
         "environment": "development",
         "attachment_scanner": "unavailable",
+        "ai_image_input": "unavailable",
     }
+
+
+def test_versioned_health_reports_mock_image_capability_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mock + AI_IMAGE_INPUT_ENABLED keeps the image-capable contract available."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
+    monkeypatch.setenv("AI_PROVIDER", "mock")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["ai_image_input"] == "available"
+
+
+def test_versioned_health_keeps_foundry_image_input_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Foundry adapters remain image-unavailable even when the operator flag is on."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AI_PROVIDER", "microsoft_foundry")
+    monkeypatch.setenv("AI_IMAGE_INPUT_ENABLED", "true")
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://example.services.ai.azure.com/api/projects/demo",
+    )
+    monkeypatch.setenv("FOUNDRY_MODEL_DEPLOYMENT", "demo-deployment")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["ai_image_input"] == "unavailable"
 
 
 def test_readiness_endpoint(client: TestClient) -> None:

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from app.api.dependencies import get_database_readiness_probe
 from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
+from app.providers.factory import ai_image_input_status
 from app.schemas.health import HealthResponse, LivenessResponse, ReadinessResponse
 
 liveness_router = APIRouter(tags=["health"])
@@ -32,6 +33,7 @@ def get_health() -> HealthResponse:
         version=settings.app_version,
         environment=settings.app_env,
         attachment_scanner=settings.attachment_scanner_status,
+        ai_image_input=ai_image_input_status(settings),
     )
 
 

@@ -61,7 +61,17 @@ def configure_logging(log_level: str, environment: str) -> None:
     root_logger.setLevel(level)
 
     # Keep noisy third-party loggers at WARNING unless debugging.
+    # httpx/httpcore and Azure HTTP pipelines can otherwise emit full outbound
+    # URLs that embed mailbox message/attachment identifiers.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    for name in (
+        "httpx",
+        "httpcore",
+        "urllib3",
+        "azure",
+        "azure.core.pipeline.policies.http_logging_policy",
+    ):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:

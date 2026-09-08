@@ -50,6 +50,7 @@ import {
   PROTECTED_ANALYSES_SMOKE_PATH,
   type AnalysisListResponse,
 } from "./errors";
+import { HEALTH_PATH, type PlatformHealthResponse } from "./health";
 
 type FetchLike = typeof fetch;
 
@@ -75,6 +76,21 @@ export class EciApiClient {
 
   async getAnalysesSmoke(): Promise<AnalysisListResponse> {
     return this.requestJson<AnalysisListResponse>("GET", PROTECTED_ANALYSES_SMOKE_PATH);
+  }
+
+  async getPlatformHealth(): Promise<PlatformHealthResponse> {
+    const response = await this.fetchImpl(new URL(HEALTH_PATH, `${this.baseUrl}/`).toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Request-ID": this.createRequestId(),
+      },
+    });
+    if (!response.ok) {
+      const kind = kindForStatus(response.status);
+      throw new EciApiError(response.status, kind, messageForKind(kind));
+    }
+    return (await response.json()) as PlatformHealthResponse;
   }
 
   async listConnectorAccounts(

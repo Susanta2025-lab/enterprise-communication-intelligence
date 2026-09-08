@@ -5,6 +5,7 @@ import { presentProductError } from "../../errors/presentProductError";
 import { formatReportedSize } from "../../lib/formatBytes";
 import {
   friendlyAttachmentType,
+  isImageAttachmentType,
   isOversizedReportedSize,
   isSupportedAttachmentType,
 } from "../../lib/attachmentType";
@@ -16,6 +17,7 @@ import {
   ANALYZE_ATTACHMENT_LABEL,
   ANALYZING_ATTACHMENT_COPY,
   COMPLETED_STATUS,
+  IMAGE_ANALYSIS_UNAVAILABLE_STATUS,
   INLINE_STATUS,
   NOT_ANALYZED_STATUS,
   PREVIOUS_ANALYSES_HEADING,
@@ -28,6 +30,7 @@ import { formatMailboxTimestamp } from "../../lib/formatTimestamp";
 type AttachmentItemProps = {
   item: AttachmentMetadataItem;
   canAnalyze: boolean;
+  imageAnalysisAvailable: boolean;
   pending: boolean;
   result: AttachmentAnalysisResponse | null;
   history: readonly AttachmentAnalysisResponse[];
@@ -38,6 +41,7 @@ type AttachmentItemProps = {
 export function AttachmentItem({
   item,
   canAnalyze,
+  imageAnalysisAvailable,
   pending,
   result,
   history,
@@ -49,8 +53,11 @@ export function AttachmentItem({
   const filename = displayAttachmentFilename(item.filename);
   const type = friendlyAttachmentType(item.filename, item.media_type);
   const supported = isSupportedAttachmentType(item.filename, item.media_type);
+  const imageType = isImageAttachmentType(item.filename, item.media_type);
+  const imageUnavailable = imageType && !imageAnalysisAvailable;
   const oversized = isOversizedReportedSize(item.reported_size);
-  const canRequestAnalyze = canAnalyze && supported && !oversized && !pending;
+  const offerAnalyze = canAnalyze && supported && !oversized && !imageUnavailable;
+  const canRequestAnalyze = offerAnalyze && !pending;
   const latest = result ?? history[0] ?? null;
   const previous = latest
     ? history.filter((entry) => entry.attachment_analysis_id !== latest.attachment_analysis_id)
@@ -61,9 +68,11 @@ export function AttachmentItem({
       ? COMPLETED_STATUS
       : oversized
         ? TOO_LARGE_STATUS
-        : supported
-          ? NOT_ANALYZED_STATUS
-          : UNSUPPORTED_STATUS;
+        : imageUnavailable
+          ? IMAGE_ANALYSIS_UNAVAILABLE_STATUS
+          : supported
+            ? NOT_ANALYZED_STATUS
+            : UNSUPPORTED_STATUS;
   const errorView = error ? presentProductError("attachment_analyze", error) : null;
 
   useEffect(() => {
@@ -86,10 +95,14 @@ export function AttachmentItem({
             {filename}
           </p>
           <p className="mt-1 text-sm text-slate-600">{metaParts.join(" · ")}</p>
-          <p className="mt-1 text-sm text-slate-700" data-testid="attachment-status">
+          <p
+            className="mt-1 text-sm text-slate-700"
+            data-testid="attachment-status"
+            role={pending ? "status" : undefined}
+          >
             {status}
           </p>
-          {canAnalyze && supported && !oversized ? (
+          {offerAnalyze ? (
             <div className="mt-3">
               <Button
                 className="w-full sm:w-auto"
@@ -102,11 +115,6 @@ export function AttachmentItem({
                 {ANALYZE_ATTACHMENT_LABEL}
               </Button>
             </div>
-          ) : null}
-          {pending ? (
-            <p role="status" className="mt-3 text-sm text-slate-600" data-testid="attachment-analyzing">
-              {ANALYZING_ATTACHMENT_COPY}
-            </p>
           ) : null}
         </div>
       </div>

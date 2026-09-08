@@ -29,6 +29,7 @@ import {
   useAttachmentAnalysisHistory,
 } from "../hooks/useAttachmentAnalysisHistory";
 import { useMailboxAttachments } from "../hooks/useMailboxAttachments";
+import { useImageAnalysisAvailable } from "../hooks/usePlatformHealth";
 import { useWorkflowAction } from "../hooks/useWorkflowAction";
 import {
   flattenMailboxItems,
@@ -48,6 +49,10 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   const canAnalyze = hasPermission(permissions, "communications:analyze");
   const canWorkflow = hasPermission(permissions, "communications:workflow");
   const canSend = hasPermission(permissions, "communications:send");
+  const imageAnalysisAvailable = useImageAnalysisAvailable(
+    apiClient,
+    Boolean(connectorAccountId) && canRead,
+  );
   const connectorsQuery = useConnectorAccounts(apiClient, Boolean(connectorAccountId) && canRead);
   const account = connectorsQuery.data?.items.find((item) => item.id === connectorAccountId);
   const mailboxEnabled = Boolean(connectorAccountId) && canRead && account?.status === "active";
@@ -304,6 +309,7 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
                 <>
                   <AttachmentsSection
                     canAnalyze={canAnalyze}
+                    imageAnalysisAvailable={imageAnalysisAvailable}
                     loading={attachmentsQuery.isPending}
                     listError={attachmentsQuery.error}
                     onRetryList={() => void attachmentsQuery.refetch()}

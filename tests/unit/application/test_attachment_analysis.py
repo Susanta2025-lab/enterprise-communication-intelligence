@@ -49,6 +49,31 @@ from tests.unit.infrastructure.attachments.fixtures import (
 )
 
 
+class _TrackingConnector:
+    """Wrap a connector and record content-retrieval attempts."""
+
+    def __init__(self, inner: FakeCommunicationConnector) -> None:
+        self.inner = inner
+        self.content_fetches: list[tuple[str, str]] = []
+
+    @property
+    def provider(self) -> str:
+        return self.inner.provider
+
+    def fetch_message(self, provider_message_id: str):
+        return self.inner.fetch_message(provider_message_id)
+
+    def list_attachments(self, provider_message_id: str):
+        return self.inner.list_attachments(provider_message_id)
+
+    def fetch_attachment_content(self, provider_message_id: str, provider_attachment_id: str):
+        self.content_fetches.append((provider_message_id, provider_attachment_id))
+        return self.inner.fetch_attachment_content(provider_message_id, provider_attachment_id)
+
+    def list_messages(self, query):
+        return self.inner.list_messages(query)
+
+
 def _message(body: str = "Please review the attached statement.") -> CommunicationMessage:
     return CommunicationMessage(
         body=body,
@@ -202,22 +227,30 @@ def test_prompt_injection_text_stays_untrusted_and_does_not_send() -> None:
     assert result.analysis.draft_reply is None
 
 
-def test_image_capability_disabled_fails_closed_without_ai() -> None:
+def test_image_capability_disabled_fails_closed_without_retrieval_or_ai() -> None:
     provider = MagicMock()
     provider.supports_image_input.return_value = False
+    scanner = MagicMock()
+    parser = MagicMock()
     payload = tiny_jpeg()
-    service = _service(provider=provider, image_input_enabled=False)
+    connector = _TrackingConnector(
+        _connector("photo.jpg", "image/jpeg", payload),
+    )
+    service = _service(scanner=scanner, parser=parser, provider=provider, image_input_enabled=False)
     with pytest.raises(AttachmentImageAnalysisNotAvailableError):
         service.analyze(
-            _connector("photo.jpg", "image/jpeg", payload),
+            connector,
             "fake-msg-001",
             "att-1",
             _message(),
         )
+    assert connector.content_fetches == []
+    scanner.scan.assert_not_called()
+    parser.parse.assert_not_called()
     provider.analyze.assert_not_called()
 
 
-def test_mock_image_capability_enabled_analyzes_image() -> None:
+def test_image_capability_enabled_with_supporting_provider_analyzes_image() -> None:
     payload = tiny_png()
     result = _service(
         provider=MockAIProvider(supports_image_input=True),
@@ -232,6 +265,34 @@ def test_mock_image_capability_enabled_analyzes_image() -> None:
     assert result.extracted_content_status is AttachmentExtractedContentStatus.IMAGE
     assert result.analysis.draft_reply is None
     assert "untrusted image attachment" in result.analysis.summary.text.lower()
+
+
+def test_xlsx_remains_unsupported_without_retrieval() -> None:
+    scanner = MagicMock()
+    parser = MagicMock()
+    provider = MagicMock()
+    connector = _TrackingConnector(
+        FakeCommunicationConnector(
+            attachments={
+                "fake-msg-001": (
+                    _metadata(
+                        "att-xlsx",
+                        "budget.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        2048,
+                    ),
+                )
+            },
+            attachment_contents={("fake-msg-001", "att-xlsx"): b"PK\x03\x04fake-xlsx"},
+        )
+    )
+    service = _service(scanner=scanner, parser=parser, provider=provider)
+    with pytest.raises(AttachmentNotSupportedError):
+        service.analyze(connector, "fake-msg-001", "att-xlsx", _message())
+    assert connector.content_fetches == []
+    scanner.scan.assert_not_called()
+    parser.parse.assert_not_called()
+    provider.analyze.assert_not_called()
 
 
 def test_txt_path_reaches_mock() -> None:

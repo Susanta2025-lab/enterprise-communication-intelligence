@@ -121,10 +121,21 @@ function mailboxFetch(
     analyze?: (body: { provider_attachment_id?: string }) => Response | Promise<Response>;
     history?: AttachmentAnalysisResponse[];
     emailAnalyze?: () => Response;
+    aiImageInput?: "available" | "unavailable";
   } = {},
 ) {
   return vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
+    if (url.includes("/api/v1/health") || url.endsWith("/health")) {
+      return jsonResponse(200, {
+        status: "healthy",
+        service: "Enterprise Communication Intelligence Platform",
+        version: "0.1.0",
+        environment: "development",
+        attachment_scanner: "unavailable",
+        ai_image_input: options.aiImageInput ?? "unavailable",
+      });
+    }
     if (url.includes("/attachments/analyze")) {
       const body = JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}")) as {
         provider_attachment_id?: string;
@@ -224,12 +235,36 @@ describe("attachment metadata", () => {
     expect(screen.getByText("Unsupported for analysis")).toBeInTheDocument();
     expect(screen.getByText("huge.pdf")).toBeInTheDocument();
     expect(screen.getByText("Too large to analyze")).toBeInTheDocument();
+    expect(
+      screen.getByText("Image analysis unavailable with current AI provider"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyze attachment: Contract.pdf" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Analyze attachment: banner.png" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Analyze attachment: banner.png" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Analyze attachment: payload.zip" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Analyze attachment: huge.pdf" })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain(ATT_PDF);
     expect(document.body.textContent).not.toContain(ATT_ZIP);
+  });
+
+  it("offers Analyze for JPEG/PNG only when platform health reports image input available", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = mailboxFetch(
+      [
+        attachmentItem({
+          provider_attachment_id: ATT_IMAGE,
+          filename: "chart.png",
+          media_type: "image/png",
+          reported_size: 4096,
+        }),
+      ],
+      { aiImageInput: "available" },
+    );
+    renderWorkspace({ fetchImpl });
+    await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
+    expect(await screen.findByRole("button", { name: "Analyze attachment: chart.png" })).toBeEnabled();
+    expect(
+      screen.queryByText("Image analysis unavailable with current AI provider"),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -309,7 +344,10 @@ describe("attachment state and error mapping", () => {
     await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
     const button = await screen.findByRole("button", { name: "Analyze attachment: Contract.pdf" });
     await user.click(button);
-    expect(await screen.findByTestId("attachment-analyzing")).toHaveTextContent("Analyzing attachment");
+    const analyzing = await screen.findAllByText("Analyzing attachment");
+    expect(analyzing).toHaveLength(1);
+    expect(screen.getByTestId("attachment-status")).toHaveTextContent("Analyzing attachment");
+    expect(screen.queryByTestId("attachment-analyzing")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyze attachment: Contract.pdf" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Ada Lovelace/ })).toBeEnabled();
     release?.(jsonResponse(200, analysisResult()));
@@ -331,20 +369,55 @@ describe("attachment state and error mapping", () => {
     [500, "foundry stack trace", "The attachment could not be analyzed."],
   ] as const)("maps HTTP %s detail to controlled copy", async (status, detail, message) => {
     const user = userEvent.setup();
-    const fetchImpl = mailboxFetch([attachmentItem({
-      provider_attachment_id: ATT_IMAGE,
-      filename: "scan.jpg",
-      media_type: "image/jpeg",
-      reported_size: 4096,
-    })], {
-      analyze: () => jsonResponse(status, { detail }),
-    });
+    const fetchImpl = mailboxFetch(
+      [
+        attachmentItem({
+          provider_attachment_id: ATT_IMAGE,
+          filename: "scan.jpg",
+          media_type: "image/jpeg",
+          reported_size: 4096,
+        }),
+      ],
+      {
+        aiImageInput: "available",
+        analyze: () => jsonResponse(status, { detail }),
+      },
+    );
     renderWorkspace({ fetchImpl });
     await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
     await user.click(await screen.findByRole("button", { name: "Analyze attachment: scan.jpg" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
     expect(screen.queryByText(detail)).not.toBeInTheDocument();
     expect(screen.queryByText("foundry stack trace")).not.toBeInTheDocument();
+  });
+
+  it("keeps backend image-unavailable enforcement when frontend gating is bypassed", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = mailboxFetch(
+      [
+        attachmentItem({
+          provider_attachment_id: ATT_IMAGE,
+          filename: "scan.jpg",
+          media_type: "image/jpeg",
+          reported_size: 4096,
+        }),
+      ],
+      {
+        aiImageInput: "available",
+        analyze: () =>
+          jsonResponse(409, {
+            detail: "Image analysis is not available.",
+            code: "attachment_image_unavailable",
+          }),
+      },
+    );
+    renderWorkspace({ fetchImpl });
+    await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
+    await user.click(await screen.findByRole("button", { name: "Analyze attachment: scan.jpg" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Image analysis is not available with the current AI provider.",
+    );
+    expect(attachmentAnalyzeCalls(fetchImpl)).toHaveLength(1);
   });
 
   it("maps a network failure without exposing internals", async () => {

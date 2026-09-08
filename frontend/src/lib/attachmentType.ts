@@ -44,6 +44,11 @@ export function isSupportedAttachmentType(filename: string, mediaType: string): 
   return SUPPORTED_TYPES.has(friendlyAttachmentType(filename, mediaType));
 }
 
+export function isImageAttachmentType(filename: string, mediaType: string): boolean {
+  const type = friendlyAttachmentType(filename, mediaType);
+  return type === "JPEG" || type === "PNG";
+}
+
 export function isOversizedReportedSize(reportedSize: number): boolean {
   return Number.isFinite(reportedSize) && reportedSize > MAX_ATTACHMENT_CONTENT_BYTES;
 }

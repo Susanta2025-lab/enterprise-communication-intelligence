@@ -1,5 +1,5 @@
 """AI provider implementations and factory."""
 
-from app.providers.factory import create_ai_provider
+from app.providers.factory import ai_image_input_status, create_ai_provider
 
-__all__ = ["create_ai_provider"]
+__all__ = ["ai_image_input_status", "create_ai_provider"]
