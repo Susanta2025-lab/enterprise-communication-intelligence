@@ -5,6 +5,7 @@ import {
   type ConnectorProvider,
 } from "../../api/connectorAccounts";
 import { Button } from "../ui/button";
+import { ConnectorLogo } from "./ConnectorLogo";
 import {
   CONNECT_ANOTHER_AVAILABLE_COPY,
   CONNECT_ANOTHER_UNAVAILABLE_COPY,
@@ -33,11 +34,12 @@ export function ConnectAnotherAccount({
       data-testid={`connect-another-${provider}`}
     >
       <Button
-        className="w-full sm:w-auto"
+        className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
         disabled={!enabled}
         aria-describedby={descriptionId}
         onClick={enabled ? onConnect : undefined}
       >
+        <ConnectorLogo provider={provider} className="h-5 w-5 shrink-0" />
         {label}
       </Button>
       <p id={descriptionId} className="mt-2 text-sm text-slate-600">

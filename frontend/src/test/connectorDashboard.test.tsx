@@ -163,7 +163,7 @@ describe("connector dashboard", () => {
     expect(screen.getByRole("heading", { name: "Gmail" })).toBeVisible();
   });
 
-  it("keeps Gmail and Microsoft Outlook text labels when generic icons are present", async () => {
+  it("renders Gmail and Outlook brand marks beside provider text labels", async () => {
     const fetchImpl = vi.fn<typeof fetch>(
       async () =>
         jsonResponse(
@@ -177,9 +177,20 @@ describe("connector dashboard", () => {
     renderDashboard({ fetchImpl });
     expect(await screen.findByRole("heading", { name: "Gmail" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Microsoft Outlook" })).toBeVisible();
+
+    const gmailLogo = document.querySelector('[data-connector-logo="gmail"]');
+    const outlookLogo = document.querySelector('[data-connector-logo="outlook"]');
+    expect(gmailLogo).not.toBeNull();
+    expect(outlookLogo).not.toBeNull();
+    expect(gmailLogo).toHaveAttribute("aria-hidden", "true");
+    expect(outlookLogo).toHaveAttribute("aria-hidden", "true");
+    expect(gmailLogo).toHaveAttribute("data-provider", "gmail");
+    expect(outlookLogo).toHaveAttribute("data-provider", "microsoft_graph");
+
+    expect(screen.queryByRole("img", { name: /gmail logo/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /outlook logo/i })).not.toBeInTheDocument();
     expect(screen.queryByAltText(/gmail logo/i)).not.toBeInTheDocument();
     expect(screen.queryByAltText(/outlook logo/i)).not.toBeInTheDocument();
-    expect(screen.queryByAltText(/microsoft logo/i)).not.toBeInTheDocument();
   });
 
   it("renders REAUTH_REQUIRED with reconnect and does not imply deletion", async () => {

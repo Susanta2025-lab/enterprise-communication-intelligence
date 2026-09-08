@@ -218,7 +218,7 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   if (account.status === "reauth_required") {
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
-        <MailboxHeader title={title} />
+        <MailboxHeader title={title} provider={account.provider} />
         <MailboxUnavailableState
           title="Reauthorization required"
           message="This mailbox needs to be reconnected before messages can be loaded. Reconnect from the dashboard."
@@ -230,7 +230,7 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
   if (account.status !== "active") {
     return (
       <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
-        <MailboxHeader title={title} />
+        <MailboxHeader title={title} provider={account.provider} />
         <MailboxUnavailableState
           title="Mailbox disconnected"
           message="This mailbox is disconnected. Connect it from the dashboard to browse messages."
@@ -249,6 +249,7 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
     <section className="space-y-6" aria-labelledby="mailbox-workspace-heading">
       <MailboxHeader
         title={title}
+        provider={account.provider}
         onRefresh={
           mailboxQuery.isSuccess || showList ? () => void handleRefresh() : undefined
         }

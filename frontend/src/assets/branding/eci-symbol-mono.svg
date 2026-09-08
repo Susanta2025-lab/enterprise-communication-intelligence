@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ECI">
   <title>ECI</title>
   <path fill="#082B59" d="M5 9.8 10.2 4.5h3.3v23H10.2L5 22.2Z"/>
-  <path fill="#08BFE0" d="M27 9.8 21.8 4.5h-3.3v23h3.3L27 22.2Z"/>
-  <rect x="14.9" y="8" width="2.2" height="16" rx="1.1" fill="#08BFE0"/>
+  <path fill="#082B59" d="M27 9.8 21.8 4.5h-3.3v23h3.3L27 22.2Z"/>
 </svg>

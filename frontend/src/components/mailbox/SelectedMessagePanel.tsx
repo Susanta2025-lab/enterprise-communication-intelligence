@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { MailboxMessageListItem } from "../../api/mailbox";
 import { formatMailboxTimestamp } from "../../lib/formatTimestamp";
+import { ConnectorLogo } from "../connectors/ConnectorLogo";
 import { providerLabel } from "../connectors/copy";
 import { displaySubject } from "./copy";
 
@@ -41,7 +42,8 @@ export function SelectedMessagePanel({
         </button>
       ) : null}
       <h3 className="text-base font-semibold text-slate-900">Selected message</h3>
-      <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <p className="mt-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+        <ConnectorLogo provider={provider} className="h-4 w-4 shrink-0" />
         {providerLabel(provider)}
       </p>
       <dl className="mt-4 space-y-3 text-sm">

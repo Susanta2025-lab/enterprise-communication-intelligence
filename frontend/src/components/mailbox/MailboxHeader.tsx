@@ -2,10 +2,12 @@ import { Link } from "react-router-dom";
 
 import { BACK_TO_DASHBOARD_LABEL, REFRESH_LABEL } from "../../errors/copy";
 import { DASHBOARD_PATH } from "../../navigation/paths";
+import { ConnectorLogo } from "../connectors/ConnectorLogo";
 import { Button } from "../ui/button";
 
 type MailboxHeaderProps = {
   title: string;
+  provider?: string;
   onRefresh?: () => void;
   refreshDisabled?: boolean;
   refreshing?: boolean;
@@ -13,6 +15,7 @@ type MailboxHeaderProps = {
 
 export function MailboxHeader({
   title,
+  provider,
   onRefresh,
   refreshDisabled,
   refreshing,
@@ -25,9 +28,14 @@ export function MailboxHeader({
             {BACK_TO_DASHBOARD_LABEL}
           </Link>
         </nav>
-        <h2 id="mailbox-workspace-heading" className="mt-2 text-lg font-semibold break-words text-slate-900">
-          {title}
-        </h2>
+        <div className="mt-2 flex min-w-0 items-center gap-2.5">
+          {provider ? (
+            <ConnectorLogo provider={provider} className="h-7 w-7 shrink-0" />
+          ) : null}
+          <h2 id="mailbox-workspace-heading" className="text-lg font-semibold break-words text-slate-900">
+            {title}
+          </h2>
+        </div>
       </div>
       {onRefresh ? (
         <Button

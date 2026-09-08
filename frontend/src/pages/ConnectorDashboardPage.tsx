@@ -7,6 +7,7 @@ import { hasPermission } from "../auth/permissions";
 import { ConfirmDialog } from "../components/connectors/ConfirmDialog";
 import { ConnectAnotherAccount } from "../components/connectors/ConnectAnotherAccount";
 import { ConnectorCard } from "../components/connectors/ConnectorCard";
+import { ConnectorLogo } from "../components/connectors/ConnectorLogo";
 import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
 import { OAuthReturnNotice } from "../components/connectors/OAuthReturnNotice";
 import { PermissionGate } from "../components/connectors/PermissionGate";
@@ -193,8 +194,13 @@ function MissingProviderCard({
   return (
     <article className="flex min-w-0 flex-col gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-5">
       <div className="min-w-0">
-        <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
-        <p className="mt-1 text-sm text-slate-600">No mailbox is connected for this provider.</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <ConnectorLogo provider={provider} className="mt-0.5 h-8 w-8 shrink-0" />
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold break-words text-slate-900">{label}</h3>
+            <p className="mt-1 text-sm text-slate-600">No mailbox is connected for this provider.</p>
+          </div>
+        </div>
       </div>
       <PermissionGate
         permission="communications:connect"
