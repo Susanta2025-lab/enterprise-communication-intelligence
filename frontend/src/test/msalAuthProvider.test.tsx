@@ -1,4 +1,4 @@
-import { InteractionStatus, type AccountInfo, type AuthenticationResult, type IPublicClientApplication } from "@azure/msal-browser";
+import { InteractionStatus, EventType, type AccountInfo, type AuthenticationResult, type IPublicClientApplication } from "@azure/msal-browser";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
@@ -75,6 +75,8 @@ function createInstance(
     acquireTokenSilent,
     loginRedirect: vi.fn(async () => undefined),
     logoutRedirect: vi.fn(async () => undefined),
+    addEventCallback: vi.fn(() => "cb-1"),
+    removeEventCallback: vi.fn(),
     ...extras,
   } as unknown as IPublicClientApplication;
 }
@@ -250,5 +252,39 @@ describe("MsalAuthProvider login and logout", () => {
       postLogoutRedirectUri: TEST_CONFIG.entraRedirectUri,
     });
     expect(instance.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a completed-sign-in failure when MSAL emits ACQUIRE_TOKEN_FAILURE", async () => {
+    msalHarness.authenticated = false;
+    const listeners: Array<(message: unknown) => void> = [];
+    const acquireTokenSilent = vi.fn(async () => ({ accessToken: SCOPED_TOKEN }) as AuthenticationResult);
+    const instance = createInstance(acquireTokenSilent, null, {
+      addEventCallback: vi.fn((callback) => {
+        listeners.push(callback);
+        return "fail-cb";
+      }),
+    });
+    msalHarness.instance = instance;
+
+    function ErrorProbe() {
+      const { error } = useAuth();
+      return <p role="alert">{error}</p>;
+    }
+
+    render(
+      <MsalAuthProvider config={TEST_CONFIG} instance={instance}>
+        <ErrorProbe />
+      </MsalAuthProvider>,
+    );
+
+    expect(listeners).toHaveLength(1);
+    listeners[0]?.({
+      eventType: EventType.ACQUIRE_TOKEN_FAILURE,
+      error: { name: "BrowserAuthError", errorCode: "no_token_request_cache_error" },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-in could not be completed. Try again.",
+    );
   });
 });

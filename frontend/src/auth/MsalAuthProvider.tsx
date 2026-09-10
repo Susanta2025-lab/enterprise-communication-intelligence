@@ -1,4 +1,10 @@
-import { InteractionStatus, type AccountInfo, type IPublicClientApplication } from "@azure/msal-browser";
+import {
+  EventType,
+  InteractionStatus,
+  type AccountInfo,
+  type EventMessage,
+  type IPublicClientApplication,
+} from "@azure/msal-browser";
 import { MsalProvider, useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -7,9 +13,11 @@ import { permissionsFromAccessToken } from "./accessTokenClaims";
 import { AuthContext } from "./AuthContext";
 import { resolveDisplayName } from "./displayName";
 import { buildLoginRequest, buildLogoutRequest } from "./msal";
+import { logMsalDiagError } from "./msalDiagnostics";
 import type { EciPermission } from "./permissions";
 
 const EMPTY_PERMISSIONS: readonly EciPermission[] = [];
+const REDIRECT_FAILURE_MESSAGE = "Sign-in could not be completed. Try again.";
 
 function resolveAccount(instance: IPublicClientApplication): AccountInfo | null {
   return instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
@@ -60,7 +68,31 @@ function MsalAuthSession({
   const displayName = resolveDisplayName(account);
 
   useEffect(() => {
-    if (!isAuthenticated || accountId === null) {
+    const callbackId = instance.addEventCallback((message: EventMessage) => {
+      // MSAL browser v5 emits login/redirect failures as ACQUIRE_TOKEN_FAILURE
+      // (LOGIN_FAILURE was removed).
+      if (message.eventType !== EventType.ACQUIRE_TOKEN_FAILURE) {
+        return;
+      }
+      logMsalDiagError("auth interaction failed", message.error, {
+        eventType: message.eventType,
+        interactionStatus: inProgress,
+        accountCount: instance.getAllAccounts().length,
+        hasActiveAccount: instance.getActiveAccount() !== null,
+      });
+      setError(REDIRECT_FAILURE_MESSAGE);
+    });
+    return () => {
+      if (callbackId) {
+        instance.removeEventCallback(callbackId);
+      }
+    };
+  }, [inProgress, instance]);
+
+  useEffect(() => {
+    // Wait until MsalProvider finishes Startup / redirect handling before
+    // touching tokens; interactive APIs must not race handleRedirectPromise.
+    if (interactionInProgress || !isAuthenticated || accountId === null) {
       setPermissions(retainPermissionsIfUnchanged(EMPTY_PERMISSIONS));
       return;
     }
@@ -81,7 +113,12 @@ function MsalAuthSession({
         }
         setPermissions(retainPermissionsIfUnchanged(permissionsFromAccessToken(result.accessToken)));
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        logMsalDiagError("permission token acquire failed", error, {
+          eventType: "acquireTokenSilent",
+          accountCount: instance.getAllAccounts().length,
+          hasActiveAccount: instance.getActiveAccount() !== null,
+        });
         if (!cancelled) {
           setPermissions(retainPermissionsIfUnchanged(EMPTY_PERMISSIONS));
         }
@@ -89,7 +126,7 @@ function MsalAuthSession({
     return () => {
       cancelled = true;
     };
-  }, [accountId, config.eciApiScopes, instance, isAuthenticated]);
+  }, [accountId, config.eciApiScopes, instance, interactionInProgress, isAuthenticated]);
 
   const login = useCallback(async () => {
     if (interactionInProgress) {
@@ -98,10 +135,14 @@ function MsalAuthSession({
     setError(null);
     try {
       await instance.loginRedirect(buildLoginRequest(config));
-    } catch {
+    } catch (error: unknown) {
+      logMsalDiagError("loginRedirect failed", error, {
+        eventType: "loginRedirect",
+        interactionStatus: inProgress,
+      });
       setError("Sign-in could not be started. Try again.");
     }
-  }, [config, instance, interactionInProgress]);
+  }, [config, inProgress, instance, interactionInProgress]);
 
   const logout = useCallback(async () => {
     if (interactionInProgress) {

@@ -43,6 +43,7 @@ function start(): void {
     tokenProvider: new MsalAccessTokenProvider(msalInstance, config),
   });
 
+  // initialize() only — msal-react v5 MsalProvider calls handleRedirectPromise.
   void initializeMsal(msalInstance)
     .then(() => {
       const root = document.getElementById("root");

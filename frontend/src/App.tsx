@@ -31,7 +31,7 @@ export function App({ apiClient }: AppProps) {
 }
 
 function AppRoutes({ apiClient }: AppProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, interactionInProgress } = useAuth();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -42,6 +42,16 @@ function AppRoutes({ apiClient }: AppProps) {
   }, [isAuthenticated, queryClient]);
 
   if (!isAuthenticated) {
+    // MsalProvider owns redirect completion; avoid Sign-in until Startup/redirect ends.
+    if (interactionInProgress) {
+      return (
+        <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-16 sm:px-6">
+          <p className="text-sm text-slate-600" role="status">
+            Completing sign-in…
+          </p>
+        </main>
+      );
+    }
     return <SignInPanel />;
   }
 

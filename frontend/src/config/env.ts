@@ -1,4 +1,4 @@
-import { isEciPermission } from "../auth/permissions";
+import { ECI_PERMISSIONS, isEciPermission } from "../auth/permissions";
 
 export type EnvRecord = Record<string, string | boolean | undefined>;
 
@@ -61,8 +61,14 @@ export function parseEciApiScopes(raw: string): readonly string[] {
   if (parts.length === 0) {
     throw new FrontendConfigError("VITE_ECI_API_SCOPES is missing or empty.");
   }
+  if (parts.length !== ECI_PERMISSIONS.length) {
+    throw new FrontendConfigError(
+      `VITE_ECI_API_SCOPES must contain exactly ${ECI_PERMISSIONS.length} delegated scopes.`,
+    );
+  }
 
   const seen = new Set<string>();
+  let resourcePrefix: string | null = null;
   for (const scope of parts) {
     if (scope.includes(".default")) {
       throw new FrontendConfigError(
@@ -77,7 +83,27 @@ export function parseEciApiScopes(raw: string): readonly string[] {
           "VITE_ECI_API_SCOPES must contain full ECI scope identifiers.",
         );
       }
-      permission = url.pathname.replace(/^\/+/, "").split("/").at(-1) ?? "";
+      if (!url.hostname) {
+        throw new FrontendConfigError(
+          "VITE_ECI_API_SCOPES must contain full ECI scope identifiers.",
+        );
+      }
+      const pathSegments = url.pathname.split("/").filter(Boolean);
+      // Reject nested paths such as /communications:send/communications:read.
+      if (pathSegments.length !== 1) {
+        throw new FrontendConfigError(
+          "VITE_ECI_API_SCOPES must use a single permission path segment per scope.",
+        );
+      }
+      permission = pathSegments[0] ?? "";
+      const prefix = `api://${url.hostname}`.toLowerCase();
+      if (resourcePrefix === null) {
+        resourcePrefix = prefix;
+      } else if (prefix !== resourcePrefix) {
+        throw new FrontendConfigError(
+          "VITE_ECI_API_SCOPES must use one shared api:// resource prefix.",
+        );
+      }
     } catch (error) {
       if (error instanceof FrontendConfigError) {
         throw error;
@@ -95,6 +121,14 @@ export function parseEciApiScopes(raw: string): readonly string[] {
       throw new FrontendConfigError("VITE_ECI_API_SCOPES contains duplicate permissions.");
     }
     seen.add(permission);
+  }
+
+  for (const required of ECI_PERMISSIONS) {
+    if (!seen.has(required)) {
+      throw new FrontendConfigError(
+        "VITE_ECI_API_SCOPES must include each communications:* permission exactly once.",
+      );
+    }
   }
 
   return Object.freeze([...parts]);

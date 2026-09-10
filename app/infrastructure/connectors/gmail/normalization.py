@@ -73,8 +73,10 @@ def list_gmail_attachment_metadata(payload: object) -> list[AttachmentMetadata]:
     """Collect attachment metadata from a Gmail message MIME tree.
 
     Never decodes ``body.data`` and never treats it as attachment content.
-    Parts without ``attachmentId`` are omitted because they cannot be retrieved
-    later. Duplicate attachment ids fail closed.
+    Parts without both a stable ``partId`` and a retrieve ``attachmentId`` are
+    omitted. ``provider_attachment_id`` is the immutable MIME ``partId``;
+    ephemeral ``body.attachmentId`` values are resolved only at explicit
+    retrieve time. Duplicate part ids fail closed.
     """
     if not isinstance(payload, dict):
         raise ConnectorMessageContentError()
@@ -87,18 +89,43 @@ def list_gmail_attachment_metadata(payload: object) -> list[AttachmentMetadata]:
 
     collected: list[AttachmentMetadata] = []
     seen_ids: set[str] = set()
-    for part in _iter_mime_parts(mime_payload):
-        if not _is_attachment(part):
-            continue
-        metadata = _attachment_metadata_from_part(part)
-        if metadata is None:
-            continue
+    for metadata, _gmail_attachment_id in _iter_retrievable_attachments(mime_payload):
         if metadata.provider_attachment_id in seen_ids:
             raise ConnectorAttachmentMetadataError()
         seen_ids.add(metadata.provider_attachment_id)
         collected.append(metadata)
     return collected
 
+
+def resolve_gmail_attachment(
+    payload: object,
+    provider_part_id: str,
+) -> tuple[AttachmentMetadata, str] | None:
+    """Resolve stable ``partId`` to metadata plus the current ephemeral attachmentId.
+
+    Returns ``None`` when the part is missing, not uniquely matched, or not
+    retrievable. Does not decode ``body.data``.
+    """
+    if not isinstance(payload, dict):
+        raise ConnectorMessageContentError()
+    message_id = _required_text(payload.get("id"))
+    if message_id is None:
+        raise ConnectorMessageContentError()
+    mime_payload = payload.get("payload")
+    if not isinstance(mime_payload, dict):
+        raise ConnectorMessageContentError()
+
+    part_id = provider_part_id.strip()
+    if not part_id:
+        return None
+    matches = [
+        (metadata, gmail_attachment_id)
+        for metadata, gmail_attachment_id in _iter_retrievable_attachments(mime_payload)
+        if metadata.provider_attachment_id == part_id
+    ]
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 def parse_list_page(payload: object) -> tuple[list[str], str | None]:
     """Return listed Gmail ids and the opaque next-page token, if any."""
@@ -189,12 +216,28 @@ def _iter_text_parts(part: object) -> list[tuple[str, str]]:
     return found
 
 
-def _attachment_metadata_from_part(part: dict[str, Any]) -> AttachmentMetadata | None:
+def _iter_retrievable_attachments(
+    mime_payload: dict[str, Any],
+) -> list[tuple[AttachmentMetadata, str]]:
+    found: list[tuple[AttachmentMetadata, str]] = []
+    for part in _iter_mime_parts(mime_payload):
+        if not _is_attachment(part):
+            continue
+        resolved = _attachment_from_part(part)
+        if resolved is not None:
+            found.append(resolved)
+    return found
+
+
+def _attachment_from_part(part: dict[str, Any]) -> tuple[AttachmentMetadata, str] | None:
     body = part.get("body")
     if not isinstance(body, dict):
         return None
-    attachment_id = _required_text(body.get("attachmentId"))
-    if attachment_id is None:
+    part_id = _required_text(part.get("partId"))
+    if part_id is None:
+        return None
+    gmail_attachment_id = _required_text(body.get("attachmentId"))
+    if gmail_attachment_id is None:
         return None
     media_type = _media_type(part)
     if not media_type:
@@ -204,8 +247,8 @@ def _attachment_metadata_from_part(part: dict[str, Any]) -> AttachmentMetadata |
         return None
     disposition, is_inline = _attachment_disposition(part)
     try:
-        return AttachmentMetadata(
-            provider_attachment_id=attachment_id,
+        metadata = AttachmentMetadata(
+            provider_attachment_id=part_id,
             filename=_attachment_filename(part),
             media_type=media_type,
             reported_size=reported_size,
@@ -215,6 +258,7 @@ def _attachment_metadata_from_part(part: dict[str, Any]) -> AttachmentMetadata |
         )
     except ValidationError:
         return None
+    return metadata, gmail_attachment_id.strip()
 
 
 def _reported_size(value: object) -> int | None:

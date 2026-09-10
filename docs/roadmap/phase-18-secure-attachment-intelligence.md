@@ -14,7 +14,7 @@ Phase 17D (External Business-User Verification) is **not** a technical dependenc
 
 ## Status
 
-Phase 18 overall is **Completed** for the agreed offline/local scope. This assessment is complete and accepted. Execution slices **18A**–**18F** are implemented. Live mailbox, live Foundry/Bedrock attachment inference, cloud scanner deployment, and live EICAR-vs-ClamAV fixture validation remain operator-authorized follow-ups and are **not** required to close the offline Phase 18 Definition of Done.
+Phase 18 overall is **Completed** for the agreed offline/local scope, Azure live attachment validation, and AWS live attachment validation. This assessment is complete and accepted. Execution slices **18A**–**18F** are implemented. Phase 17D (external business-user verification) remains deferred and is not part of this release scope. Live EICAR-vs-ClamAV fixture validation remains an optional operator-authorized follow-up and is **not** required to close Phase 18.
 
 | Item | Status |
 |---|---|
@@ -26,9 +26,10 @@ Phase 18 overall is **Completed** for the agreed offline/local scope. This asses
 | **18E** Frontend attachment UX | Completed |
 | **18F** Hardening, real ClamAV client, telemetry, docs, offline regression | Completed |
 | Phase 18 implementation | Completed (offline/local) |
-| Phase 17D External Business-User Verification | Deferred / not a Phase 18 dependency |
-| Live mailbox or attachment validation | Azure live validation completed (see below) |
-| Cloud resume / Foundry / Bedrock invocation | Azure Foundry attachment live path exercised |
+| Phase 17D External Business-User Verification | Deferred / out of current release scope |
+| Azure live mailbox / attachment validation | **PASS** (see below) |
+| AWS live mailbox / attachment validation | **PASS** (see below; task def `eci-api-dev:10`) |
+| Cloud resume / Foundry / Bedrock invocation | Azure Foundry + AWS Bedrock attachment live paths exercised |
 | Live EICAR vs ClamAV malicious fixture | Not performed — authorization required |
 
 ### Azure live-validation results (post-18F cleanup)
@@ -45,6 +46,28 @@ Owner-controlled Outlook mailbox against Azure runtime + Microsoft Foundry + Cla
 | Workflow / Send isolation | **PASS** — attachment analyze does not create workflow or send |
 
 Live follow-up cleanup (this slice): image-provider capability preflight, frontend image availability UX via `GET /api/v1/health` `ai_image_input`, duplicate “Analyzing attachment” fix, and privacy-safe removal of mailbox `message_id` from Foundry/Bedrock/mock/application analysis logs plus muted HTTP client URL logging.
+
+### AWS live-validation results (External ID + Gmail + Bedrock)
+
+Owner-controlled Gmail mailbox against AWS runtime + External ID login + Amazon Bedrock + ClamAV. Validated on ECS task definition `eci-api-dev:10`. After validation, ECS was returned to `0/0/0` and RDS was stopped. This is **not** Phase 17D external business-user verification.
+
+| Check | Result |
+|---|---|
+| External ID application login | **PASS** |
+| Protected API authorization | **PASS** |
+| Gmail OAuth connection | **PASS** |
+| Gmail metadata-only attachment listing | **PASS** |
+| No automatic attachment-content retrieval | **PASS** |
+| PDF → retrieve → ClamAV → parse → Bedrock | **PASS** (explicit Analyze only) |
+| DOCX → retrieve → ClamAV → parse → Bedrock | **PASS** (explicit Analyze only) |
+| Attachment-analysis persistence / history | **PASS** |
+| XLSX unsupported pre-retrieval gate | **PASS** |
+| PNG image-capability pre-retrieval gate | **PASS** (provider reports image input unavailable; no content GET) |
+| JPEG image-capability pre-retrieval gate | **PASS** (same controlled gate; image analysis did not succeed) |
+| No workflow / Propose / Approve / Execute / Send | **PASS** |
+| Gmail stable `partId` retrieve binding | **PASS** (live-validated after fix) |
+
+**Gmail identity defect (found and fixed during AWS live validation):** Gmail mints a new ephemeral `body.attachmentId` on every `messages.get`. ECI previously exposed that value as `provider_attachment_id` and required it to match a fresh listing before `attachments.get`, which produced `MailboxAttachmentNotFoundError` (HTTP 404) even though metadata listing showed the PDF. Refresh mailbox could not fix it: a refreshed list still exposed generation *N*, while Analyze’s re-list produced generation *N+1*. Fix: expose immutable MIME `partId` as `provider_attachment_id`; on explicit Analyze, re-list, resolve that `partId` to the current `attachmentId`, then call `attachments.get`. Metadata listing still omits `body.data` and never downloads bytes.
 
 
 ### 18A implementation close-out
@@ -66,7 +89,7 @@ Distinguish two Gmail surfaces:
 
 18A behavior:
 
-- `list_attachments` (Gmail) uses `format=full` plus a `fields` mask that keeps `attachmentId`, `size`, `filename`, `mimeType`, disposition / Content-ID headers, and nested `parts`, and **does not select `body.data`**.
+- `list_attachments` (Gmail) uses `format=full` plus a `fields` mask that keeps `partId`, `attachmentId`, `size`, `filename`, `mimeType`, disposition / Content-ID headers, and nested `parts`, and **does not select `body.data`**. Public `provider_attachment_id` is the stable `partId`; ephemeral `attachmentId` is resolved only on explicit retrieve.
 - `list_attachments` never calls `users.messages.attachments.get`.
 - `fetch_message` / `list_messages` keep `format=full` **without** a `fields` mask. Gmail cannot guarantee text-part `body.data` while excluding attachment-part `body.data` in the same resource. ECI does not invent a workaround. Attachment-classified `body.data` is not decoded as email body, not returned as retrievable `AttachmentMetadata` unless `attachmentId` is present, not persisted, not sent to AI, and not treated as authorization to analyze.
 - Graph metadata uses base-property `$select` only (`id,name,contentType,size,isInline`), does not `$expand=attachments`, and does not request `/$value`.
@@ -430,7 +453,7 @@ Inspected repository: `Susanta2025-lab/enterprise-communication-intelligence`
 | HEAD date | 2026-09-05 |
 | Working tree | clean |
 | Alembic head | `16f0001` |
-| Retained cloud lineage (docs) | application `3fa3412`, schema `16f0001`, AWS task definition `eci-api-dev:8` |
+| Retained cloud lineage (docs) | application `3fa3412` lineage superseded for Phase 18 AWS attach validation by task definition `eci-api-dev:10`; schema includes `18d0001`; compute returned to scaled-to-zero after validation |
 | Cloud compute | documented as scaled to zero; managed databases stopped |
 
 Phase 17C and 17C-G are in this lineage (`d93a558` restored Gmail ID-token clock-skew leeway; `182fbbb` closed 17C documentation). Phase 17 overall remains **Next** because 17D is not started. That does not block Phase 18.
@@ -654,13 +677,14 @@ Reuse the existing MIME walk, but collect skipped parts instead of discarding th
 `list_attachments` requests `format=full` with a Gmail `fields` mask that includes only:
 
 - message `id`
-- nested `payload` / `parts` (`mimeType`, `filename`, `headers(name,value)`, `body(size,attachmentId)`)
+- nested `payload` / `parts` (`partId`, `mimeType`, `filename`, `headers(name,value)`, `body(size,attachmentId)`)
 
 It does **not** select `body.data`. The mask is unrolled to a finite MIME depth (8) because Gmail partial response has no recursive wildcard. That is an HTTP-level exclusion for metadata listing, not a guarantee about `fetch_message`.
 
 From each attachment-classified part:
 
-- `provider_attachment_id` = `body.attachmentId` (required for later retrieve)
+- `provider_attachment_id` = MIME `partId` (immutable; required for later retrieve binding)
+- current `body.attachmentId` is **not** exposed as the public id (Gmail may mint a new value on every `messages.get`)
 - `filename` from the part `filename` field / Content-Disposition
 - `media_type` from `mimeType`
 - `reported_size` from `body.size`
@@ -671,10 +695,11 @@ Rules:
 
 - Nested multipart: recurse; collect every qualifying part.
 - Inline images with filename: include, marked `is_inline=true`.
-- Parts with `attachmentId` missing: omit from analyzable list (cannot retrieve safely). A filename plus incidental `body.data` is not retrievable metadata and is not decoded as attachment content.
+- Parts missing `partId` or `attachmentId`: omit from analyzable list (cannot retrieve safely). A filename plus incidental `body.data` is not retrievable metadata and is not decoded as attachment content.
 - Do not decode `body.data` during metadata listing. The metadata HTTP request also omits `body.data`.
 - Malformed trees: skip the unusable part; fail the message only if the MIME root is unusable for metadata (same class as current `ConnectorMessageContentError` when the payload is not a message).
 - Reported size is advisory until bytes are retrieved.
+- Duplicate `partId` values fail closed.
 
 `fetch_message` remains `format=full` without `fields`. Gmail may include attachment-part `body.data` in that response. ECI still extracts only non-attachment `text/plain` / `text/html` bodies. It does not persist, expose, or analyze those incidental attachment bytes.
 
@@ -684,7 +709,7 @@ Rules:
 GET https://gmail.googleapis.com/gmail/v1/users/me/messages/{messageId}/attachments/{id}
 ```
 
-Response `data` is base64url. Decode with the existing `_decode_base64url` approach. Compare decoded length to `size` and to ECI limits. Mismatch → reject.
+Explicit retrieve re-reads metadata with the same fields mask, resolves the listed stable `partId` to the **current** ephemeral `body.attachmentId`, then calls `attachments.get` with that fresh id. Response `data` is base64url. Decode with the existing `_decode_base64url` approach. Compare decoded length to `size` and to ECI limits. Mismatch → reject.
 
 Do not retrieve sibling attachments. Do not use `format=raw`.
 
@@ -1276,7 +1301,11 @@ Owner-controlled test mailboxes and files only. No external business reviewer. N
 | 5. Unsupported extension (XLSX) → unsupported UI / no retrieval | **PASS** |
 | Workflow / Send isolation | **PASS** |
 
-Remaining optional later: Bedrock attachment live proof; oversized / MIME-mismatch fixtures; prompt-injection PDF; **explicitly authorized** EICAR vs real scanner.
+Remaining optional later: oversized / MIME-mismatch fixtures; prompt-injection PDF; **explicitly authorized** EICAR vs real scanner. Azure Foundry and AWS Bedrock attachment live proofs above are completed for owner-controlled mailboxes. Phase 17D external business-user verification remains deferred.
+
+### AWS live validation — Gmail attachment identity (resolved)
+
+See the AWS results table in **Status**. Concise root cause: ephemeral Gmail `body.attachmentId` was used as `provider_attachment_id` and re-validated by exact match after a fresh `messages.get`. Refresh mailbox could not help because each list/analyze cycle minted a new id. Fix: stable MIME `partId` as the public id; resolve current `attachmentId` only on explicit Analyze. Live-validated on `eci-api-dev:10`.
 
 Minimum later sequence (same mailbox already used for Phase 14/15/16/17C proofs):
 
@@ -1311,7 +1340,7 @@ These are **execution slices, not assessment phases**. Do not commission another
 
 18C may internally sequence documents first, then images, without a new assessment.
 
-Optional later work **outside** Phase 18 offline DoD: cloud ClamAV sidecar deploy, live EICAR-vs-ClamAV authorization, cloud timeout/memory bump, official connector logos after license review, OCR, 10 MiB limit raise.
+Optional later work **outside** Phase 18 DoD: live EICAR-vs-ClamAV authorization, multimodal enablement after a proven image-capable adapter, cloud timeout/memory bump, official connector logos after license review, OCR, 10 MiB limit raise. Phase 17D external business-user verification remains deferred.
 
 ---
 
@@ -1342,7 +1371,7 @@ Phase 18 is complete when all of the following are true:
 - [x] `python -m pip check`, `python -m ruff check .`, `python -m pytest` pass
 - [x] Phase 18 roadmap documentation updated; README unchanged unless the owner instructs
 
-Live mailbox, cloud scanner deployment, live Foundry/Bedrock attachment inference, and live EICAR-vs-ClamAV remain operator-authorized follow-ups outside the offline DoD.
+Live EICAR-vs-ClamAV remains an optional operator-authorized follow-up outside the Phase 18 DoD. Azure Foundry and AWS Bedrock attachment live validation (owner-controlled mailboxes; no Send; PNG/JPEG capability-gated) are recorded in Status.
 
 ---
 

@@ -52,9 +52,15 @@ describe("frontend configuration", () => {
 
   it("parses comma or whitespace separated explicit scopes", () => {
     const scopes = parseEciApiScopes(
-      "api://33333333-3333-3333-3333-333333333333/communications:read api://33333333-3333-3333-3333-333333333333/communications:analyze",
+      [
+        "api://33333333-3333-3333-3333-333333333333/communications:read",
+        "api://33333333-3333-3333-3333-333333333333/communications:analyze",
+        "api://33333333-3333-3333-3333-333333333333/communications:connect",
+        "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+        "api://33333333-3333-3333-3333-333333333333/communications:send",
+      ].join(" "),
     );
-    expect(scopes).toHaveLength(2);
+    expect(scopes).toHaveLength(5);
   });
 
   it.each([
@@ -97,17 +103,93 @@ describe("frontend configuration", () => {
 
   it("rejects .default as the browser permission strategy", () => {
     expect(() =>
-      parseEciApiScopes("api://33333333-3333-3333-3333-333333333333/.default"),
-    ).toThrow(FrontendConfigError);
+      parseEciApiScopes(
+        [
+          "api://33333333-3333-3333-3333-333333333333/.default",
+          "api://33333333-3333-3333-3333-333333333333/communications:analyze",
+          "api://33333333-3333-3333-3333-333333333333/communications:connect",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+          "api://33333333-3333-3333-3333-333333333333/communications:send",
+        ].join(","),
+      ),
+    ).toThrow("not .default");
   });
 
   it("rejects dot-separated permission replacements", () => {
     expect(() =>
-      parseEciApiScopes("api://33333333-3333-3333-3333-333333333333/communications.read"),
-    ).toThrow(FrontendConfigError);
+      parseEciApiScopes(
+        [
+          "api://33333333-3333-3333-3333-333333333333/communications.read",
+          "api://33333333-3333-3333-3333-333333333333/communications:analyze",
+          "api://33333333-3333-3333-3333-333333333333/communications:connect",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+          "api://33333333-3333-3333-3333-333333333333/communications:send",
+        ].join(","),
+      ),
+    ).toThrow("exact communications:* permission names");
   });
 
   it("rejects scopes that are not full identifiers", () => {
-    expect(() => parseEciApiScopes("communications:read")).toThrow(FrontendConfigError);
+    expect(() =>
+      parseEciApiScopes(
+        [
+          "communications:read",
+          "api://33333333-3333-3333-3333-333333333333/communications:analyze",
+          "api://33333333-3333-3333-3333-333333333333/communications:connect",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+          "api://33333333-3333-3333-3333-333333333333/communications:send",
+        ].join(","),
+      ),
+    ).toThrow("full ECI scope identifiers");
+  });
+
+  it("rejects nested permission paths such as /communications:send/communications:read", () => {
+    const nested = [
+      "api://33333333-3333-3333-3333-333333333333/communications:send/communications:read",
+      "api://33333333-3333-3333-3333-333333333333/communications:send/communications:analyze",
+      "api://33333333-3333-3333-3333-333333333333/communications:send/communications:connect",
+      "api://33333333-3333-3333-3333-333333333333/communications:send/communications:workflow",
+      "api://33333333-3333-3333-3333-333333333333/communications:send/communications:send",
+    ].join(" ");
+    expect(() => parseEciApiScopes(nested)).toThrow(FrontendConfigError);
+    expect(() => parseEciApiScopes(nested)).toThrow(
+      "must use a single permission path segment per scope",
+    );
+  });
+
+  it("rejects fewer than five scopes even when each path is well-formed", () => {
+    expect(() =>
+      parseEciApiScopes(
+        "api://33333333-3333-3333-3333-333333333333/communications:read api://33333333-3333-3333-3333-333333333333/communications:analyze",
+      ),
+    ).toThrow("exactly 5 delegated scopes");
+  });
+
+  it("rejects mixed api:// resource prefixes", () => {
+    expect(() =>
+      parseEciApiScopes(
+        [
+          "api://33333333-3333-3333-3333-333333333333/communications:read",
+          "api://44444444-4444-4444-4444-444444444444/communications:analyze",
+          "api://33333333-3333-3333-3333-333333333333/communications:connect",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+          "api://33333333-3333-3333-3333-333333333333/communications:send",
+        ].join(","),
+      ),
+    ).toThrow("one shared api:// resource prefix");
+  });
+
+  it("rejects a five-scope list that omits one required permission", () => {
+    expect(() =>
+      parseEciApiScopes(
+        [
+          "api://33333333-3333-3333-3333-333333333333/communications:read",
+          "api://33333333-3333-3333-3333-333333333333/communications:analyze",
+          "api://33333333-3333-3333-3333-333333333333/communications:connect",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+          "api://33333333-3333-3333-3333-333333333333/communications:workflow",
+        ].join(","),
+      ),
+    ).toThrow("duplicate permissions");
   });
 });

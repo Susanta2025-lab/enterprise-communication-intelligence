@@ -34,6 +34,7 @@ def filename_data_part_without_attachment_id(
 ) -> dict[str, Any]:
     """Gmail small-part shape: filename + body.data, no attachmentId."""
     return {
+        "partId": "inline-data",
         "mimeType": mime_type,
         "filename": filename,
         "headers": [header("Content-Disposition", f'attachment; filename="{filename}"')],
@@ -44,6 +45,7 @@ def filename_data_part_without_attachment_id(
 def attachment_part(
     *,
     attachment_id: str,
+    part_id: str | None = None,
     filename: str = "report.pdf",
     mime_type: str = "application/pdf",
     size: int = 2048,
@@ -62,6 +64,9 @@ def attachment_part(
     if include_data:
         body_obj["data"] = data if data is not None else b64url("must-not-decode")
     return {
+        # Default partId to attachment_id so simple fixtures keep a 1:1 mapping
+        # while still exercising the stable-partId → ephemeral-attachmentId path.
+        "partId": part_id if part_id is not None else attachment_id,
         "mimeType": mime_type,
         "filename": filename,
         "headers": headers,

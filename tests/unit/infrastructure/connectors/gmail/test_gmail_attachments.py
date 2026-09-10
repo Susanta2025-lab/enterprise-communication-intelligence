@@ -57,6 +57,7 @@ def _assert_list_attachments_omits_body_data(request) -> None:
     assert "data" not in fields
     assert "body.data" not in fields
     assert "body(size,attachmentId)" in fields
+    assert "partId" in fields
     assert "filename" in fields
     assert "mimeType" in fields
     assert "headers(name,value)" in fields
@@ -102,6 +103,113 @@ def test_fetch_message_does_not_download_attachment_content(gmail_connector: tup
     assert stub.requests[0].url.params.get("format") == "full"
     assert stub.requests[0].url.params.get("fields") is None
     _assert_no_explicit_attachment_content_request(stub)
+
+
+def test_list_attachments_uses_stable_part_id_not_ephemeral_attachment_id(
+    gmail_connector: tuple,
+) -> None:
+    connector, stub, _client = gmail_connector
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(
+            text_part("Visible body"),
+            attachment_part(
+                attachment_id="ANGjdJ-ephemeral-1",
+                part_id="1",
+                filename="report.pdf",
+                mime_type="application/pdf",
+                size=4096,
+            ),
+        ),
+    )
+
+    page = connector.list_attachments("msg-1")
+
+    assert len(page.items) == 1
+    assert page.items[0].provider_attachment_id == "1"
+    assert page.items[0].filename == "report.pdf"
+    _assert_no_explicit_attachment_content_request(stub)
+
+
+def test_missing_part_id_is_omitted_even_with_attachment_id(
+    gmail_connector: tuple,
+) -> None:
+    connector, stub, _client = gmail_connector
+    part = attachment_part(attachment_id="att-keep", part_id="keep", filename="keep.pdf")
+    del part["partId"]
+    stub.messages["msg-1"] = gmail_resource(
+        "msg-1",
+        payload=_mixed_payload(text_part("Visible body"), part),
+    )
+
+    page = connector.list_attachments("msg-1")
+
+    assert page.items == []
+    _assert_no_explicit_attachment_content_request(stub)
+
+
+def test_listed_part_id_survives_ephemeral_attachment_id_churn(
+    gmail_connector: tuple,
+) -> None:
+    """Gmail may mint a new body.attachmentId on every messages.get.
+
+    Listing must expose stable partId. Explicit retrieve must re-resolve the
+    current attachmentId for that part and still fetch bytes without listing
+    having downloaded content.
+    """
+    connector, stub, _client = gmail_connector
+    pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+    generation = {"n": 0}
+
+    def _resource_for_generation() -> dict:
+        generation["n"] += 1
+        ephemeral = f"ANGjdJ-ephemeral-{generation['n']}"
+        resource = gmail_resource(
+            "msg-1",
+            payload=_mixed_payload(
+                text_part("Visible body"),
+                attachment_part(
+                    attachment_id=ephemeral,
+                    part_id="1",
+                    filename="report.pdf",
+                    mime_type="application/pdf",
+                    size=len(pdf),
+                ),
+            ),
+        )
+        stub.attachment_payloads[("msg-1", ephemeral)] = {
+            "size": len(pdf),
+            "data": _b64url_bytes(pdf),
+            "attachmentId": ephemeral,
+        }
+        return resource
+
+    class _ChurningMessages(dict):
+        def get(self, key, default=None):  # noqa: ANN001
+            if key != "msg-1":
+                return super().get(key, default)
+            return _resource_for_generation()
+
+        def __contains__(self, key: object) -> bool:
+            return key == "msg-1" or super().__contains__(key)
+
+    stub.messages = _ChurningMessages()
+
+    listed = connector.list_attachments("msg-1")
+    assert [item.provider_attachment_id for item in listed.items] == ["1"]
+    listed_id = listed.items[0].provider_attachment_id
+    assert stub.attachment_content_requests == []
+
+    content = connector.fetch_attachment_content("msg-1", listed_id)
+
+    assert content.content == pdf
+    assert content.source_attachment_id == "1"
+    assert content.metadata.provider_attachment_id == "1"
+    assert content.metadata.filename == "report.pdf"
+    assert generation["n"] >= 2
+    assert [request.url.path for request in stub.attachment_content_requests] == [
+        f"{GMAIL_API_PREFIX}/msg-1/attachments/ANGjdJ-ephemeral-{generation['n']}"
+    ]
 
 
 def test_list_attachments_uses_format_full_without_content_endpoint(
@@ -294,14 +402,14 @@ def test_malformed_size_skips_unusable_part(gmail_connector: tuple) -> None:
     _assert_no_explicit_attachment_content_request(stub)
 
 
-def test_duplicate_attachment_ids_fail_closed(gmail_connector: tuple) -> None:
+def test_duplicate_part_ids_fail_closed(gmail_connector: tuple) -> None:
     connector, stub, _client = gmail_connector
     stub.messages["msg-1"] = gmail_resource(
         "msg-1",
         payload=_mixed_payload(
             text_part("Visible body"),
-            attachment_part(attachment_id="dup-id", filename="one.pdf"),
-            attachment_part(attachment_id="dup-id", filename="two.pdf"),
+            attachment_part(attachment_id="att-one", part_id="dup-part", filename="one.pdf"),
+            attachment_part(attachment_id="att-two", part_id="dup-part", filename="two.pdf"),
         ),
     )
 
@@ -309,7 +417,7 @@ def test_duplicate_attachment_ids_fail_closed(gmail_connector: tuple) -> None:
         connector.list_attachments("msg-1")
 
     assert exc_info.value.message == "Connector attachment metadata is invalid."
-    assert "dup-id" not in exc_info.value.message
+    assert "dup-part" not in exc_info.value.message
     assert "two.pdf" not in exc_info.value.message
     _assert_no_explicit_attachment_content_request(stub)
 

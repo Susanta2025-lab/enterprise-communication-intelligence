@@ -25,7 +25,7 @@ from app.domain.interfaces import (
     ConnectorMessageQuery,
     MessagePage,
 )
-from app.domain.models import AttachmentContent, AttachmentMetadata, CommunicationMessage
+from app.domain.models import AttachmentContent, CommunicationMessage
 from app.infrastructure.connectors.common.auth import AccessTokenProvider, resolve_access_token
 from app.infrastructure.connectors.gmail.normalization import (
     decode_gmail_base64url,
@@ -33,6 +33,7 @@ from app.infrastructure.connectors.gmail.normalization import (
     list_gmail_attachment_metadata,
     normalize_gmail_message,
     parse_list_page,
+    resolve_gmail_attachment,
 )
 
 _GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1"
@@ -42,7 +43,9 @@ _OPERATION_FETCH = "fetch"
 _OPERATION_LIST_ATTACHMENTS = "list_attachments"
 _OPERATION_FETCH_ATTACHMENT = "fetch_attachment"
 _ATTACHMENT_METADATA_MIME_DEPTH = 8
-_ATTACHMENT_PART_FIELDS = "mimeType,filename,headers(name,value),body(size,attachmentId)"
+_ATTACHMENT_PART_FIELDS = (
+    "partId,mimeType,filename,headers(name,value),body(size,attachmentId)"
+)
 
 
 def attachment_metadata_fields(depth: int = _ATTACHMENT_METADATA_MIME_DEPTH) -> str:
@@ -50,7 +53,9 @@ def attachment_metadata_fields(depth: int = _ATTACHMENT_METADATA_MIME_DEPTH) -> 
 
     ``format=full`` still selects the MIME tree. The mask then excludes
     ``MessagePartBody.data`` at each unrolled ``parts`` level so metadata
-    listing does not request embedded attachment bytes. Depth is finite
+    listing does not request embedded attachment bytes. ``partId`` is selected
+    because it is the stable public attachment identity; ``attachmentId`` remains
+    retrieve-only and may change across ``messages.get`` calls. Depth is finite
     because Gmail partial response cannot apply a recursive wildcard.
     """
     nested = _ATTACHMENT_PART_FIELDS
@@ -136,16 +141,26 @@ class GmailCommunicationConnector(CommunicationConnector):
     ) -> AttachmentContent:
         """Retrieve exactly one Gmail attachment via ``users.messages.attachments.get``.
 
-        Revalidates metadata with the 18A fields mask (no ``body.data``) so
-        the attachment id is bound to this message before the content GET.
+        ``provider_attachment_id`` is the stable MIME ``partId`` exposed by listing.
+        This method re-reads metadata with the 18A fields mask (no ``body.data``),
+        resolves the current ephemeral ``body.attachmentId`` for that part, then
+        performs one content GET. Listing never downloads bytes.
         """
         message_id = _validated_message_id(provider_message_id)
-        attachment_id = _validated_attachment_id(provider_attachment_id)
-        metadata = _metadata_for_attachment(self.list_attachments(message_id).items, attachment_id)
+        part_id = _validated_attachment_id(provider_attachment_id)
+        metadata_payload = self._get_json(
+            _message_url(message_id),
+            params={"format": "full", "fields": _ATTACHMENT_METADATA_FIELDS},
+            operation=_OPERATION_LIST_ATTACHMENTS,
+        )
+        resolved = resolve_gmail_attachment(metadata_payload, part_id)
+        if resolved is None:
+            raise ConnectorAttachmentNotFoundError()
+        metadata, gmail_attachment_id = resolved
         if metadata.reported_size > MAX_ATTACHMENT_CONTENT_BYTES:
             raise ConnectorAttachmentContentError()
         payload = self._get_json(
-            _attachment_url(message_id, attachment_id),
+            _attachment_url(message_id, gmail_attachment_id),
             operation=_OPERATION_FETCH_ATTACHMENT,
         )
         if not isinstance(payload, dict):
@@ -159,13 +174,17 @@ class GmailCommunicationConnector(CommunicationConnector):
         if len(content) > MAX_ATTACHMENT_CONTENT_BYTES:
             raise ConnectorAttachmentContentError()
         returned_id = payload.get("attachmentId")
-        if isinstance(returned_id, str) and returned_id.strip() and returned_id != attachment_id:
+        if (
+            isinstance(returned_id, str)
+            and returned_id.strip()
+            and returned_id.strip() != gmail_attachment_id
+        ):
             raise ConnectorAttachmentContentError()
         return AttachmentContent(
             metadata=metadata,
             content=content,
             source_message_id=message_id,
-            source_attachment_id=attachment_id,
+            source_attachment_id=part_id,
         )
 
     def _get_json(
@@ -223,16 +242,6 @@ def _message_url(message_id: str) -> str:
 
 def _attachment_url(message_id: str, attachment_id: str) -> str:
     return f"{_message_url(message_id)}/attachments/{quote(attachment_id, safe='')}"
-
-
-def _metadata_for_attachment(
-    items: list[AttachmentMetadata],
-    attachment_id: str,
-) -> AttachmentMetadata:
-    matches = [item for item in items if item.provider_attachment_id == attachment_id]
-    if len(matches) != 1:
-        raise ConnectorAttachmentNotFoundError()
-    return matches[0]
 
 
 def _raise_for_status(

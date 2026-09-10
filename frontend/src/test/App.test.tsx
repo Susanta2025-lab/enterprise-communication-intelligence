@@ -9,12 +9,13 @@ import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 function renderApp(options: {
   isAuthenticated: boolean;
+  interactionInProgress?: boolean;
   fetchImpl?: ReturnType<typeof vi.fn<typeof fetch>>;
   login?: () => Promise<void>;
   logout?: () => Promise<void>;
   error?: string | null;
 }) {
-    const fetchImpl =
+  const fetchImpl =
     options.fetchImpl ??
     vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
@@ -45,6 +46,7 @@ function renderApp(options: {
         login,
         logout,
         error: options.error ?? null,
+        interactionInProgress: options.interactionInProgress ?? false,
       })}
     >
       <App apiClient={apiClient} />
@@ -62,6 +64,16 @@ describe("authentication shell", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Check API connection" })).not.toBeInTheDocument();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("waits on redirect/startup completion before showing sign-in", () => {
+    const { fetchImpl } = renderApp({
+      isAuthenticated: false,
+      interactionInProgress: true,
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Completing sign-in");
+    expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
