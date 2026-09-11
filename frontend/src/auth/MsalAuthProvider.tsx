@@ -159,6 +159,7 @@ function MsalAuthSession({
   const session = useMemo(
     () => ({
       isAuthenticated,
+      accountKey: accountId,
       displayName,
       login,
       logout,
@@ -166,7 +167,16 @@ function MsalAuthSession({
       interactionInProgress,
       permissions,
     }),
-    [displayName, error, interactionInProgress, isAuthenticated, login, logout, permissions],
+    [
+      accountId,
+      displayName,
+      error,
+      interactionInProgress,
+      isAuthenticated,
+      login,
+      logout,
+      permissions,
+    ],
   );
 
   return <AuthContext.Provider value={session}>{children}</AuthContext.Provider>;

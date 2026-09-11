@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
+import { useCurrentUser } from "../auth/useCurrentUser";
 import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
@@ -10,6 +11,7 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   const { displayName, logout, error, interactionInProgress } = useAuth();
+  const { isOwner } = useCurrentUser();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -25,13 +27,23 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            {displayName ? (
-              <p className="min-w-0 break-words text-sm text-slate-600" data-testid="signed-in-account">
-                Signed in as {displayName}
-              </p>
-            ) : (
-              <p className="text-sm text-slate-600">Signed in</p>
-            )}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {displayName ? (
+                <p className="min-w-0 break-words text-sm text-slate-600" data-testid="signed-in-account">
+                  Signed in as {displayName}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-600">Signed in</p>
+              )}
+              {isOwner ? (
+                <span
+                  className="shrink-0 rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                  data-testid="owner-badge"
+                >
+                  Platform Owner
+                </span>
+              ) : null}
+            </div>
             <Button className="w-full sm:w-auto" onClick={() => void logout()} disabled={interactionInProgress}>
               Sign out
             </Button>

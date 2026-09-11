@@ -51,6 +51,7 @@ import {
   type AnalysisListResponse,
 } from "./errors";
 import { HEALTH_PATH, type PlatformHealthResponse } from "./health";
+import { ME_PATH, parseMeResponse, type MeResponse } from "./me";
 
 type FetchLike = typeof fetch;
 
@@ -91,6 +92,15 @@ export class EciApiClient {
       throw new EciApiError(response.status, kind, messageForKind(kind));
     }
     return (await response.json()) as PlatformHealthResponse;
+  }
+
+  async getMe(): Promise<MeResponse> {
+    const payload = await this.requestJson<unknown>("GET", ME_PATH);
+    const me = parseMeResponse(payload);
+    if (me === null) {
+      throw new EciApiError(503, "unavailable", messageForKind("unavailable"));
+    }
+    return me;
   }
 
   async listConnectorAccounts(

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import type { EciApiClient } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
+import { CurrentUserProvider } from "./auth/CurrentUserContext";
 import { AppShell } from "./components/AppShell";
 import { AppErrorBoundary } from "./components/feedback/AppErrorBoundary";
 import { SignInPanel } from "./components/SignInPanel";
@@ -56,14 +57,16 @@ function AppRoutes({ apiClient }: AppProps) {
   }
 
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<HomePage apiClient={apiClient} />} />
-        <Route
-          path="/mailbox/:connectorAccountId"
-          element={<MailboxWorkspacePage apiClient={apiClient} />}
-        />
-      </Routes>
-    </AppShell>
+    <CurrentUserProvider apiClient={apiClient}>
+      <AppShell>
+        <Routes>
+          <Route path="/" element={<HomePage apiClient={apiClient} />} />
+          <Route
+            path="/mailbox/:connectorAccountId"
+            element={<MailboxWorkspacePage apiClient={apiClient} />}
+          />
+        </Routes>
+      </AppShell>
+    </CurrentUserProvider>
   );
 }

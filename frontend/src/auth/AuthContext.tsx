@@ -4,6 +4,7 @@ import type { EciPermission } from "./permissions";
 
 export type AuthSession = {
   isAuthenticated: boolean;
+  accountKey: string | null;
   displayName: string | null;
   login: () => Promise<void>;
   logout: () => Promise<void>;

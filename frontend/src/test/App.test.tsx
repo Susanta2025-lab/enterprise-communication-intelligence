@@ -100,12 +100,54 @@ describe("authentication shell", () => {
     expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
+    expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();
     expect(fetchImpl).toHaveBeenCalled();
-    expect(fetchImpl.mock.calls[0]?.[0]).toEqual(expect.stringContaining("/api/v1/connector-accounts"));
+    expect(
+      fetchImpl.mock.calls.some(([url]) => String(url).includes("/api/v1/connector-accounts")),
+    ).toBe(true);
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Platform Owner badge only after authoritative /me owner response", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/v1/me")) {
+        return new Response(JSON.stringify({ application_role: "owner", is_owner: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/api/v1/analyses")) {
+        return new Response(JSON.stringify({ items: [], limit: 1, offset: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ items: [], limit: 20, offset: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const apiClient = new EciApiClient({
+      baseUrl: "http://localhost:8000",
+      tokenProvider: { acquireAccessToken: async () => TEST_TOKEN },
+      fetchImpl,
+    });
+    render(
+      <AuthStub
+        session={createAuthSession({
+          isAuthenticated: true,
+          accountKey: "home-account-owner",
+          displayName: "Ada Lovelace",
+        })}
+      >
+        <App apiClient={apiClient} />
+      </AuthStub>,
+    );
+    expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
   });
 
   it("shows authentication errors without rendering tokens", () => {

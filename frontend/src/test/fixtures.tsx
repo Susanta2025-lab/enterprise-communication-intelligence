@@ -32,6 +32,7 @@ export const TEST_CONFIG: FrontendConfig = {
 export function createAuthSession(overrides: Partial<AuthSession> = {}): AuthSession {
   return {
     isAuthenticated: false,
+    accountKey: null,
     displayName: null,
     login: async () => undefined,
     logout: async () => undefined,

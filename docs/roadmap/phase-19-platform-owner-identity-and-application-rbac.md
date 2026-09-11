@@ -36,11 +36,11 @@ Phase 19 architecture/readiness assessment: **READY WITH PREREQUISITES**.
 | **19B** Role schema/model + safe migration | **CLOSED / PASS** |
 | **19C** Server-side owner authorization | **CLOSED / PASS** |
 | **19D** Secure first-owner bootstrap | **CLOSED / PASS** |
-| **19E** `/me` + frontend owner awareness | Not started |
+| **19E** `/me` + frontend owner awareness | **CLOSED / PASS** |
 | **19F** Security regression matrix + documentation closure | Not started |
-| Phase 19 overall | Next (19A–19D complete) |
+| Phase 19 overall | Next (19A–19E complete) |
 
-Phase 18 remains **CLOSED / PASS**. Phases 19A–19C remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
+Phase 18 remains **CLOSED / PASS**. Phases 19A–19E remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
 
 **Important:** the controlled first-owner bootstrap command exists, but **real owner activation has NOT occurred** in this slice. No real `(iss, sub)` values were captured or stored in the repository. Operators must run promotion later against an environment database after ordinary External ID sign-in.
 
@@ -181,14 +181,28 @@ Passing the opaque internal UUID avoids placing durable External ID `(iss, sub)`
 
 ## 19E — `/me` + frontend owner awareness
 
-Not started.
+**CLOSED / PASS.**
 
-Intended scope:
+Implemented server-authoritative current-user identity and minimal frontend owner presentation. **Real owner activation has still NOT occurred.** Phase 19D bootstrap exists but has not been executed against a real owner account.
 
-- server-authoritative `/me` (or equivalent) exposing application role from the database
-- frontend reads role for visibility only
-- no security enforcement in the SPA
-- no admin dashboard
+### Delivered
+
+- `GET /api/v1/me` → `{ "application_role": "user"|"owner", "is_owner": bool }`
+- Auth via verified JWT → `(iss, sub)` → existing `external_identities` mapping → persisted `users.application_role`
+- Does **not** create users; missing mapping → 404
+- Omits `user_id`, issuer, subject, email, mailbox identity, and tokens (SPA needs role only)
+- Frontend `CurrentUserProvider` fetches `/me` for authenticated sessions only
+- Minimal **Platform Owner** badge in the signed-in shell when `is_owner` is true from `/me`
+- Owner UI is presentation only; `require_owner` remains the security boundary
+- Communications `PermissionGate` / `communications:*` scopes remain separate from `application_role`
+- No admin dashboard, role-management APIs, Entra changes, or real promotion
+
+### Security assumptions
+
+- Frontend role state never authorizes `GET /api/v1/admin/ping` or other owner routes
+- JWT `roles`, scopes, email, and mailbox identity cannot change `/me` or grant owner
+- `/me` failure never yields owner UI
+- Logout / account-key change clears owner presentation state
 
 ## 19F — Security regression matrix + documentation closure
 
