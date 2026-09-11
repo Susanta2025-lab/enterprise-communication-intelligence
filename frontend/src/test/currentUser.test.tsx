@@ -112,6 +112,10 @@ describe("CurrentUserProvider", () => {
     });
     expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Ada Lovelace");
+    expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
+    expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
+      "Designed & developed by Susanta Hazra",
+    );
   });
 
   it("does not show owner badge for ordinary /me", async () => {
@@ -120,6 +124,10 @@ describe("CurrentUserProvider", () => {
       expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Ada Lovelace"),
     );
     expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
+    expect(screen.getByTestId("eci-tagline")).toBeInTheDocument();
+    expect(screen.getByTestId("eci-attribution")).toBeInTheDocument();
   });
 
   it("does not treat MSAL/JWT roles as owner without /me", async () => {

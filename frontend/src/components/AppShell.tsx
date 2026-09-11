@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { useCurrentUser } from "../auth/useCurrentUser";
+import { ECI_NAVY } from "./branding/eciBrand";
 import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
@@ -14,7 +15,7 @@ export function AppShell({ children }: AppShellProps) {
   const { isOwner } = useCurrentUser();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -23,7 +24,15 @@ export function AppShell({ children }: AppShellProps) {
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Enterprise Communication Intelligence
               </p>
-              <h1 className="text-lg font-semibold">ECI Platform</h1>
+              <h1 className="text-lg font-semibold" style={{ color: ECI_NAVY }}>
+                ECI Platform
+              </h1>
+              <p
+                className="mt-0.5 text-sm tracking-wide text-slate-600"
+                data-testid="eci-tagline"
+              >
+                Register. Connect. Analyze.
+              </p>
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -50,7 +59,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
       </header>
-      <main id="main-content" className="mx-auto max-w-6xl min-w-0 px-4 py-8 sm:px-6">
+      <main id="main-content" className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 py-8 sm:px-6">
         {error ? (
           <p role="alert" className="mb-4 text-sm text-red-700">
             {error}
@@ -58,6 +67,13 @@ export function AppShell({ children }: AppShellProps) {
         ) : null}
         {children}
       </main>
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
+          <p className="text-center text-xs text-slate-500" data-testid="eci-attribution">
+            Designed & developed by Susanta Hazra
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

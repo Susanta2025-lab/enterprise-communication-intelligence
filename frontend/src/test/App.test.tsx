@@ -99,6 +99,10 @@ describe("authentication shell", () => {
     const { fetchImpl, logout } = renderApp({ isAuthenticated: true });
     expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
+    expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
+    expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
+      "Designed & developed by Susanta Hazra",
+    );
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
     expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
@@ -148,6 +152,10 @@ describe("authentication shell", () => {
       </AuthStub>,
     );
     expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
+    expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
+    expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
+      "Designed & developed by Susanta Hazra",
+    );
   });
 
   it("shows authentication errors without rendering tokens", () => {

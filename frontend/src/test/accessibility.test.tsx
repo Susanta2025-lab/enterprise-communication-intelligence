@@ -80,6 +80,11 @@ describe("authentication and dashboard landmarks", () => {
     );
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
+    expect(screen.getByRole("contentinfo")).toBeInTheDocument();
+    expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
+    expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
+      "Designed & developed by Susanta Hazra",
+    );
     expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();
     expect(screen.getByTestId("connector-loading")).toHaveTextContent("Loading connector accounts");
   });
