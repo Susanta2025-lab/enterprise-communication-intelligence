@@ -49,6 +49,7 @@ def test_alembic_revision_graph_is_valid() -> None:
         "13a0001",
         "16f0001",
         "18d0001",
+        "19b0001",
     }
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
@@ -57,8 +58,9 @@ def test_alembic_revision_graph_is_valid() -> None:
     assert revisions["13a0001"].down_revision == "12a0001"
     assert revisions["16f0001"].down_revision == "13a0001"
     assert revisions["18d0001"].down_revision == "16f0001"
-    assert script.get_heads() == ["18d0001"]
-    assert script.get_current_head() == "18d0001"
+    assert revisions["19b0001"].down_revision == "18d0001"
+    assert script.get_heads() == ["19b0001"]
+    assert script.get_current_head() == "19b0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -149,9 +151,29 @@ def test_offline_upgrade_sql_compiles_without_oidc_or_connection(
     assert "display_identity" in sql
     assert "connect_another" in sql
     assert "reauth_required" in sql
+    assert "application_role" in sql
+    assert "ck_users_application_role" in sql
     assert "CREATE TABLE workflows" not in sql
     assert secret not in sql
     assert secret not in result.stderr
+
+
+def test_users_application_role_migration_creates_expected_schema() -> None:
+    """The 19B migration adds constrained application_role without promotion."""
+    migration = (
+        _ROOT / "alembic" / "versions" / "19b0001_users_application_role.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "19b0001"' in migration
+    assert 'down_revision: str | None = "18d0001"' in migration
+    assert "application_role" in migration
+    assert "ck_users_application_role" in migration
+    assert "application_role IN ('user', 'owner')" in migration
+    assert 'server_default="user"' in migration
+    assert "PLATFORM_OWNER" not in migration
+    assert "access_token" not in migration
+    assert "refresh_token" not in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
 
 
 def test_connector_account_migration_creates_expected_schema() -> None:

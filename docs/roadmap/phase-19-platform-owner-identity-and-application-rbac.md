@@ -32,15 +32,15 @@ Phase 19 architecture/readiness assessment: **READY WITH PREREQUISITES**.
 |---|---|
 | Phase 18 — Secure Attachment Intelligence | **CLOSED / PASS** (unchanged) |
 | Phase 19 assessment | READY WITH PREREQUISITES |
-| **19A** Architecture decision lock | **Completed / PASS** |
-| **19B** Role schema/model + safe migration | Not started |
+| **19A** Architecture decision lock | **CLOSED / PASS** |
+| **19B** Role schema/model + safe migration | **Completed / PASS** |
 | **19C** Server-side owner authorization | Not started |
 | **19D** Secure first-owner bootstrap | Not started |
 | **19E** `/me` + frontend owner awareness | Not started |
 | **19F** Security regression matrix + documentation closure | Not started |
-| Phase 19 overall | Next (19A locked) |
+| Phase 19 overall | Next (19A–19B complete) |
 
-Phase 18 remains **CLOSED / PASS**. Do not reopen or rewrite Phase 18.
+Phase 18 remains **CLOSED / PASS**. Phase 19A remains **CLOSED / PASS**. Do not reopen or rewrite completed phases.
 
 ## Locked architecture
 
@@ -93,22 +93,27 @@ Out of scope:
 
 ## 19B — Role schema/model + safe migration
 
-Not started.
+**Completed / PASS.**
 
-Intended scope:
+Implemented the persistence/domain foundation only.
 
-- additive `users.application_role` (or equivalent constrained column)
-- values `user` | `owner`, default `user`
-- backfill existing users to `user`
-- ensure `resolve_or_create` / create path always persists `user`
-- offline migration and model tests
+Delivered:
 
-Out of scope unless explicitly expanded later:
+- Alembic revision `19b0001` (down_revision `18d0001`)
+- additive portable text column `users.application_role`
+- values constrained to `user` | `owner` via `ck_users_application_role`
+- server/ORM default `user`; existing rows migrate to `user`
+- domain `ApplicationRole` StrEnum
+- `create_user_with_external_identity` / `resolve_or_create` always persist `user`
+- no owner promotion API, admin routes, `/me`, frontend awareness, or Entra changes
 
-- promoting a real owner
-- admin HTTP routes
-- frontend role UI
-- Entra federation
+Out of scope (deferred):
+
+- `require_owner` (19C)
+- secure first-owner bootstrap / promotion (19D)
+- `/me` + frontend owner awareness (19E)
+- admin dashboard
+- workforce federation
 
 ## 19C — Server-side owner authorization
 

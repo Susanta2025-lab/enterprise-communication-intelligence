@@ -15,6 +15,9 @@ class IdentityRepository(ABC):
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         """Create a user and unique external identity mapping.
 
+        Implementations must persist ordinary ``application_role=user`` only.
+        This method must never accept, infer, or write ``owner``.
+
         Returns:
             The new internal user id.
 

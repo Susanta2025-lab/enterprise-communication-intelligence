@@ -38,6 +38,19 @@ class MessageCategory(StrEnum):
     OTHER = "other"
 
 
+class ApplicationRole(StrEnum):
+    """ECI application RBAC role persisted on ``users.application_role``.
+
+    Stored as portable text with a database check constraint. This is not an
+    Entra JWT ``roles`` claim, not a ``communications:*`` permission, and not
+    Azure RBAC or AWS IAM. Ordinary signup always creates ``USER``. Owner
+    promotion is a controlled operator action outside normal identity create.
+    """
+
+    USER = "user"
+    OWNER = "owner"
+
+
 class ConnectorAccountStatus(StrEnum):
     """Lifecycle of a user-owned connector account.
 

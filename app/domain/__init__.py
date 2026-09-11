@@ -1,6 +1,7 @@
 """Provider-independent communication domain for ECI Platform."""
 
 from app.domain.enums import (
+    ApplicationRole,
     AttachmentDisposition,
     AttachmentExtractedContentStatus,
     AttachmentKind,
@@ -44,6 +45,7 @@ __all__ = [
     "AIImageInput",
     "AIProvider",
     "ActionItem",
+    "ApplicationRole",
     "AttachmentAnalysis",
     "AttachmentContent",
     "AttachmentDisposition",

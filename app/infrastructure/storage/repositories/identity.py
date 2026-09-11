@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import PersistenceError
+from app.domain.enums import ApplicationRole
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.infrastructure.storage.models import ExternalIdentity, User
 
@@ -28,12 +29,16 @@ class SqlAlchemyIdentityRepository(IdentityRepository):
         return self._session.scalars(statement).first()
 
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
-        """Create a user and unique external identity mapping."""
+        """Create a user and unique external identity mapping.
+
+        New users always receive ``application_role=user``. Role is never
+        inferred from issuer, subject, or any client/JWT claim.
+        """
         existing = self.get_user_id_by_external_identity(issuer, subject)
         if existing is not None:
             raise PersistenceError("External identity is already registered.")
 
-        user = User(id=uuid4())
+        user = User(id=uuid4(), application_role=ApplicationRole.USER.value)
         identity = ExternalIdentity(
             id=uuid4(),
             user_id=user.id,

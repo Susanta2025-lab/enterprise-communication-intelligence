@@ -54,6 +54,16 @@ def test_missing_identity_creates_user_and_commits() -> None:
     assert unit.identities[(_ISSUER_A, _SUBJECT_A)] == user_id
 
 
+def test_resolve_or_create_signature_cannot_accept_role() -> None:
+    """IdentityResolver must not accept application_role from callers."""
+    import inspect
+
+    parameters = inspect.signature(IdentityResolver.resolve_or_create).parameters
+    assert "application_role" not in parameters
+    assert "role" not in parameters
+    assert set(parameters) == {"self", "principal"}
+
+
 def test_find_existing_missing_returns_none_without_create() -> None:
     """History lookups must not create a user."""
     unit = InMemoryUnitOfWork()

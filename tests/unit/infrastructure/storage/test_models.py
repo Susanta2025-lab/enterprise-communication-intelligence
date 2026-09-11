@@ -61,11 +61,15 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
 
 
 def test_user_columns_exclude_pii(sqlite_engine: Engine) -> None:
-    """User rows are an opaque UUID plus timestamps."""
+    """User rows are an opaque UUID, application role, and timestamps."""
     inspector = inspect(sqlite_engine)
     columns = {column["name"] for column in inspector.get_columns("users")}
-    assert columns == {"id", "created_at", "updated_at"}
+    assert columns == {"id", "application_role", "created_at", "updated_at"}
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+    check_names = {
+        constraint["name"] for constraint in inspector.get_check_constraints("users")
+    }
+    assert "ck_users_application_role" in check_names
 
 
 def test_external_identity_unique_constraint(sqlite_engine: Engine) -> None:

@@ -38,8 +38,20 @@ class User(Base):
     """Internal opaque user identity. No PII columns."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "application_role IN ('user', 'owner')",
+            name="ck_users_application_role",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    application_role: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="user",
+        server_default="user",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
