@@ -134,11 +134,71 @@ def test_database_rejects_unsupported_application_role(
         session.rollback()
 
 
-def test_resolve_create_path_has_no_owner_promotion_api() -> None:
-    """19B must not expose an owner-promotion method on the repository."""
-    assert not hasattr(SqlAlchemyIdentityRepository, "promote_to_owner")
+def test_resolve_create_path_has_no_generic_role_write_api() -> None:
+    """Request-path identity APIs must not expose unrestricted role writes."""
     assert not hasattr(SqlAlchemyIdentityRepository, "set_application_role")
     assert not hasattr(SqlAlchemyIdentityRepository, "create_owner")
+    assert hasattr(SqlAlchemyIdentityRepository, "promote_user_role_from_user_to_owner")
+
+
+def test_promote_user_role_from_user_to_owner(session_factory: sessionmaker) -> None:
+    """Conditional promote updates only user→owner for the target row."""
+    with session_factory() as session:
+        repository = SqlAlchemyIdentityRepository(session)
+        user_id = repository.create_user_with_external_identity(_ISSUER_A, _SUBJECT_A)
+        session.commit()
+        assert repository.promote_user_role_from_user_to_owner(user_id) is True
+        session.commit()
+        assert repository.get_application_role_for_user(user_id) == ApplicationRole.OWNER.value
+        assert repository.promote_user_role_from_user_to_owner(user_id) is False
+        assert repository.count_users_with_application_role(ApplicationRole.OWNER.value) == 1
+        assert repository.user_has_external_identity(user_id) is True
+
+
+def test_promote_unknown_user_returns_false(session_factory: sessionmaker) -> None:
+    with session_factory() as session:
+        repository = SqlAlchemyIdentityRepository(session)
+        assert (
+            repository.promote_user_role_from_user_to_owner(
+                UUID("00000000-0000-4000-8000-000000000001")
+            )
+            is False
+        )
+
+
+def test_sqlalchemy_first_owner_bootstrap_persists_owner(
+    session_factory: sessionmaker,
+) -> None:
+    """End-to-end bootstrap through SqlAlchemy UoW persists owner."""
+    from app.application.services.owner_bootstrap import (
+        FirstOwnerBootstrapResult,
+        FirstOwnerBootstrapService,
+    )
+    from app.infrastructure.storage.unit_of_work import SqlAlchemyPersistenceUnitOfWork
+
+    def _factory() -> SqlAlchemyPersistenceUnitOfWork:
+        return SqlAlchemyPersistenceUnitOfWork(session_factory)
+
+    with _factory() as uow:
+        user_id = uow.identity_repository.create_user_with_external_identity(
+            _ISSUER_A,
+            _SUBJECT_A,
+        )
+        uow.commit()
+
+    result = FirstOwnerBootstrapService(_factory).promote_first_owner(user_id)
+    assert result is FirstOwnerBootstrapResult.PROMOTED
+
+    with _factory() as uow:
+        assert (
+            uow.identity_repository.get_application_role_for_user(user_id)
+            == ApplicationRole.OWNER.value
+        )
+
+    assert (
+        FirstOwnerBootstrapService(_factory).promote_first_owner(user_id)
+        is FirstOwnerBootstrapResult.ALREADY_OWNER
+    )
 
 
 def test_user_has_no_email_or_name_columns(session_factory: sessionmaker) -> None:

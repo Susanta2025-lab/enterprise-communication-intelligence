@@ -21,6 +21,23 @@ class IdentityRepository(ABC):
         """
 
     @abstractmethod
+    def user_has_external_identity(self, user_id: UUID) -> bool:
+        """Return True when ``user_id`` has at least one External ID mapping."""
+
+    @abstractmethod
+    def count_users_with_application_role(self, role: str) -> int:
+        """Return how many users currently have ``application_role=role``."""
+
+    @abstractmethod
+    def promote_user_role_from_user_to_owner(self, user_id: UUID) -> bool:
+        """Conditionally set ``application_role`` from ``user`` to ``owner``.
+
+        Updates exactly one row when ``user_id`` exists with role ``user``.
+        Returns True when a row was updated. Never creates users. Never accepts
+        arbitrary roles. Not for request-path authorization.
+        """
+
+    @abstractmethod
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         """Create a user and unique external identity mapping.
 

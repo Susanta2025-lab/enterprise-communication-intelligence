@@ -54,12 +54,26 @@ class InMemoryIdentityRepository(IdentityRepository):
         self._identities = identities
         self._application_roles = application_roles
         self.create_calls = 0
+        self.promote_calls = 0
 
     def get_user_id_by_external_identity(self, issuer: str, subject: str) -> UUID | None:
         return self._identities.get((issuer, subject))
 
     def get_application_role_for_user(self, user_id: UUID) -> str | None:
         return self._application_roles.get(user_id)
+
+    def user_has_external_identity(self, user_id: UUID) -> bool:
+        return any(mapped == user_id for mapped in self._identities.values())
+
+    def count_users_with_application_role(self, role: str) -> int:
+        return sum(1 for value in self._application_roles.values() if value == role)
+
+    def promote_user_role_from_user_to_owner(self, user_id: UUID) -> bool:
+        self.promote_calls += 1
+        if self._application_roles.get(user_id) != ApplicationRole.USER.value:
+            return False
+        self._application_roles[user_id] = ApplicationRole.OWNER.value
+        return True
 
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         self.create_calls += 1

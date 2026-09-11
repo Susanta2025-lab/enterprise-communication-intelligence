@@ -34,15 +34,15 @@ Phase 19 architecture/readiness assessment: **READY WITH PREREQUISITES**.
 | Phase 19 assessment | READY WITH PREREQUISITES |
 | **19A** Architecture decision lock | **CLOSED / PASS** |
 | **19B** Role schema/model + safe migration | **CLOSED / PASS** |
-| **19C** Server-side owner authorization | **Completed / PASS** |
-| **19D** Secure first-owner bootstrap | Not started |
+| **19C** Server-side owner authorization | **CLOSED / PASS** |
+| **19D** Secure first-owner bootstrap | **CLOSED / PASS** |
 | **19E** `/me` + frontend owner awareness | Not started |
 | **19F** Security regression matrix + documentation closure | Not started |
-| Phase 19 overall | Next (19A–19C complete) |
+| Phase 19 overall | Next (19A–19D complete) |
 
-Phase 18 remains **CLOSED / PASS**. Phase 19A and 19B remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
+Phase 18 remains **CLOSED / PASS**. Phases 19A–19C remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
 
-**Important:** server-side owner authorization exists (`require_owner`, `GET /api/v1/admin/ping`). No production owner bootstrap/promotion exists yet. Real owner activation remains pending Phase 19D. Tests may seed `application_role=owner` only through controlled fixtures.
+**Important:** the controlled first-owner bootstrap command exists, but **real owner activation has NOT occurred** in this slice. No real `(iss, sub)` values were captured or stored in the repository. Operators must run promotion later against an environment database after ordinary External ID sign-in.
 
 ## Locked architecture
 
@@ -68,7 +68,7 @@ The following decisions are authoritative for Phase 19. They are recorded in ADR
 ### Identity and documentation safety
 
 - No real owner `(iss, sub)` value belongs in tracked documentation or source code.
-- Owner identity is captured and promoted only through a controlled operator step in a later slice (19D).
+- Owner identity is promoted only through the controlled operator bootstrap (`python -m app.cli.promote_owner`); real activation is environment-specific and outside git.
 - Examples and placeholders remain conceptual.
 
 ## 19A — Architecture decision lock
@@ -140,20 +140,44 @@ Out of scope (deferred):
 
 ## 19D — Secure first-owner bootstrap
 
-Not started.
+**CLOSED / PASS.**
 
-Intended scope:
+Implemented the operator-only first-owner promotion mechanism. **Real owner activation was not performed.**
 
-- controlled operator promotion path after ordinary External ID sign-in
-- bind promotion to verified `(iss, sub)` / mapped `users.id`
-- auditable one-shot (or equivalently controlled) bootstrap per environment
-- never promote inside normal signup
+### Bootstrap design
 
-Safety:
+```text
+python -m app.cli.promote_owner --user-id <existing-users.id-uuid>
+```
 
-- do not commit real `(iss, sub)` values
-- do not auto-promote from email allowlists
-- do not use mailbox identities
+- Requires `DATABASE_URL`
+- Targets an **existing** internal `users.id` only
+- Requires an External ID mapping on that user
+- Conditionally updates `application_role` from `user` → `owner`
+- First-owner invariant: fails closed if a different owner already exists
+- Idempotent when the same user is already `owner`
+- Never creates users
+- No public HTTP role-write API
+- No email / JWT / mailbox selectors
+
+### Why `--user-id`
+
+Passing the opaque internal UUID avoids placing durable External ID `(iss, sub)` values into shell history. Operators verify External ID sign-in separately, then resolve `users.id` from `external_identities` outside this command before invoking it.
+
+### Security assumptions
+
+- Ordinary signup / `resolve_or_create` still creates only `user`
+- Owner authorization remains server-side DB role checks (19C)
+- Bootstrap is an offline/operator process, not an application request path
+- Tracked docs/source never contain real owner identity values
+
+### Later real activation (NOT executed in 19D)
+
+1. Ensure the environment database is migrated to Alembic head including `19b0001`
+2. Designated human signs in once via ordinary External ID product login
+3. Operator resolves that person's internal `users.id` from `external_identities` for the verified `(iss, sub)` (outside git/docs)
+4. Operator runs `python -m app.cli.promote_owner --user-id <uuid>` with `DATABASE_URL` for that environment
+5. Confirm with an authenticated owner call to `GET /api/v1/admin/ping`
 
 ## 19E — `/me` + frontend owner awareness
 
@@ -193,7 +217,7 @@ From the readiness assessment:
 - Phase 18 CLOSED / PASS
 - External ID product login and `(iss, sub)` mapping remain the identity foundation
 - persistence and Alembic tooling available for the role column
-- operator availability to capture and promote a real owner identity only in 19D, outside tracked source
+- operator availability to promote a real owner identity per environment using the 19D CLI, outside tracked source
 
 ## Related documents
 

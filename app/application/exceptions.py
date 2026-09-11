@@ -199,3 +199,31 @@ class AttachmentImageAnalysisNotAvailableError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Image analysis is not available.")
+
+
+class OwnerBootstrapTargetNotFoundError(ECIPlatformError):
+    """Raised when the bootstrap target user id does not exist."""
+
+    def __init__(self) -> None:
+        super().__init__("Owner bootstrap target was not found.")
+
+
+class OwnerBootstrapExternalIdentityRequiredError(ECIPlatformError):
+    """Raised when the target user has no External ID mapping."""
+
+    def __init__(self) -> None:
+        super().__init__("Owner bootstrap requires an External ID mapping.")
+
+
+class OwnerAlreadyExistsError(ECIPlatformError):
+    """Raised when first-owner bootstrap finds a different existing owner."""
+
+    def __init__(self) -> None:
+        super().__init__("A platform owner already exists.")
+
+
+class OwnerBootstrapConflictError(ECIPlatformError):
+    """Raised when conditional owner promotion no longer matches stored role."""
+
+    def __init__(self) -> None:
+        super().__init__("Owner bootstrap could not update application role.")
