@@ -43,6 +43,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-025](ADR-025-browser-frontend-and-authentication-architecture.md) | Browser Frontend and Authentication Architecture | Accepted |
 | [ADR-026](ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md) | Cloud-hosted browser SPA topology and multi-cloud HTTPS validation | Accepted |
 | [ADR-027](ADR-027-microsoft-entra-external-id-customer-authentication.md) | Microsoft Entra External ID for Customer Authentication | Accepted |
+| [ADR-028](ADR-028-platform-owner-identity-and-application-rbac.md) | Platform Owner Identity and Application RBAC | Accepted |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -85,6 +86,8 @@ ADR-025 records the Phase 15A browser foundation: same-repository React + TypeSc
 ADR-026 records Phase 16 hosting: environment-specific Vite SPA builds, Azure Static Web Apps → ACA, AWS S3/CloudFront SPA plus CloudFront HTTPS → HTTP ALB → ECS (no custom domain), colocated sequential PostgreSQL, mandatory Key Vault / Secrets Manager, crossed Graph+Foundry / Gmail+Bedrock proofs, and no live Send by default. ADR-010's ALB-native TLS still needs ACM/domain; Phase 16 uses CloudFront default certificates instead. 16B/16C implemented the Azure path. 16D implemented AWS HTTPS hosting (COMPLETE / PASS) without Gmail, Bedrock, or Send. 16E completed AWS Gmail → Bedrock, including one historical Send. 16F completed multi-account connector semantics, Azure/AWS regression validation, and runtime pause, stopping before Send. Phase 16 is closed from the validation perspective.
 
 ADR-027 records Phase 17 product-login cutover to Microsoft Entra External ID. The workforce tenant remains the operator/admin/mailbox-OAuth directory, not the long-term customer-login directory. Browser MSAL, authorization code + PKCE, bearer tokens, single-issuer JWT validation, `(iss, sub)` mapping, and the five `communications:*` permissions are retained. Email OTP is the initial customer path. Dual-issuer trust, email identity keys, schema migration, social login, and mailbox-login merging are rejected. External ID `sub` is pairwise to the API registration. ECI application login remains separate from mailbox login. Phases 17B–17C implemented and live-validated that cutover for controlled users; **Phase 17D external business-user verification remains deferred**.
+
+ADR-028 records Phase 19 application RBAC: Approach A designates an existing External ID application user as platform owner; owner status is bound to verified `(iss, sub)` and persisted as `users.application_role` (`user` \| `owner`, default `user`); Entra JWT `roles`, mailbox identities, email, Foundry/Bedrock, Azure RBAC, and AWS IAM are not application RBAC sources; normal signup never creates an owner; server-side `require_owner` and `/me` are later slices; workforce → External ID federation and an admin dashboard remain out of initial Phase 19 scope. Phase 19A locks the architecture only; implementation starts in later slices.
 
 ## Template
 
