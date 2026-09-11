@@ -323,6 +323,56 @@ def test_openapi_schema_available(client: TestClient) -> None:
     assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
 
 
+def test_openapi_me_privacy_boundary(client: TestClient) -> None:
+    """Phase 19 /me must not leak internal identifiers or sensitive identity fields."""
+    schema = client.get("/openapi.json").json()
+    assert "/api/v1/me" in schema["paths"]
+    me_path = schema["paths"]["/api/v1/me"]
+    assert "get" in me_path
+    assert "post" not in me_path
+    assert "put" not in me_path
+    assert "patch" not in me_path
+    assert "delete" not in me_path
+
+    me_get = me_path["get"]
+    assert me_get.get("security") == [{"HTTPBearer": []}]
+    assert "401" in me_get["responses"]
+    assert "404" in me_get["responses"]
+    assert "503" in me_get["responses"]
+    assert "200" in me_get["responses"]
+
+    me_schema = schema["components"]["schemas"]["MeResponse"]
+    assert set(me_schema["properties"].keys()) == {"application_role", "is_owner"}
+    for forbidden in (
+        "user_id",
+        "iss",
+        "sub",
+        "issuer",
+        "subject",
+        "email",
+        "preferred_username",
+        "access_token",
+        "id_token",
+        "mailbox",
+        "roles",
+        "scp",
+        "permissions",
+    ):
+        assert forbidden not in me_schema["properties"]
+
+    # Regression: docstring/description must not emit the internal identifier name.
+    me_serialized = repr(me_get) + repr(me_schema)
+    assert "user_id" not in me_serialized
+    assert "access_token" not in me_serialized
+    assert "id_token" not in me_serialized
+    assert "refresh_token" not in me_serialized
+    assert "credential_ref" not in me_serialized
+    assert "external_account_id" not in me_serialized
+
+    # Broad privacy assertion remains intact for the full OpenAPI document.
+    assert "user_id" not in repr(schema)
+
+
 def test_openapi_schema_exposes_analysis_history_routes(client: TestClient) -> None:
     """Phase 9B exposes owned analysis history endpoints."""
     schema = client.get("/openapi.json").json()

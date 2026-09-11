@@ -258,6 +258,36 @@ def test_mailbox_identity_cannot_influence_me(
     assert response.json() == {"application_role": "user", "is_owner": False}
 
 
+def test_graph_mailbox_identity_cannot_influence_me(
+    me_api: tuple[TestClient, InMemoryUnitOfWork],
+    private_key,
+) -> None:
+    client, unit = me_api
+    _seed_user(unit, role=ApplicationRole.USER.value)
+    user_id = next(iter(unit.application_roles))
+    unit.connector_account_store[uuid4()] = sample_connector_account(
+        user_id,
+        provider="microsoft_graph",
+        external_account_id="graph-owner@example.invalid",
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    response = client.get(
+        _ME_URL,
+        headers=bearer_header(
+            _token(
+                private_key,
+                permissions=_ALL_COMMUNICATIONS,
+                extra_claims={
+                    "email": "graph-owner@example.invalid",
+                    "preferred_username": "graph-owner@example.invalid",
+                },
+            )
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json() == {"application_role": "user", "is_owner": False}
+
+
 def test_corrupt_application_role_fails_closed_on_me(
     me_api: tuple[TestClient, InMemoryUnitOfWork],
     private_key,

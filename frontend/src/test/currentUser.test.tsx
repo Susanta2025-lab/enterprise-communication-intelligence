@@ -172,11 +172,13 @@ describe("CurrentUserProvider", () => {
         })}
       >
         <CurrentUserProvider apiClient={apiClient}>
+          <AppShell>content</AppShell>
           <Probe />
         </CurrentUserProvider>
       </AuthStub>,
     );
 
+    expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
     await waitFor(() => expect(screen.getByTestId("me-owner")).toHaveTextContent("yes"));
 
     rerender(
@@ -188,6 +190,7 @@ describe("CurrentUserProvider", () => {
         })}
       >
         <CurrentUserProvider apiClient={apiClient}>
+          <AppShell>content</AppShell>
           <Probe />
         </CurrentUserProvider>
       </AuthStub>,
@@ -195,6 +198,7 @@ describe("CurrentUserProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("me-status")).toHaveTextContent("anonymous"));
     expect(screen.getByTestId("me-owner")).toHaveTextContent("no");
+    expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
   });
 
   it("does not leak previous owner state across account keys", async () => {

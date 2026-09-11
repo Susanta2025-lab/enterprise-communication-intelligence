@@ -37,12 +37,12 @@ Phase 19 architecture/readiness assessment: **READY WITH PREREQUISITES**.
 | **19C** Server-side owner authorization | **CLOSED / PASS** |
 | **19D** Secure first-owner bootstrap | **CLOSED / PASS** |
 | **19E** `/me` + frontend owner awareness | **CLOSED / PASS** |
-| **19F** Security regression matrix + documentation closure | Not started |
-| Phase 19 overall | Next (19A–19E complete) |
+| **19F** Security regression matrix + documentation closure | **CLOSED / PASS** |
+| Phase 19 overall | **CLOSED / PASS** |
 
-Phase 18 remains **CLOSED / PASS**. Phases 19A–19E remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
+Phase 18 remains **CLOSED / PASS**. Phases 19A–19F remain **CLOSED / PASS**. Phase 19 overall is **CLOSED / PASS**. Do not reopen or rewrite completed phases.
 
-**Important:** the controlled first-owner bootstrap command exists, but **real owner activation has NOT occurred** in this slice. No real `(iss, sub)` values were captured or stored in the repository. Operators must run promotion later against an environment database after ordinary External ID sign-in.
+**Important:** the controlled first-owner bootstrap command exists, but **real owner activation has NOT occurred**. No real `(iss, sub)` values were captured or stored in the repository. Operators must run promotion later against an environment database after ordinary External ID sign-in.
 
 ## Locked architecture
 
@@ -206,13 +206,80 @@ Implemented server-authoritative current-user identity and minimal frontend owne
 
 ## 19F — Security regression matrix + documentation closure
 
-Not started.
+**CLOSED / PASS.**
 
-Intended scope:
+Completed the Phase 19 security/regression review and documentation closure against ADR-028 and the implemented 19B–19E code. **Real owner activation was NOT performed.** No live Azure/AWS mutation, Entra change, or `promote_owner` against a real environment occurred in this slice.
 
-- offline security regression covering non-owner denial, create-path non-promotion, mailbox/email non-grant, and server-authoritative `/me`
-- Phase 19 documentation closure
-- preserve Phase 18 CLOSED / PASS
+### IMPLEMENTED (technical capability)
+
+- constrained `users.application_role` (`user` \| `owner`, default `user`)
+- server-side `require_owner` and minimal `GET /api/v1/admin/ping`
+- operator-only first-owner bootstrap CLI
+- server-authoritative `GET /api/v1/me` (`application_role`, `is_owner` only)
+- frontend owner awareness (presentation only)
+- offline security regression coverage for the Phase 19 matrix
+
+### NOT PERFORMED
+
+- real platform-owner activation / promotion in any environment
+- workforce → External ID federation
+- admin dashboard or generalized multi-role administration
+- external business-user validation (Phase 17D remains deferred)
+
+### Security regression matrix (evidence)
+
+| # | Property | Evidence |
+|---|---|---|
+| 1 | ordinary user remains user | `test_me_endpoint`, identity repository create path |
+| 2 | persisted owner recognized as owner | `test_admin_owner_authorization`, `test_me_endpoint` |
+| 3 | normal signup cannot create owner | identity repository + migration defaults |
+| 4 | `resolve_or_create` cannot promote | `test_identity_resolver`, owner bootstrap unit |
+| 5 | email equality cannot grant owner | same-email/different-`sub` admin denial |
+| 6 | different subject cannot impersonate owner | verified `(iss, sub)` resolution tests |
+| 7 | JWT `roles=["owner"]` cannot grant owner | admin + `/me` JWT role denial |
+| 8 | all `communications:*` scopes cannot grant owner | admin scope denial |
+| 9 | frontend/client role state cannot grant owner | `/me` + frontend current-user tests |
+| 10 | request header/query/body cannot grant owner | admin + `/me` client-claim denial |
+| 11 | Gmail mailbox identity cannot grant owner | admin/me/bootstrap mailbox denial |
+| 12 | Graph mailbox identity cannot grant owner | admin + `/me` Graph connector denial |
+| 13 | unauthenticated admin → 401 | `test_admin_ping_without_token_returns_401` |
+| 14 | normal authenticated user admin → 403 | `test_admin_ping_ordinary_user_returns_403` |
+| 15 | persisted owner admin → 200 | `test_admin_ping_persisted_owner_returns_200` |
+| 16 | unknown/corrupt role fails closed | admin 403 / `/me` 503 / DB check |
+| 17 | persistence failure fails safely | admin + `/me` 503 on `PersistenceError` |
+| 18 | bootstrap cannot create a user | owner bootstrap unit |
+| 19 | nonexistent bootstrap target fails closed | owner bootstrap unit |
+| 20 | failed bootstrap leaves DB unchanged | bootstrap failure/rollback cases |
+| 21 | second distinct owner is rejected | first-owner invariant |
+| 22 | repeated same-owner bootstrap is safe | idempotent `ALREADY_OWNER` |
+| 23 | no HTTP application-role mutation exists | admin/bootstrap/me method denial |
+| 24 | ordinary user cannot self-promote | bootstrap integration |
+| 25 | `/me` reflects DB role, not token/client | `/me` claim-independence tests |
+| 26 | `/me` does not expose sensitive identity fields | runtime + OpenAPI privacy assertions |
+| 27 | logout clears frontend owner state | current-user shell badge clear |
+| 28 | account/session switch cannot retain owner state | account-key switch test |
+| 29 | `PermissionGate` independent from owner state | current-user PermissionGate test |
+| 30 | cross-user resource isolation unchanged | owner probe + pre-existing ownership suites |
+
+### OpenAPI / privacy
+
+- Broad OpenAPI assertion `user_id` not present in the schema remains intact.
+- `/me` schema exposes only `application_role` and `is_owner`.
+- `/me` OpenAPI wording must not emit the internal identifier name (`user_id`).
+
+### Real owner activation boundary
+
+Technical owner/RBAC capability is complete. Secure operator bootstrap exists (`python -m app.cli.promote_owner --user-id <uuid>`). Real activation remains a separate operator action per environment after ordinary External ID sign-in and controlled resolution to internal `users.id`. Real `(iss, sub)` values must not be committed to source or docs.
+
+### Multi-cloud
+
+Application RBAC remains host-neutral:
+
+```text
+External ID → ECI API → PostgreSQL application_role
+```
+
+Identical on Azure-hosted and AWS-hosted ECI. Azure RBAC / AWS IAM are not application-owner truth. No Foundry/Bedrock changes were required for Phase 19.
 
 ## Non-goals (initial Phase 19)
 
@@ -224,13 +291,13 @@ Intended scope:
 - changing Foundry, Bedrock, Azure RBAC, or AWS IAM into application role sources
 - embedding real owner identity values in the repository
 
-## Prerequisites for later slices
+## Prerequisites for real owner activation (operator)
 
-From the readiness assessment:
+From the readiness assessment and Phase 19 delivery:
 
 - Phase 18 CLOSED / PASS
 - External ID product login and `(iss, sub)` mapping remain the identity foundation
-- persistence and Alembic tooling available for the role column
+- persistence and Alembic tooling available for the role column (head includes `19b0001`)
 - operator availability to promote a real owner identity per environment using the 19D CLI, outside tracked source
 
 ## Related documents

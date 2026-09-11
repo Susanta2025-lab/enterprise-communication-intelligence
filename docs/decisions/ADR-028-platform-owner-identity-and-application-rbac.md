@@ -4,7 +4,7 @@
 
 Accepted
 
-The Solution Architect locked this decision in Phase 19A. Schema, authorization guards, bootstrap, `/me`, and frontend awareness are later Phase 19 slices. This ADR does not implement RBAC code, migrations, admin endpoints, Entra changes, or cloud mutations.
+The Solution Architect locked this decision in Phase 19A. Phase 19B–19F implemented schema, `require_owner`, operator bootstrap, `/me`, frontend awareness, and security/documentation closure under this ADR. This ADR does not itself mutate Entra, Azure, or AWS resources, and it does not perform real owner activation.
 
 This ADR does not rewrite [ADR-009](ADR-009-application-user-authentication.md), [ADR-013](ADR-013-external-identity-mapping-and-user-owned-data.md), [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md), [ADR-025](ADR-025-browser-frontend-and-authentication-architecture.md), or [ADR-027](ADR-027-microsoft-entra-external-id-customer-authentication.md). It adds application-persisted owner RBAC on top of the existing External ID product-login and `(iss, sub)` mapping contracts.
 
@@ -102,7 +102,7 @@ Presentation claims remain presentation-only when shown. They are not owner keys
 
 Tracked documentation and source code must not contain real owner `(iss, sub)` values, real access tokens, or other secrets.
 
-Capture and promotion of a real owner identity happen only through a controlled operator step in a later Phase 19 slice (19D). Placeholders in examples remain conceptual.
+Capture and promotion of a real owner identity happen only through a controlled operator step (Phase 19D CLI). Placeholders in examples remain conceptual. Real activation is environment-specific and outside tracked source.
 
 ## Application-role persistence
 
@@ -169,11 +169,9 @@ Optional later hardening may use Settings allowlists solely to constrain the boo
 
 ## Backend and frontend authorization boundary
 
-Backend authorization will ultimately provide a server-side `require_owner` (or equivalent) guard. Admin-only routes, when added later, enforce that guard on the server.
+Backend authorization provides a server-side `require_owner` guard. The minimal admin probe (`GET /api/v1/admin/ping`) enforces that guard. No admin dashboard is part of the initial Phase 19 scope.
 
-Frontend role awareness will later come from a server-authoritative `/me` (or equivalent) endpoint. Frontend visibility is never security enforcement. The SPA must not grant privileges from MSAL token `roles` or `scp`.
-
-No admin dashboard is part of the initial Phase 19 scope.
+Frontend role awareness comes from server-authoritative `GET /api/v1/me`. Frontend visibility is never security enforcement. The SPA must not grant privileges from MSAL token `roles` or `scp`.
 
 ## Multi-cloud implications
 
@@ -229,11 +227,11 @@ Do not implement those extensions in the initial Phase 19 slices unless explicit
 
 ## Operational consequences
 
-- Later slice 19B adds the safe role schema/migration.
-- Later slice 19C adds server-side `require_owner`.
-- Later slice 19D performs controlled first-owner capture and promotion per environment.
-- Later slice 19E exposes server-authoritative `/me` and frontend awareness.
-- Later slice 19F closes with a security regression matrix and documentation.
+- Slice 19B added the safe role schema/migration.
+- Slice 19C added server-side `require_owner`.
+- Slice 19D delivered controlled first-owner bootstrap (CLI); real activation remains operator-executed per environment.
+- Slice 19E exposed server-authoritative `/me` and frontend awareness.
+- Slice 19F closed with a security regression matrix and documentation.
 - No Microsoft Entra, Azure, or AWS resource changes are required for Approach A architecture lock.
 - No admin dashboard in initial Phase 19 scope.
 
@@ -268,11 +266,14 @@ Phase 19 initial scope does not include:
 
 ## Related Components
 
-- `app/application/services/identity.py` (later: create path remains non-owner)
+- `app/application/services/identity.py` (create path remains non-owner)
+- `app/application/services/owner_bootstrap.py` (operator first-owner promotion)
+- `app/cli/promote_owner.py` (operator CLI; no HTTP role mutation)
 - `app/core/security.py` (communications permissions remain separate)
-- `app/infrastructure/storage/models.py` (later: `application_role`)
-- future `require_owner` FastAPI dependency
-- future `/me` (or equivalent) response contract
+- `app/infrastructure/storage/models.py` (`application_role`)
+- `app/api/dependencies.py` (`require_owner`)
+- `app/api/routes/me.py` / `app/schemas/me.py` (`GET /api/v1/me`)
+- `app/api/routes/admin.py` (minimal owner probe)
 - [ADR-009](ADR-009-application-user-authentication.md)
 - [ADR-013](ADR-013-external-identity-mapping-and-user-owned-data.md)
 - [ADR-021](ADR-021-mailbox-delegated-oauth-authorization-architecture.md)

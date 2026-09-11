@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_token_validator, get_unit_of_work_factory
 from app.application.services.identity import IdentityResolver
 from app.core.config import get_settings
+from app.core.exceptions import PersistenceError
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
     COMMUNICATIONS_READ_PERMISSION,
@@ -257,6 +258,86 @@ def test_mailbox_connector_identity_cannot_influence_owner(
     )
     assert response.status_code == 403
     assert unit.application_roles[user_id] == ApplicationRole.USER.value
+
+
+def test_graph_mailbox_identity_cannot_influence_owner(
+    owner_api: tuple[TestClient, InMemoryUnitOfWork],
+    private_key,
+) -> None:
+    client, unit = owner_api
+    _seed_user(unit, role=ApplicationRole.USER.value)
+    user_id = next(iter(unit.application_roles))
+    unit.connector_account_store[uuid4()] = sample_connector_account(
+        user_id,
+        provider="microsoft_graph",
+        external_account_id="graph-owner@example.invalid",
+        granted_capabilities=(CommunicationCapability.MAIL_READ,),
+    )
+    response = client.get(
+        _ADMIN_PING,
+        headers=bearer_header(
+            _token(
+                private_key,
+                permissions=_ALL_COMMUNICATIONS,
+                extra_claims={
+                    "email": "graph-owner@example.invalid",
+                    "preferred_username": "graph-owner@example.invalid",
+                },
+            )
+        ),
+    )
+    assert response.status_code == 403
+    assert unit.application_roles[user_id] == ApplicationRole.USER.value
+
+
+def test_same_email_different_subject_cannot_impersonate_owner(
+    owner_api: tuple[TestClient, InMemoryUnitOfWork],
+    private_key,
+) -> None:
+    """Email equality across subjects must not grant owner (ADR-028)."""
+    client, unit = owner_api
+    shared_email = "shared@example.invalid"
+    _seed_user(unit, subject="owner-subject", role=ApplicationRole.OWNER.value)
+    response = client.get(
+        _ADMIN_PING,
+        headers=bearer_header(
+            _token(
+                private_key,
+                subject="other-subject",
+                permissions=_ALL_COMMUNICATIONS,
+                extra_claims={
+                    "email": shared_email,
+                    "preferred_username": shared_email,
+                },
+            )
+        ),
+    )
+    assert response.status_code == 403
+    assert (TEST_ISSUER, "other-subject") not in unit.identities
+
+
+def test_require_owner_persistence_failure_returns_503(
+    owner_api: tuple[TestClient, InMemoryUnitOfWork],
+    private_key,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, unit = owner_api
+    _seed_user(unit, role=ApplicationRole.OWNER.value)
+
+    def _boom(_issuer: str, _subject: str):
+        raise PersistenceError("simulated failure")
+
+    monkeypatch.setattr(
+        unit.identity_repository,
+        "get_user_id_by_external_identity",
+        _boom,
+    )
+    response = client.get(
+        _ADMIN_PING,
+        headers=bearer_header(_token(private_key, permissions=(TEST_PERMISSION,))),
+    )
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Persistence is currently unavailable."}
 
 
 def test_identity_resolution_uses_verified_iss_sub(
