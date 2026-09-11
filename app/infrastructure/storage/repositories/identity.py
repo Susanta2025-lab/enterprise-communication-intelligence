@@ -28,6 +28,11 @@ class SqlAlchemyIdentityRepository(IdentityRepository):
         )
         return self._session.scalars(statement).first()
 
+    def get_application_role_for_user(self, user_id: UUID) -> str | None:
+        """Return persisted ``application_role`` for ``user_id``, or ``None``."""
+        statement = select(User.application_role).where(User.id == user_id)
+        return self._session.scalars(statement).first()
+
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         """Create a user and unique external identity mapping.
 

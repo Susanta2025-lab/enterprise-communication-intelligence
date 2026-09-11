@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admin,
     analyses,
     attachment_analyses,
     communications,
@@ -22,6 +23,7 @@ def create_api_router() -> APIRouter:
     settings = get_settings()
     api_router = APIRouter()
     api_router.include_router(health.router, prefix=settings.api_v1_prefix)
+    api_router.include_router(admin.router, prefix=settings.api_v1_prefix)
     api_router.include_router(communications.router, prefix=settings.api_v1_prefix)
     api_router.include_router(analyses.router, prefix=settings.api_v1_prefix)
     api_router.include_router(workflow_actions.router, prefix=settings.api_v1_prefix)

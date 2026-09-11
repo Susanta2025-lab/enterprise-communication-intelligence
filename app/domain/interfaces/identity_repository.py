@@ -12,6 +12,15 @@ class IdentityRepository(ABC):
         """Return the internal user id for ``(issuer, subject)``, if one exists."""
 
     @abstractmethod
+    def get_application_role_for_user(self, user_id: UUID) -> str | None:
+        """Return persisted ``application_role`` for ``user_id``, or ``None`` if missing.
+
+        Returns the stored role string only. Callers must treat anything other
+        than ``owner`` as non-owner. This method never infers role from JWT
+        claims, email, mailbox identity, or client input.
+        """
+
+    @abstractmethod
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         """Create a user and unique external identity mapping.
 

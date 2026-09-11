@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from app.core.exceptions import PersistenceError
 from app.domain.enums import (
+    ApplicationRole,
     ConnectorAccountStatus,
     MailboxAuthorizationProvider,
     WorkflowActionStatus,
@@ -45,12 +46,20 @@ _DUPLICATE_CONNECTOR_ACCOUNT = "Connector account is already registered."
 class InMemoryIdentityRepository(IdentityRepository):
     """Dict-backed identity mapping used by unit tests."""
 
-    def __init__(self, identities: dict[tuple[str, str], UUID]) -> None:
+    def __init__(
+        self,
+        identities: dict[tuple[str, str], UUID],
+        application_roles: dict[UUID, str],
+    ) -> None:
         self._identities = identities
+        self._application_roles = application_roles
         self.create_calls = 0
 
     def get_user_id_by_external_identity(self, issuer: str, subject: str) -> UUID | None:
         return self._identities.get((issuer, subject))
+
+    def get_application_role_for_user(self, user_id: UUID) -> str | None:
+        return self._application_roles.get(user_id)
 
     def create_user_with_external_identity(self, issuer: str, subject: str) -> UUID:
         self.create_calls += 1
@@ -59,6 +68,7 @@ class InMemoryIdentityRepository(IdentityRepository):
             raise PersistenceError(_DUPLICATE_IDENTITY)
         user_id = uuid4()
         self._identities[key] = user_id
+        self._application_roles[user_id] = ApplicationRole.USER.value
         return user_id
 
 
@@ -517,6 +527,7 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self,
         *,
         identities: dict[tuple[str, str], UUID] | None = None,
+        application_roles: dict[UUID, str] | None = None,
         analyses: dict[UUID, AnalysisRecord] | None = None,
         attachment_analyses: dict[UUID, AttachmentAnalysisRecord] | None = None,
         connector_accounts: dict[UUID, ConnectorAccountRecord] | None = None,
@@ -529,6 +540,9 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         commit_error: Exception | None = None,
     ) -> None:
         self.identities = identities if identities is not None else {}
+        self.application_roles = (
+            application_roles if application_roles is not None else {}
+        )
         self.analyses = analyses if analyses is not None else {}
         self.attachment_analysis_store = (
             attachment_analyses if attachment_analyses is not None else {}
@@ -544,7 +558,10 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self.workflow_action_store = (
             workflow_actions if workflow_actions is not None else {}
         )
-        self._identity_repository = InMemoryIdentityRepository(self.identities)
+        self._identity_repository = InMemoryIdentityRepository(
+            self.identities,
+            self.application_roles,
+        )
         self._analysis_repository = InMemoryAnalysisRepository(self.analyses)
         self._attachment_analyses = InMemoryAttachmentAnalysisRepository(
             self.attachment_analysis_store

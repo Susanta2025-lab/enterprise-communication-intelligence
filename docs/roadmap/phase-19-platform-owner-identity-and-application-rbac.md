@@ -33,14 +33,16 @@ Phase 19 architecture/readiness assessment: **READY WITH PREREQUISITES**.
 | Phase 18 — Secure Attachment Intelligence | **CLOSED / PASS** (unchanged) |
 | Phase 19 assessment | READY WITH PREREQUISITES |
 | **19A** Architecture decision lock | **CLOSED / PASS** |
-| **19B** Role schema/model + safe migration | **Completed / PASS** |
-| **19C** Server-side owner authorization | Not started |
+| **19B** Role schema/model + safe migration | **CLOSED / PASS** |
+| **19C** Server-side owner authorization | **Completed / PASS** |
 | **19D** Secure first-owner bootstrap | Not started |
 | **19E** `/me` + frontend owner awareness | Not started |
 | **19F** Security regression matrix + documentation closure | Not started |
-| Phase 19 overall | Next (19A–19B complete) |
+| Phase 19 overall | Next (19A–19C complete) |
 
-Phase 18 remains **CLOSED / PASS**. Phase 19A remains **CLOSED / PASS**. Do not reopen or rewrite completed phases.
+Phase 18 remains **CLOSED / PASS**. Phase 19A and 19B remain **CLOSED / PASS**. Do not reopen or rewrite completed phases.
+
+**Important:** server-side owner authorization exists (`require_owner`, `GET /api/v1/admin/ping`). No production owner bootstrap/promotion exists yet. Real owner activation remains pending Phase 19D. Tests may seed `application_role=owner` only through controlled fixtures.
 
 ## Locked architecture
 
@@ -117,14 +119,24 @@ Out of scope (deferred):
 
 ## 19C — Server-side owner authorization
 
-Not started.
+**Completed / PASS.**
 
-Intended scope:
+Implemented server-side owner authorization only.
 
-- server-side `require_owner` (or equivalent) guard
-- fail closed for unauthenticated and non-owner callers
-- keep `communications:*` permission checks separate
-- minimal protected surface only as needed to prove the guard (no admin dashboard)
+Delivered:
+
+- `IdentityRepository.get_application_role_for_user(user_id)`
+- FastAPI `require_owner` dependency (DB `application_role` only after verified `(iss, sub)` mapping)
+- `GET /api/v1/admin/ping` → `{"status": "ok"}` for persisted owners
+- unauthenticated → 401; authenticated non-owner → 403; owner → 200
+- JWT `roles`, communications scopes, headers/body/query, and mailbox identity cannot grant owner
+- no production promotion/bootstrap path
+
+Out of scope (deferred):
+
+- secure first-owner bootstrap / promotion (19D)
+- `/me` + frontend owner awareness (19E)
+- admin dashboard / user management APIs
 
 ## 19D — Secure first-owner bootstrap
 

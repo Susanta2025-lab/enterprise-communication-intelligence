@@ -37,7 +37,7 @@ from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAu
 from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
-from app.core.exceptions import ServiceUnavailableError
+from app.core.exceptions import PersistenceError, ServiceUnavailableError
 from app.core.logging import get_logger
 from app.core.security import (
     COMMUNICATIONS_CONNECT_PERMISSION,
@@ -49,6 +49,7 @@ from app.core.security import (
     AuthorizationFailedError,
     TokenValidator,
 )
+from app.domain.enums import ApplicationRole
 from app.domain.interfaces import (
     AIProvider,
     AttachmentScanner,
@@ -455,6 +456,63 @@ def require_unit_of_work_factory(
         logger.warning("persistence_unavailable", operation="history")
         raise ServiceUnavailableError(_UNAVAILABLE)
     return factory
+
+
+def require_owner(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(authenticate_caller),
+    ],
+    uow_factory: Annotated[
+        UnitOfWorkFactory | None,
+        Depends(get_unit_of_work_factory),
+    ],
+) -> AuthenticatedPrincipal:
+    """Require authenticated principal with persisted ``application_role=owner``.
+
+    Owner status comes only from ``users.application_role`` after ``(iss, sub)``
+    identity resolution. JWT ``roles``, ``communications:*`` scopes, email,
+    mailbox identity, and client-supplied role claims are ignored.
+
+    ``AUTH_MODE=disabled`` yields 401. Missing/invalid tokens remain 401.
+    Authenticated non-owners and unknown identities yield 403. Persistence
+    unavailability yields 503. The unit of work is opened only after
+    authentication succeeds.
+    """
+    if principal is None:
+        logger.warning("authentication_failed", reason="missing_token")
+        raise HTTPException(
+            status_code=401,
+            detail=_AUTHENTICATE_DETAIL,
+            headers=_WWW_AUTHENTICATE,
+        )
+
+    if uow_factory is None:
+        logger.warning("persistence_unavailable", operation="require_owner")
+        raise ServiceUnavailableError(_UNAVAILABLE)
+
+    try:
+        with uow_factory() as uow:
+            user_id = uow.identity_repository.get_user_id_by_external_identity(
+                principal.issuer,
+                principal.subject,
+            )
+            if user_id is None:
+                logger.warning("authorization_failed", reason="not_owner")
+                raise HTTPException(status_code=403, detail=_AUTHORIZE_DETAIL)
+            role = uow.identity_repository.get_application_role_for_user(user_id)
+            if role != ApplicationRole.OWNER.value:
+                logger.warning("authorization_failed", reason="not_owner")
+                raise HTTPException(status_code=403, detail=_AUTHORIZE_DETAIL)
+    except PersistenceError as exc:
+        logger.warning(
+            "persistence_unavailable",
+            operation="require_owner",
+            error_class=type(exc).__name__,
+        )
+        raise ServiceUnavailableError(_UNAVAILABLE) from None
+
+    return principal
 
 
 def get_execution_unit_of_work_factory(

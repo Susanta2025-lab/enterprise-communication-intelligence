@@ -88,6 +88,18 @@ def test_create_persists_application_role_user(
         assert user is not None
         assert user.application_role == ApplicationRole.USER.value
         assert user.application_role != ApplicationRole.OWNER.value
+        assert repository.get_application_role_for_user(user_id) == ApplicationRole.USER.value
+
+
+def test_get_application_role_for_unknown_user_returns_none(
+    session_factory: sessionmaker,
+) -> None:
+    """Role lookup must be scoped to an existing ECI user id."""
+    with session_factory() as session:
+        repository = SqlAlchemyIdentityRepository(session)
+        assert repository.get_application_role_for_user(
+            UUID("00000000-0000-4000-8000-000000000001")
+        ) is None
 
 
 def test_create_ignores_email_like_subject_for_role(
