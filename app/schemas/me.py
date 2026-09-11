@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class MeResponse(BaseModel):
     """Minimal server-authoritative application identity for the caller.
 
-    Omits internal ``user_id``: the SPA needs only role for presentation.
+    Omits internal application identifiers: the SPA needs only role for presentation.
     Never includes issuer, subject, email, mailbox identity, or tokens.
     """
 
