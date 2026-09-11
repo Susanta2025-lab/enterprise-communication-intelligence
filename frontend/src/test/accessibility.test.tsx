@@ -85,6 +85,14 @@ describe("authentication and dashboard landmarks", () => {
     expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
       "Designed & developed by Susanta Hazra",
     );
+    expect(screen.getByRole("link", { name: "Susanta Hazra on LinkedIn" })).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/in/susantahazra",
+    );
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/Susanta2025-lab",
+    );
     expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();
     expect(screen.getByTestId("connector-loading")).toHaveTextContent("Loading connector accounts");
   });

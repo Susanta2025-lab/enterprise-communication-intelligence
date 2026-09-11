@@ -100,9 +100,19 @@ describe("authentication shell", () => {
     expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
     expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
-    expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
-      "Designed & developed by Susanta Hazra",
-    );
+    const attribution = screen.getByTestId("eci-attribution");
+    expect(attribution).toHaveTextContent("Designed & developed by Susanta Hazra");
+    expect(attribution).toHaveTextContent("GitHub");
+    expect(attribution).not.toHaveTextContent("LinkedIn");
+    const linkedIn = screen.getByRole("link", { name: "Susanta Hazra on LinkedIn" });
+    expect(linkedIn).toHaveAttribute("href", "https://www.linkedin.com/in/susantahazra");
+    expect(linkedIn).toHaveAttribute("target", "_blank");
+    expect(linkedIn).toHaveAttribute("rel", "noopener noreferrer");
+    expect(linkedIn).toHaveTextContent("Susanta Hazra");
+    const github = screen.getByRole("link", { name: "GitHub" });
+    expect(github).toHaveAttribute("href", "https://github.com/Susanta2025-lab");
+    expect(github).toHaveAttribute("target", "_blank");
+    expect(github).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
     expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
@@ -155,6 +165,14 @@ describe("authentication shell", () => {
     expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
     expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
       "Designed & developed by Susanta Hazra",
+    );
+    expect(screen.getByRole("link", { name: "Susanta Hazra on LinkedIn" })).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/in/susantahazra",
+    );
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+      "href",
+      "https://github.com/Susanta2025-lab",
     );
   });
 

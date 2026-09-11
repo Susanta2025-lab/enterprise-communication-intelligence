@@ -6,6 +6,12 @@ import { ECI_NAVY } from "./branding/eciBrand";
 import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
+const DEVELOPER_LINKEDIN_URL = "https://www.linkedin.com/in/susantahazra";
+const DEVELOPER_GITHUB_URL = "https://github.com/Susanta2025-lab";
+
+const attributionLinkClassName =
+  "rounded-sm text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline focus-visible:text-slate-700";
+
 type AppShellProps = {
   children: ReactNode;
 };
@@ -70,7 +76,25 @@ export function AppShell({ children }: AppShellProps) {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
           <p className="text-center text-xs text-slate-500" data-testid="eci-attribution">
-            Designed & developed by Susanta Hazra
+            Designed & developed by{" "}
+            <a
+              href={DEVELOPER_LINKEDIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={attributionLinkClassName}
+              aria-label="Susanta Hazra on LinkedIn"
+            >
+              Susanta Hazra
+            </a>
+            {" · "}
+            <a
+              href={DEVELOPER_GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={attributionLinkClassName}
+            >
+              GitHub
+            </a>
           </p>
         </div>
       </footer>

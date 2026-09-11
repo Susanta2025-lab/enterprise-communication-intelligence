@@ -116,6 +116,8 @@ describe("CurrentUserProvider", () => {
     expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
       "Designed & developed by Susanta Hazra",
     );
+    expect(screen.getByRole("link", { name: "Susanta Hazra on LinkedIn" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GitHub" })).toBeInTheDocument();
   });
 
   it("does not show owner badge for ordinary /me", async () => {
@@ -128,6 +130,8 @@ describe("CurrentUserProvider", () => {
     expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByTestId("eci-tagline")).toBeInTheDocument();
     expect(screen.getByTestId("eci-attribution")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Susanta Hazra on LinkedIn" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GitHub" })).toBeInTheDocument();
   });
 
   it("does not treat MSAL/JWT roles as owner without /me", async () => {
