@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { useCurrentUser } from "../auth/useCurrentUser";
-import { ECI_NAVY } from "./branding/eciBrand";
+import { ECI_CYAN, ECI_NAVY } from "./branding/eciBrand";
 import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
@@ -52,9 +52,15 @@ export function AppShell({ children }: AppShellProps) {
               )}
               {isOwner ? (
                 <span
-                  className="shrink-0 rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-cyan-50 px-2.5 py-0.5 text-xs font-semibold shadow-sm"
+                  style={{ color: ECI_NAVY, borderColor: "rgba(8, 43, 89, 0.55)" }}
                   data-testid="owner-badge"
                 >
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: ECI_CYAN }}
+                    aria-hidden="true"
+                  />
                   Platform Owner
                 </span>
               ) : null}
