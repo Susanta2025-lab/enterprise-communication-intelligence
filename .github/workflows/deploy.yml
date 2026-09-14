@@ -111,11 +111,21 @@ jobs:
           docker push "${ACR_IMAGE}:${SHORT_SHA}"
           docker push "${ACR_IMAGE}:stable"
 
+      - name: Validate Azure Container App deployment configuration
+        env:
+          AZURE_CONTAINER_NAME: ${{ vars.AZURE_CONTAINER_NAME }}
+        run: |
+          if [ -z "${AZURE_CONTAINER_NAME}" ]; then
+            echo "AZURE_CONTAINER_NAME is required and must be non-empty." >&2
+            exit 1
+          fi
+
       - name: Update Container App image
         run: |
           az containerapp update \
             --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --container-name "${{ vars.AZURE_CONTAINER_NAME }}" \
             --image "${ACR_IMAGE}:${SHORT_SHA}"
 
   azure-frontend:
@@ -142,6 +152,34 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate Azure frontend deployment configuration
+        env:
+          AZURE_STATIC_WEB_APP_NAME: ${{ vars.AZURE_STATIC_WEB_APP_NAME }}
+          VITE_ECI_API_BASE_URL: ${{ vars.VITE_ECI_API_BASE_URL }}
+          VITE_ENTRA_AUTHORITY: ${{ vars.VITE_ENTRA_AUTHORITY }}
+          VITE_ENTRA_SPA_CLIENT_ID: ${{ vars.VITE_ENTRA_SPA_CLIENT_ID }}
+          VITE_ENTRA_REDIRECT_URI: ${{ vars.VITE_ENTRA_REDIRECT_URI }}
+          VITE_ECI_API_SCOPES: ${{ vars.VITE_ECI_API_SCOPES }}
+        run: |
+          missing=0
+          for name in \
+            AZURE_STATIC_WEB_APP_NAME \
+            VITE_ECI_API_BASE_URL \
+            VITE_ENTRA_AUTHORITY \
+            VITE_ENTRA_SPA_CLIENT_ID \
+            VITE_ENTRA_REDIRECT_URI \
+            VITE_ECI_API_SCOPES
+          do
+            if [ -z "${!name}" ]; then
+              echo "${name} is required and must be non-empty." >&2
+              missing=1
+            fi
+          done
+          if [ "${missing}" -ne 0 ]; then
+            echo "Azure frontend deployment configuration is incomplete." >&2
+            exit 1
+          fi
 
       - name: Production Vite build
         env:
