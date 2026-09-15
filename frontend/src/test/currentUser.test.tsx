@@ -7,7 +7,7 @@ import { CurrentUserProvider } from "../auth/CurrentUserContext";
 import { useCurrentUser } from "../auth/useCurrentUser";
 import { PermissionGate } from "../components/connectors/PermissionGate";
 import { AppShell } from "../components/AppShell";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_AZURE_DEPLOYMENT, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -62,7 +62,7 @@ function renderCurrentUser(options: {
   render(
     <AuthStub session={session}>
       <CurrentUserProvider apiClient={apiClient}>
-        {options.includeShell ? <AppShell>content</AppShell> : <Probe />}
+        {options.includeShell ? <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell> : <Probe />}
         <PermissionGate permission="communications:send">
           <span data-testid="send-gate">send-allowed</span>
         </PermissionGate>
@@ -111,6 +111,8 @@ describe("CurrentUserProvider", () => {
       includeShell: true,
     });
     expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
+    expect(screen.getByTestId("deployment-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("deployment-cloud-label")).toHaveTextContent("Azure");
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Ada Lovelace");
     expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
     expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
@@ -126,6 +128,7 @@ describe("CurrentUserProvider", () => {
       expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Ada Lovelace"),
     );
     expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("deployment-badge")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ECI Platform" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "ECI" })).toBeInTheDocument();
     expect(screen.getByTestId("eci-tagline")).toBeInTheDocument();
@@ -176,7 +179,7 @@ describe("CurrentUserProvider", () => {
         })}
       >
         <CurrentUserProvider apiClient={apiClient}>
-          <AppShell>content</AppShell>
+          <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
           <Probe />
         </CurrentUserProvider>
       </AuthStub>,
@@ -194,7 +197,7 @@ describe("CurrentUserProvider", () => {
         })}
       >
         <CurrentUserProvider apiClient={apiClient}>
-          <AppShell>content</AppShell>
+          <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
           <Probe />
         </CurrentUserProvider>
       </AuthStub>,

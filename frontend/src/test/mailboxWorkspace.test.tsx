@@ -9,7 +9,7 @@ import { MAILBOX_UI_PAGE_SIZE } from "../api/mailbox";
 import { formatMailboxTimestamp } from "../lib/formatTimestamp";
 import { mailboxWorkspacePath } from "../navigation/paths";
 import type { EciPermission } from "../auth/permissions";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_CONFIG, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 const GMAIL_ID = "11111111-1111-4111-8111-111111111111";
 const OPAQUE_CURSOR = "opaque/cursor+token=";
@@ -85,7 +85,7 @@ function renderWorkspace(options: {
         permissions: options.permissions ?? ["communications:read", "communications:connect"],
       })}
     >
-      <App apiClient={apiClient} />
+      <App apiClient={apiClient} config={TEST_CONFIG} />
     </AuthStub>,
   );
   return { apiClient };

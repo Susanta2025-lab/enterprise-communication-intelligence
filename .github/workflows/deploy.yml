@@ -161,6 +161,10 @@ jobs:
           VITE_ENTRA_SPA_CLIENT_ID: ${{ vars.VITE_ENTRA_SPA_CLIENT_ID }}
           VITE_ENTRA_REDIRECT_URI: ${{ vars.VITE_ENTRA_REDIRECT_URI }}
           VITE_ECI_API_SCOPES: ${{ vars.VITE_ECI_API_SCOPES }}
+          # Public build-time presentation metadata only (not credentials / not authorization).
+          VITE_ECI_CLOUD_PROVIDER: azure
+          VITE_ECI_AI_PROVIDER: microsoft_foundry
+          VITE_ECI_CLOUD_REGION: Spain Central
         run: |
           missing=0
           for name in \
@@ -169,7 +173,10 @@ jobs:
             VITE_ENTRA_AUTHORITY \
             VITE_ENTRA_SPA_CLIENT_ID \
             VITE_ENTRA_REDIRECT_URI \
-            VITE_ECI_API_SCOPES
+            VITE_ECI_API_SCOPES \
+            VITE_ECI_CLOUD_PROVIDER \
+            VITE_ECI_AI_PROVIDER \
+            VITE_ECI_CLOUD_REGION
           do
             if [ -z "${!name}" ]; then
               echo "${name} is required and must be non-empty." >&2
@@ -188,6 +195,10 @@ jobs:
           VITE_ENTRA_SPA_CLIENT_ID: ${{ vars.VITE_ENTRA_SPA_CLIENT_ID }}
           VITE_ENTRA_REDIRECT_URI: ${{ vars.VITE_ENTRA_REDIRECT_URI }}
           VITE_ECI_API_SCOPES: ${{ vars.VITE_ECI_API_SCOPES }}
+          # Public build-time presentation metadata only (not credentials / not authorization).
+          VITE_ECI_CLOUD_PROVIDER: azure
+          VITE_ECI_AI_PROVIDER: microsoft_foundry
+          VITE_ECI_CLOUD_REGION: Spain Central
         run: npm run build
 
       - name: Azure OIDC login

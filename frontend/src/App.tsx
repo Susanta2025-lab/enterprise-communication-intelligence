@@ -9,29 +9,31 @@ import { CurrentUserProvider } from "./auth/CurrentUserContext";
 import { AppShell } from "./components/AppShell";
 import { AppErrorBoundary } from "./components/feedback/AppErrorBoundary";
 import { SignInPanel } from "./components/SignInPanel";
+import type { FrontendConfig } from "./config/env";
 import { HomePage } from "./pages/HomePage";
 import { MailboxWorkspacePage } from "./pages/MailboxWorkspacePage";
 import { createQueryClient } from "./query/queryClient";
 
 type AppProps = {
   apiClient: EciApiClient;
+  config: FrontendConfig;
 };
 
-export function App({ apiClient }: AppProps) {
+export function App({ apiClient, config }: AppProps) {
   const [queryClient] = useState(() => createQueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>
       <AppErrorBoundary>
         <BrowserRouter>
-          <AppRoutes apiClient={apiClient} />
+          <AppRoutes apiClient={apiClient} config={config} />
         </BrowserRouter>
       </AppErrorBoundary>
     </QueryClientProvider>
   );
 }
 
-function AppRoutes({ apiClient }: AppProps) {
+function AppRoutes({ apiClient, config }: AppProps) {
   const { isAuthenticated, interactionInProgress } = useAuth();
   const queryClient = useQueryClient();
 
@@ -58,7 +60,13 @@ function AppRoutes({ apiClient }: AppProps) {
 
   return (
     <CurrentUserProvider apiClient={apiClient}>
-      <AppShell>
+      <AppShell
+        deployment={{
+          cloudProvider: config.cloudProvider,
+          aiProvider: config.aiProvider,
+          cloudRegion: config.cloudRegion,
+        }}
+      >
         <Routes>
           <Route path="/" element={<HomePage apiClient={apiClient} />} />
           <Route

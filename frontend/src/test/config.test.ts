@@ -24,7 +24,82 @@ describe("frontend configuration", () => {
       "api://33333333-3333-3333-3333-333333333333/communications:workflow",
       "api://33333333-3333-3333-3333-333333333333/communications:send",
     ]);
+    expect(config.cloudProvider).toBe("azure");
+    expect(config.aiProvider).toBe("microsoft_foundry");
+    expect(config.cloudRegion).toBe("Spain Central");
     expect(Object.isFrozen(config)).toBe(true);
+  });
+
+  it("parses a valid Azure deployment configuration", () => {
+    const config = loadFrontendConfig({
+      ...TEST_ENV,
+      VITE_ECI_CLOUD_PROVIDER: "azure",
+      VITE_ECI_AI_PROVIDER: "microsoft_foundry",
+      VITE_ECI_CLOUD_REGION: "Spain Central",
+    });
+    expect(config.cloudProvider).toBe("azure");
+    expect(config.aiProvider).toBe("microsoft_foundry");
+    expect(config.cloudRegion).toBe("Spain Central");
+  });
+
+  it("parses a valid AWS deployment configuration", () => {
+    const config = loadFrontendConfig({
+      ...TEST_ENV,
+      VITE_ECI_CLOUD_PROVIDER: "aws",
+      VITE_ECI_AI_PROVIDER: "amazon_bedrock",
+      VITE_ECI_CLOUD_REGION: "eu-south-2",
+    });
+    expect(config.cloudProvider).toBe("aws");
+    expect(config.aiProvider).toBe("amazon_bedrock");
+    expect(config.cloudRegion).toBe("eu-south-2");
+  });
+
+  it("fails closed for an unsupported cloud provider", () => {
+    expect(() =>
+      loadFrontendConfig({ ...TEST_ENV, VITE_ECI_CLOUD_PROVIDER: "gcp" }),
+    ).toThrow(FrontendConfigError);
+    expect(() =>
+      loadFrontendConfig({ ...TEST_ENV, VITE_ECI_CLOUD_PROVIDER: "gcp" }),
+    ).toThrow("VITE_ECI_CLOUD_PROVIDER must be azure or aws");
+  });
+
+  it("fails closed for an unsupported AI provider", () => {
+    expect(() =>
+      loadFrontendConfig({ ...TEST_ENV, VITE_ECI_AI_PROVIDER: "openai" }),
+    ).toThrow(FrontendConfigError);
+    expect(() =>
+      loadFrontendConfig({ ...TEST_ENV, VITE_ECI_AI_PROVIDER: "openai" }),
+    ).toThrow("VITE_ECI_AI_PROVIDER must be microsoft_foundry or amazon_bedrock");
+  });
+
+  it("fails closed for an invalid cloud and AI provider combination", () => {
+    expect(() =>
+      loadFrontendConfig({
+        ...TEST_ENV,
+        VITE_ECI_CLOUD_PROVIDER: "aws",
+        VITE_ECI_AI_PROVIDER: "microsoft_foundry",
+        VITE_ECI_CLOUD_REGION: "eu-south-2",
+      }),
+    ).toThrow(FrontendConfigError);
+    expect(() =>
+      loadFrontendConfig({
+        ...TEST_ENV,
+        VITE_ECI_CLOUD_PROVIDER: "azure",
+        VITE_ECI_AI_PROVIDER: "amazon_bedrock",
+        VITE_ECI_CLOUD_REGION: "Spain Central",
+      }),
+    ).toThrow("supported deployment combination");
+  });
+
+  it("fails closed for an unsupported region label", () => {
+    expect(() =>
+      loadFrontendConfig({
+        ...TEST_ENV,
+        VITE_ECI_CLOUD_PROVIDER: "azure",
+        VITE_ECI_AI_PROVIDER: "microsoft_foundry",
+        VITE_ECI_CLOUD_REGION: "West Europe",
+      }),
+    ).toThrow("supported deployment combination");
   });
 
   it("accepts an explicit CIAM authority and derives knownAuthorities from its hostname", () => {
@@ -69,6 +144,9 @@ describe("frontend configuration", () => {
     "VITE_ENTRA_SPA_CLIENT_ID",
     "VITE_ENTRA_REDIRECT_URI",
     "VITE_ECI_API_SCOPES",
+    "VITE_ECI_CLOUD_PROVIDER",
+    "VITE_ECI_AI_PROVIDER",
+    "VITE_ECI_CLOUD_REGION",
   ])("rejects missing %s", (key) => {
     expect(() => loadFrontendConfig({ ...TEST_ENV, [key]: "" })).toThrow(FrontendConfigError);
     expect(() => loadFrontendConfig({ ...TEST_ENV, [key]: undefined })).toThrow(

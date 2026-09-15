@@ -8,7 +8,7 @@ import type { ConnectorAccount } from "../api/connectorAccounts";
 import type { WorkflowActionResponse, WorkflowActionStatus } from "../api/workflowActions";
 import type { EciPermission } from "../auth/permissions";
 import { mailboxWorkspacePath } from "../navigation/paths";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_CONFIG, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 const GMAIL_ID = "11111111-1111-4111-8111-111111111111";
 const MESSAGE_ID_ONE = "provider-msg-one-secret";
@@ -149,7 +149,7 @@ function renderWorkspace(options: {
         permissions: options.permissions ?? ALL_PERMISSIONS,
       })}
     >
-      <App apiClient={apiClient} />
+      <App apiClient={apiClient} config={TEST_CONFIG} />
     </AuthStub>,
   );
 }

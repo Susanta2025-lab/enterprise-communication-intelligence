@@ -9,7 +9,7 @@ import { connectorAccountMessageAnalyzePath } from "../api/mailbox";
 import type { EciPermission } from "../auth/permissions";
 import { formatMailboxTimestamp } from "../lib/formatTimestamp";
 import { mailboxWorkspacePath } from "../navigation/paths";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_CONFIG, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 const GMAIL_ID = "11111111-1111-4111-8111-111111111111";
 const OPAQUE_CURSOR = "opaque/cursor+token=";
@@ -123,7 +123,7 @@ function renderWorkspace(options: {
         permissions: options.permissions ?? ["communications:read", "communications:analyze"],
       })}
     >
-      <App apiClient={apiClient} />
+      <App apiClient={apiClient} config={TEST_CONFIG} />
     </AuthStub>,
   );
 }

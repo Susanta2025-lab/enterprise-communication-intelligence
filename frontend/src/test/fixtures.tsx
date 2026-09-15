@@ -18,6 +18,9 @@ export const TEST_ENV = {
     "api://33333333-3333-3333-3333-333333333333/communications:workflow",
     "api://33333333-3333-3333-3333-333333333333/communications:send",
   ].join(","),
+  VITE_ECI_CLOUD_PROVIDER: "azure",
+  VITE_ECI_AI_PROVIDER: "microsoft_foundry",
+  VITE_ECI_CLOUD_REGION: "Spain Central",
 };
 
 export const TEST_CONFIG: FrontendConfig = {
@@ -27,6 +30,21 @@ export const TEST_CONFIG: FrontendConfig = {
   eciApiScopes: TEST_ENV.VITE_ECI_API_SCOPES.split(","),
   entraAuthority: "https://example.ciamlogin.com/11111111-1111-1111-1111-111111111111",
   knownAuthorities: ["example.ciamlogin.com"],
+  cloudProvider: "azure",
+  aiProvider: "microsoft_foundry",
+  cloudRegion: "Spain Central",
+};
+
+export const TEST_AWS_DEPLOYMENT = {
+  cloudProvider: "aws" as const,
+  aiProvider: "amazon_bedrock" as const,
+  cloudRegion: "eu-south-2",
+};
+
+export const TEST_AZURE_DEPLOYMENT = {
+  cloudProvider: "azure" as const,
+  aiProvider: "microsoft_foundry" as const,
+  cloudRegion: "Spain Central",
 };
 
 export function createAuthSession(overrides: Partial<AuthSession> = {}): AuthSession {

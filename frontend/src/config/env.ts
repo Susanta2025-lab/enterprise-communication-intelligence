@@ -2,6 +2,12 @@ import { ECI_PERMISSIONS, isEciPermission } from "../auth/permissions";
 
 export type EnvRecord = Record<string, string | boolean | undefined>;
 
+/** Build-time cloud host for presentation only. Not an authorization input. */
+export type CloudProvider = "azure" | "aws";
+
+/** Build-time AI backend for presentation only. Not an authorization input. */
+export type AiProvider = "microsoft_foundry" | "amazon_bedrock";
+
 export type FrontendConfig = {
   readonly apiBaseUrl: string;
   readonly entraSpaClientId: string;
@@ -9,7 +15,34 @@ export type FrontendConfig = {
   readonly eciApiScopes: readonly string[];
   readonly entraAuthority: string;
   readonly knownAuthorities: readonly string[];
+  /** Public build-time presentation metadata. Not credentials or owner identity. */
+  readonly cloudProvider: CloudProvider;
+  /** Public build-time presentation metadata. Not credentials or owner identity. */
+  readonly aiProvider: AiProvider;
+  /** Safe display region label only. Not an infrastructure identifier beyond the label. */
+  readonly cloudRegion: string;
 };
+
+const CLOUD_PROVIDERS = new Set<CloudProvider>(["azure", "aws"]);
+const AI_PROVIDERS = new Set<AiProvider>(["microsoft_foundry", "amazon_bedrock"]);
+
+/** Allowed cloud ↔ AI ↔ region combinations. Fail closed on any other pairing. */
+const DEPLOYMENT_COMBINATIONS: ReadonlyArray<{
+  readonly cloudProvider: CloudProvider;
+  readonly aiProvider: AiProvider;
+  readonly cloudRegion: string;
+}> = [
+  {
+    cloudProvider: "azure",
+    aiProvider: "microsoft_foundry",
+    cloudRegion: "Spain Central",
+  },
+  {
+    cloudProvider: "aws",
+    aiProvider: "amazon_bedrock",
+    cloudRegion: "eu-south-2",
+  },
+];
 
 export class FrontendConfigError extends Error {
   readonly name = "FrontendConfigError";
@@ -163,6 +196,48 @@ export function parseEntraAuthority(raw: string): {
   });
 }
 
+function parseCloudProvider(raw: string): CloudProvider {
+  if (!CLOUD_PROVIDERS.has(raw as CloudProvider)) {
+    throw new FrontendConfigError(
+      "VITE_ECI_CLOUD_PROVIDER must be azure or aws.",
+    );
+  }
+  return raw as CloudProvider;
+}
+
+function parseAiProvider(raw: string): AiProvider {
+  if (!AI_PROVIDERS.has(raw as AiProvider)) {
+    throw new FrontendConfigError(
+      "VITE_ECI_AI_PROVIDER must be microsoft_foundry or amazon_bedrock.",
+    );
+  }
+  return raw as AiProvider;
+}
+
+function parseDeploymentMetadata(env: EnvRecord): {
+  readonly cloudProvider: CloudProvider;
+  readonly aiProvider: AiProvider;
+  readonly cloudRegion: string;
+} {
+  const cloudProvider = parseCloudProvider(readString(env, "VITE_ECI_CLOUD_PROVIDER"));
+  const aiProvider = parseAiProvider(readString(env, "VITE_ECI_AI_PROVIDER"));
+  const cloudRegion = readString(env, "VITE_ECI_CLOUD_REGION");
+
+  const allowed = DEPLOYMENT_COMBINATIONS.some(
+    (combo) =>
+      combo.cloudProvider === cloudProvider &&
+      combo.aiProvider === aiProvider &&
+      combo.cloudRegion === cloudRegion,
+  );
+  if (!allowed) {
+    throw new FrontendConfigError(
+      "VITE_ECI_CLOUD_PROVIDER, VITE_ECI_AI_PROVIDER, and VITE_ECI_CLOUD_REGION must form a supported deployment combination.",
+    );
+  }
+
+  return Object.freeze({ cloudProvider, aiProvider, cloudRegion });
+}
+
 export function loadFrontendConfig(env: EnvRecord): FrontendConfig {
   const apiBaseUrlValue = readString(env, "VITE_ECI_API_BASE_URL");
   const apiBaseUrlParsed = parseHttpUrl("VITE_ECI_API_BASE_URL", apiBaseUrlValue);
@@ -183,6 +258,7 @@ export function loadFrontendConfig(env: EnvRecord): FrontendConfig {
   const { authority: entraAuthority, knownAuthorities } = parseEntraAuthority(
     readString(env, "VITE_ENTRA_AUTHORITY"),
   );
+  const deployment = parseDeploymentMetadata(env);
 
   return Object.freeze({
     apiBaseUrl,
@@ -191,5 +267,8 @@ export function loadFrontendConfig(env: EnvRecord): FrontendConfig {
     eciApiScopes,
     entraAuthority,
     knownAuthorities,
+    cloudProvider: deployment.cloudProvider,
+    aiProvider: deployment.aiProvider,
+    cloudRegion: deployment.cloudRegion,
   });
 }

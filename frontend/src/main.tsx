@@ -53,7 +53,7 @@ function start(): void {
       createRoot(root).render(
         <StrictMode>
           <MsalAuthProvider config={config} instance={msalInstance}>
-            <App apiClient={apiClient} />
+            <App apiClient={apiClient} config={config} />
           </MsalAuthProvider>
         </StrictMode>,
       );

@@ -12,7 +12,7 @@ import { PriorityBadge } from "../components/mailbox/PriorityBadge";
 import { WorkflowStatusBadge } from "../components/mailbox/WorkflowStatusBadge";
 import { ExecutionUncertainState } from "../components/mailbox/ExecutionUncertainState";
 import { mailboxWorkspacePath } from "../navigation/paths";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_CONFIG, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -61,7 +61,7 @@ describe("authentication and dashboard landmarks", () => {
     });
     const { rerender } = render(
       <AuthStub session={createAuthSession({ isAuthenticated: false })}>
-        <App apiClient={apiClient} />
+        <App apiClient={apiClient} config={TEST_CONFIG} />
       </AuthStub>,
     );
     expect(screen.getByRole("main")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("authentication and dashboard landmarks", () => {
           permissions: ["communications:read", "communications:connect"],
         })}
       >
-        <App apiClient={apiClient} />
+        <App apiClient={apiClient} config={TEST_CONFIG} />
       </AuthStub>,
     );
     expect(screen.getByRole("banner")).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe("automated accessibility checks", () => {
     });
     const { container } = render(
       <AuthStub session={createAuthSession({ isAuthenticated: false })}>
-        <App apiClient={apiClient} />
+        <App apiClient={apiClient} config={TEST_CONFIG} />
       </AuthStub>,
     );
     const results = await axe(container);
@@ -185,7 +185,7 @@ describe("mailbox selection accessibility", () => {
           permissions: ["communications:read"],
         })}
       >
-        <App apiClient={apiClient} />
+        <App apiClient={apiClient} config={TEST_CONFIG} />
       </AuthStub>,
     );
     const row = await screen.findByRole("button", { name: /Ada Lovelace/ });

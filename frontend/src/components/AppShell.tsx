@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { useCurrentUser } from "../auth/useCurrentUser";
+import type { AiProvider, CloudProvider } from "../config/env";
 import { ECI_CYAN, ECI_NAVY } from "./branding/eciBrand";
+import { DeploymentBadge } from "./DeploymentBadge";
 import { EciMark } from "./branding/EciMark";
 import { Button } from "./ui/button";
 
@@ -12,11 +14,19 @@ const DEVELOPER_GITHUB_URL = "https://github.com/Susanta2025-lab";
 const attributionLinkClassName =
   "rounded-sm text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline focus-visible:text-slate-700";
 
-type AppShellProps = {
-  children: ReactNode;
+export type AppShellDeployment = {
+  readonly cloudProvider: CloudProvider;
+  readonly aiProvider: AiProvider;
+  readonly cloudRegion: string;
 };
 
-export function AppShell({ children }: AppShellProps) {
+type AppShellProps = {
+  children: ReactNode;
+  /** Build-time presentation metadata. Shown only with the owner badge. */
+  deployment: AppShellDeployment;
+};
+
+export function AppShell({ children, deployment }: AppShellProps) {
   const { displayName, logout, error, interactionInProgress } = useAuth();
   const { isOwner } = useCurrentUser();
 
@@ -51,18 +61,25 @@ export function AppShell({ children }: AppShellProps) {
                 <p className="text-sm text-slate-600">Signed in</p>
               )}
               {isOwner ? (
-                <span
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-cyan-50 px-2.5 py-0.5 text-xs font-semibold shadow-sm"
-                  style={{ color: ECI_NAVY, borderColor: "rgba(8, 43, 89, 0.55)" }}
-                  data-testid="owner-badge"
-                >
+                <>
                   <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: ECI_CYAN }}
-                    aria-hidden="true"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-cyan-50 px-2.5 py-0.5 text-xs font-semibold shadow-sm"
+                    style={{ color: ECI_NAVY, borderColor: "rgba(8, 43, 89, 0.55)" }}
+                    data-testid="owner-badge"
+                  >
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: ECI_CYAN }}
+                      aria-hidden="true"
+                    />
+                    Platform Owner
+                  </span>
+                  <DeploymentBadge
+                    cloudProvider={deployment.cloudProvider}
+                    aiProvider={deployment.aiProvider}
+                    cloudRegion={deployment.cloudRegion}
                   />
-                  Platform Owner
-                </span>
+                </>
               ) : null}
             </div>
             <Button className="w-full sm:w-auto" onClick={() => void logout()} disabled={interactionInProgress}>

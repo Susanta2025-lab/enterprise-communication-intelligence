@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { EciApiClient } from "../api/client";
 import { PROTECTED_ANALYSES_SMOKE_PATH } from "../api/errors";
-import { AuthStub, TEST_TOKEN, createAuthSession } from "./fixtures";
+import { AuthStub, TEST_CONFIG, TEST_TOKEN, createAuthSession } from "./fixtures";
 
 function renderApp(options: {
   isAuthenticated: boolean;
@@ -49,7 +49,7 @@ function renderApp(options: {
         interactionInProgress: options.interactionInProgress ?? false,
       })}
     >
-      <App apiClient={apiClient} />
+      <App apiClient={apiClient} config={TEST_CONFIG} />
     </AuthStub>,
   );
 
@@ -115,6 +115,7 @@ describe("authentication shell", () => {
     expect(github).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByTestId("signed-in-account")).toHaveTextContent("Signed in as Ada Lovelace");
     expect(screen.queryByTestId("owner-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("deployment-badge")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Connected mailboxes" })).toBeInTheDocument();
     expect(fetchImpl).toHaveBeenCalled();
@@ -158,10 +159,12 @@ describe("authentication shell", () => {
           displayName: "Ada Lovelace",
         })}
       >
-        <App apiClient={apiClient} />
+        <App apiClient={apiClient} config={TEST_CONFIG} />
       </AuthStub>,
     );
     expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
+    expect(screen.getByTestId("deployment-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("deployment-cloud-label")).toHaveTextContent("Azure");
     expect(screen.getByTestId("eci-tagline")).toHaveTextContent("Register. Connect. Analyze.");
     expect(screen.getByTestId("eci-attribution")).toHaveTextContent(
       "Designed & developed by Susanta Hazra",
