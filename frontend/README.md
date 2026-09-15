@@ -1,16 +1,32 @@
 # ECI frontend
 
-React + TypeScript + Vite SPA for ECI application login (Microsoft Entra External ID / MSAL), connector dashboard, mailbox browsing, selected-message analysis, secure attachment metadata / explicit Analyze, and explicit workflow review/send.
+React + TypeScript + Vite SPA for Enterprise Communication Intelligence (ECI).
 
-Mailbox OAuth stays on the FastAPI server. The SPA obtains only ECI bearer access tokens through MSAL. Application login is distinct from Gmail and Outlook mailbox OAuth.
+**Register. Connect. Analyze.**
+
+Supports application login (Microsoft Entra External ID / MSAL), connector dashboard, mailbox browsing, selected-message analysis, secure attachment metadata / explicit Analyze, explicit workflow review/send, and Platform Owner presentation (server-authoritative `/api/v1/me`).
+
+## Identity boundary
+
+**ECI application login ≠ mailbox login.**
+
+- The SPA obtains only ECI bearer access tokens through MSAL (application identity).
+- Mailbox OAuth (Gmail / Outlook) stays on the FastAPI server as a separate delegated authorization.
+- Signing into ECI does **not** grant mailbox access.
+- Mailbox OAuth does **not** determine Platform Owner authorization.
+
+Owner status comes from `GET /api/v1/me` (`application_role` / `is_owner`). The Platform Owner badge and deployment indicator are UX-only; they do not authorize anything. Server-side `require_owner` (for example `GET /api/v1/admin/ping`) remains the security boundary.
+
+Authenticated Platform Owners may see a deployment presentation indicator (Azure or AWS) with safe labels such as Cloud, AI provider, and Region. That metadata is presentation only—no authorization significance and no infrastructure secrets.
 
 ## Local setup
 
 1. Copy `.env.example` to `.env`.
 2. Fill in the public External ID / MSAL SPA values (`VITE_ENTRA_AUTHORITY`, client id, redirect URI, API scopes). There is no client secret.
 3. `VITE_ECI_API_SCOPES` must list exactly the five ECI delegated scopes with exact `communications:*` names and a common `api://` resource.
-4. Run the API with `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
-5. From this directory:
+4. Optionally set public deployment presentation vars (`VITE_ECI_CLOUD_PROVIDER`, `VITE_ECI_AI_PROVIDER`, `VITE_ECI_CLOUD_REGION`) as documented in `.env.example`.
+5. Run the API with `CORS_ALLOWED_ORIGINS=http://localhost:5173`.
+6. From this directory:
 
 ```bash
 npm install
@@ -36,7 +52,25 @@ The layout is a responsive web app. Narrow viewports stack dashboard and mailbox
 
 Raw message bodies and raw attachment bytes are not displayed as durable browser storage. Mailbox, analysis, attachment, and workflow content stay in memory. The URL may include the opaque connector account id and, briefly, sanitized OAuth return parameters. Auth diagnostics are sanitized (no tokens, codes, state, nonce, or account identifiers).
 
-Live browser sign-in, connector OAuth, mailbox list, selected-message analyze, and workflow review were validated in Phase 15G on the local Vite SPA against local FastAPI and PostgreSQL (historically with workforce Entra MSAL). Phase 17 cut product login to External ID. Phase 18 added attachment UX and live-validated attachment Analyze on Azure (Outlook→Foundry) and AWS (External ID + Gmail→Bedrock) without Send. Live Send/execute was not performed in Phase 15G or Phase 18.
+## Cloud-specific production builds
+
+Use explicit Vite modes for manual cloud builds so Azure and AWS configuration do not leak across environments:
+
+```bash
+# Azure
+npm run build -- --mode azure
+
+# AWS
+npm run build -- --mode aws
+```
+
+Do **not** treat a generic `npm run build` as the manual Azure deployment command.
+
+Configuration notes:
+
+- **AWS:** tracked `.env.aws` holds **public presentation metadata only** (`aws` / `amazon_bedrock` / `eu-south-2`). Auth and API base URL values should stay in ignored local files or CI variables.
+- **Azure:** there is no tracked `.env.azure`. Operator-specific values may come from ignored `.env.azure.local` and/or environment variables (including CI).
+- Presentation vars are not credentials and not authorization inputs.
 
 ## Scripts
 
@@ -47,3 +81,11 @@ npm run lint
 npm run test -- --run
 npm run build
 ```
+
+## Validation notes
+
+Live browser sign-in, connector OAuth, mailbox list, selected-message analyze, and workflow review were validated in Phase 15G on the local Vite SPA against local FastAPI and PostgreSQL (historically with workforce Entra MSAL). Phase 17 cut product login to External ID. Phase 18 added attachment UX and live-validated attachment Analyze on Azure (Outlook→Foundry) and AWS (External ID + Gmail→Bedrock) without Send. Phase 19 added `/me`-backed Platform Owner awareness and the owner-only deployment indicator (presentation only).
+
+Live Send/execute was not performed in Phase 15G or Phase 18. External business-user verification (Phase 17D) remains deferred and outside the currently completed release scope.
+
+For external evaluation, use an ordinary application user—not the Platform Owner account. Application login alone does not authorize a mailbox.

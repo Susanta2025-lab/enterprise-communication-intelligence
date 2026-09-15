@@ -1,6 +1,6 @@
 # ECI Platform Architecture Documentation
 
-This directory documents the architecture implemented through **Phase 18 – Secure Attachment Intelligence** (CLOSED / PASS), building on Phase 14 connected-mailbox read/analyze, Phase 15 browser SPA, Phase 16 cloud-hosted multi-cloud validation, and Phase 17 Microsoft Entra External ID product login (17A–17C CLOSED / PASS; 17D deferred).
+This directory documents the architecture implemented through **Phase 19 – Platform Owner Identity & Application RBAC** (CLOSED / PASS), building on Phase 18 Secure Attachment Intelligence, Phase 14 connected-mailbox read/analyze, Phase 15 browser SPA, Phase 16 cloud-hosted multi-cloud validation, and Phase 17 Microsoft Entra External ID product login (17A–17C CLOSED / PASS; **17D deferred**).
 
 Mailbox synchronization, search, bulk analysis, workers, and webhooks are not implemented. Multimodal JPEG/PNG attachment analysis is **not** live-supported (adapters report image input unavailable; images are gated before retrieval).
 
@@ -36,8 +36,19 @@ Mermaid source files live in [`docs/diagrams/`](../diagrams/README.md):
 
 ## Scope
 
-Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Application-user authentication is provider-independent OIDC JWT; live product login is **Microsoft Entra External ID** (workforce Entra remains operator/admin/mailbox-OAuth directory context). Mailbox delegated OAuth is separate from application login. Persistence is PostgreSQL-compatible (CI-proven; managed Azure Flexible Server and Amazon RDS provisioned for cloud proofs; schema head includes `18d0001` for `attachment_analyses`).
+Cloud hosting uses one Docker image on Azure Container Apps and Amazon ECS Fargate. Deployments are independent (no cross-cloud DB replication). Application-user authentication is provider-independent OIDC JWT; live product login is **Microsoft Entra External ID**. Mailbox delegated OAuth is separate from application login. Application RBAC persists `users.application_role` (`user` \| `owner`) after verified `(iss, sub)` → external identity → `users.id` mapping—not email. Schema head includes `19b0001`.
 
-Phase 18 adds metadata-only attachment listing, explicit single-attachment retrieve → ClamAV → parse → AI, and owner-scoped attachment-analysis history. ECI never retrieves or analyzes attachment content without an explicit user action for that attachment. Attachment analysis cannot Propose / Approve / Execute / Send. Crossed live validation: Outlook with Azure/Foundry and Gmail with AWS/Bedrock. See [Phase 18](../roadmap/phase-18-secure-attachment-intelligence.md).
+AI adapters sit behind a shared `AIProvider` contract:
 
-Phase 10–14 connector and mailbox-read foundations remain. Analyze does not create a `WorkflowAction`. `DraftReply` remains AI suggestion output. There is no retry route and no automatic reply. See [`docs/cloud/`](../cloud/README.md), [`docs/cloud/authentication.md`](../cloud/authentication.md), [`docs/roadmap/README.md`](../roadmap/README.md).
+```text
+ECI application / service layer
+             ↓
+       AI provider contract
+          ↙        ↘
+    Microsoft      Amazon
+     Foundry        Bedrock
+```
+
+Phase 18 adds metadata-only attachment listing, explicit single-attachment retrieve → ClamAV → parse → AI, and owner-scoped attachment-analysis history. Attachment analysis cannot Propose / Approve / Execute / Send. See [Phase 18](../roadmap/phase-18-secure-attachment-intelligence.md) and [Phase 19](../roadmap/phase-19-platform-owner-identity-and-application-rbac.md).
+
+Analyze does not create a `WorkflowAction`. `DraftReply` remains AI suggestion output. There is no retry route and no automatic reply. See [`docs/cloud/`](../cloud/README.md), [`docs/cloud/authentication.md`](../cloud/authentication.md), [`docs/roadmap/README.md`](../roadmap/README.md).

@@ -2,9 +2,41 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 18 is the current retained Azure runtime posture** (schema head `18d0001`, PostgreSQL Stopped, ACA scaled to zero, SWA remains serverless). Historical Phase 16F image `3fa3412` / schema `16f0001` is preserved below as historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
+**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 19 application RBAC is implemented; schema head is `19b0001`.** Cost-aware retained posture keeps compute/database stopped when idle (ACA scaled to zero, PostgreSQL Stopped, SWA serverless). Historical Phase 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
 
-## Phase 18 current retained state
+## Current Azure posture (Phase 19 + technical validation)
+
+Application path (cloud-neutral app; Azure-specific hosting):
+
+```text
+Azure Static Web Apps
+        ↓
+Azure Container Apps
+        ↓
+Azure Database for PostgreSQL Flexible Server
+        ↓
+Microsoft Foundry (GPT-5.4-mini)
+```
+
+Region: **Spain Central**. Supporting services include Azure Key Vault, managed identity, and Log Analytics. Azure and AWS are **independent** deployments—no cross-cloud database replication.
+
+**Technical deployment validation (not Phase 17D):** frontend operational; backend `/health` and `/api/v1/readiness`; PostgreSQL persistence during runtime check; application sign-in; `/api/v1/me`-backed Platform Owner state in the UI; owner deployment indicator shows Azure; existing connected-mailbox state loads. External business-user verification remains deferred.
+
+**Identity reminder:** ECI application login ≠ mailbox login. Platform Owner authorization uses verified `(issuer, subject)` → external identity mapping → `users.id` → persisted `application_role`. Mailbox OAuth does not grant owner. The owner deployment indicator is presentation only.
+
+**Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires an active serving Container App revision and an available PostgreSQL instance. Do not keep paid development infrastructure running continuously.
+
+**Manual SPA build (Azure):** from `frontend/`, use `npm run build -- --mode azure`. Do not use a generic `npm run build` as the manual Azure deployment command. There is no tracked `frontend/.env.azure`; operator values may come from ignored `.env.azure.local` or CI/environment variables.
+
+Schema head includes Alembic `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
+
+```bash
+python -m app.cli.promote_owner --user-id <internal-user-uuid>
+```
+
+Do not document live internal user UUIDs or secrets here.
+
+## Phase 18 retained state (historical)
 
 ```text
 rg-eci-deploy-dev
@@ -13,7 +45,6 @@ rg-eci-deploy-dev
 ├── Container App               eci-api-dev
 │   └── scale                   naturally scaled to zero
 ├── SWA                         eci-web-dev (serverless; retained)
-│                               https://witty-island-03f5de51e.7.azurestaticapps.net
 └── PostgreSQL                  eci-pg-dev-susanta Stopped
 
 rg-eci-dev                      Foundry unchanged. Do not delete.
@@ -24,7 +55,7 @@ Phase 18 Azure live validation (**PASS**, not Phase 17D): live Outlook / Microso
 
 Temporary Flexible Server stop is not indefinite. The provider may automatically restart the database after its permitted stop interval. Privileged start/stop remains an operator action.
 
-See [Phase 18](../../docs/roadmap/phase-18-secure-attachment-intelligence.md) and [roadmap index](../../docs/roadmap/README.md).
+See [Phase 19](../../docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md), [Phase 18](../../docs/roadmap/phase-18-secure-attachment-intelligence.md), and [roadmap index](../../docs/roadmap/README.md).
 
 ## Phase 16F retained state (historical)
 
@@ -104,21 +135,22 @@ Azure PostgreSQL                none
 Azure Static Web Apps           none
 ```
 
-Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Phase 16B created SWA and PostgreSQL under explicit authorization (see historical 16B state above). Current retained state is the Phase 18 banner.
+Phase 16 hosting freeze: Azure Static Web Apps → this ACA FQDN. See [Phase 16](../../docs/roadmap/phase-16-cloud-browser-multicloud-validation.md) and [ADR-026](../../docs/decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md). Phase 16B created SWA and PostgreSQL under explicit authorization (see historical 16B state above). Current posture is the Phase 19 banner above.
 
 ## Current architecture vs this historical runbook (Phase 13/14)
 
 This file remains the Phase 6C/7 Azure hosting procedure. Commands and resource names below are historical. They were not re-executed in Phase 13 or Phase 14.
 
-Current ECI application architecture (code and documentation; **Phase 18** retained posture with schema head `18d0001`, production OIDC via Microsoft Entra External ID, Key Vault backend, Foundry config, and secure attachment path):
+Current ECI application architecture (code and documentation; **Phase 19** RBAC with schema head `19b0001`, production OIDC via Microsoft Entra External ID, Key Vault backend, Foundry config, secure attachment path, and owner-visible deployment presentation):
 
 - Application-user OIDC exists (`AUTH_MODE=oidc`; live product login is **Microsoft Entra External ID**). Analyze is not an anonymous public API.
+- Application RBAC persists `users.application_role` (`user` \| `owner`) after verified `(iss, sub)` mapping. Owner checks are server-side (`require_owner`, `/api/v1/admin/ping`). `/api/v1/me` exposes owner state for UX only.
 - Mailbox delegated OAuth is a separate identity domain from that login (Gmail/Microsoft consent → opaque credential store → `ConnectorAccount.credential_ref`).
-- Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault `eci-kv-oauth-dev-susanta` at the store/factory path.
+- Azure Key Vault is the durable mailbox OAuth credential backend (`CREDENTIAL_STORE_BACKEND=azure_key_vault`, `AZURE_KEY_VAULT_URL` only). Runtime identity is `DefaultAzureCredential` / Container Apps managed identity. Phase 13E live-validated the existing development Key Vault at the store/factory path.
 - Durable stores require PostgreSQL advisory-lock coordination. PostgreSQL does not store OAuth tokens.
-- Production ACA uses managed identity for Key Vault. Historical 16B ran `eci-api:7518360`. Historical Phase 16F retained image `3fa3412` / schema `16f0001`. Phase 16C live-validated Graph delegated OAuth and one Foundry mailbox analysis and stopped before Send. Phase 16F re-validated Outlook connect-another / reactivation → Foundry and stopped before Send. Phase 18 live-validated Outlook/Graph secure attachment Analyze (PDF/DOCX via ClamAV → Foundry) and stopped before Send; ACA scaled to zero and PostgreSQL stopped afterward. Phase 14 live proof used local ECI runtime + real OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
+- Production ACA uses managed identity for Key Vault. Historical 16B/16C/16F and Phase 18 attachment validation paths remain as recorded above. Cost-aware idle posture scales ACA to zero and may stop PostgreSQL. Phase 14 live proof used local ECI runtime + real OIDC + real Gmail/Graph mailboxes + local PostgreSQL + `MockAIProvider`.
 
-See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), [Phase 18](../../docs/roadmap/phase-18-secure-attachment-intelligence.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
+See [Authentication](../../docs/cloud/authentication.md), [Phase 13](../../docs/roadmap/phase-13-mailbox-delegated-oauth.md), [Phase 14](../../docs/roadmap/phase-14-connected-mailbox-analysis.md), [Phase 18](../../docs/roadmap/phase-18-secure-attachment-intelligence.md), [Phase 19](../../docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md), and [ADR-023](../../docs/decisions/ADR-023-mailbox-credential-lifecycle-disconnect-and-reauthorization.md).
 
 ## Current operational state (Phase 7)
 

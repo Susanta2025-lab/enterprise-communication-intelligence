@@ -2,22 +2,26 @@
 
 ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application and API code never import vendor clients.
 
+The same cloud-neutral application/domain/API deploys independently to Azure and AWS. **There is no cross-cloud database replication**—each cloud has its own PostgreSQL and cloud resources.
+
 ## Current status
 
 | Capability | Status |
 |---|---|
 | Mock provider | Implemented (`AI_PROVIDER=mock`) |
-| Microsoft Foundry provider | Implemented (`AI_PROVIDER=microsoft_foundry`) |
-| Amazon Bedrock provider | Implemented and live-verified (`AI_PROVIDER=amazon_bedrock`) |
-| Azure application hosting | Implemented (Container Apps + user-assigned Managed Identity) |
-| AWS application hosting | Implemented (ECS Fargate + ECS Task Role) |
+| Microsoft Foundry provider | Implemented (`AI_PROVIDER=microsoft_foundry`); model GPT-5.4-mini |
+| Amazon Bedrock provider | Implemented and live-verified (`AI_PROVIDER=amazon_bedrock`); model Claude Haiku 4.5 |
+| Azure application hosting | Implemented (Static Web Apps → Container Apps → PostgreSQL Flexible Server → Foundry); Spain Central |
+| AWS application hosting | Implemented (S3/CloudFront → CloudFront API → ALB → ECS Fargate → RDS → Bedrock); eu-south-2 |
 | Application telemetry | Implemented (structlog JSON, `request_id`, `duration_ms`) |
 | Azure retained logs / native metrics | Implemented (Log Analytics + Container Apps metrics) |
 | AWS retained logs / standard ECS metrics | Implemented (CloudWatch Logs + AWS/ECS CPU/memory) |
 | Application-user OIDC JWT | Implemented (`AUTH_MODE=oidc`; live product login is Microsoft Entra External ID) |
+| Application RBAC (Phase 19) | Implemented: persisted `application_role` (`user` \| `owner`); `require_owner`; `/api/v1/me`; owner-only `/api/v1/admin/ping`; bootstrap CLI |
+| Owner deployment indicator | Presentation-only Azure/AWS badge for authenticated Platform Owners (not authorization) |
 | GitHub Actions CI/CD | Implemented (automatic tests-only CI; manual `workflow_dispatch` CD) |
 | GitHub OIDC deploy federation | Implemented (Azure UAMI and AWS IAM role `eci-github-deploy-dev`) |
-| PostgreSQL persistence architecture | Implemented and CI-proven; Azure Flexible Server provisioned in 16B and used for 16C connector/workflow durability; Amazon RDS `eci-pg-dev` provisioned in 16D |
+| PostgreSQL persistence | Implemented; separate managed DB per cloud (Azure Flexible Server; Amazon RDS); schema head `19b0001` |
 | Gmail delegated OAuth | Implemented; locally live-validated; AWS-hosted live-validated in 16E/16F and Phase 18 |
 | Microsoft Graph delegated OAuth | Implemented; locally live-validated; Azure-hosted live-validated in 16C/16F and Phase 18 attachment path |
 | Azure Key Vault mailbox credential store | Implemented; live store-validated; Azure-hosted Graph credentials survived an ACA same-revision recycle in 16C |
@@ -25,7 +29,7 @@ ECI Platform keeps cloud AI SDKs behind the `AIProvider` interface. Application 
 | PostgreSQL advisory-lock credential coordination | Implemented and tested |
 | Connected mailbox list / selected-message analyze | Implemented; locally live-validated with `MockAIProvider`; Azure Graph → Foundry in 16C/16F; AWS Gmail → Bedrock in 16E/16F |
 | Secure attachment intelligence | Implemented (Phase 18 CLOSED / PASS): metadata-only listing; explicit Analyze; ClamAV before parse/AI; PDF/DOCX live-validated on crossed Azure Outlook→Foundry and AWS Gmail→Bedrock paths; XLSX/JPEG/PNG fail-closed or capability-gated; no Send in Phase 18 |
-| Phase 16 cloud-hosted browser topology | Frozen in 16A ([ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md)); 16A–16F completed. **Historical** 16F lineage `3fa3412` / schema `16f0001` / `eci-api-dev:8`. **Current** after Phase 18: schema head `18d0001`, AWS task definition `eci-api-dev:10`, ECS `0/0/0`, RDS stopped; Azure ACA scaled to 0, PostgreSQL stopped, SWA serverless. |
+| Phase 16 cloud-hosted browser topology | Frozen in 16A ([ADR-026](../decisions/ADR-026-cloud-hosted-browser-topology-and-multi-cloud-https-validation.md)); 16A–16F completed. Current schema head: `19b0001`. Cost-aware idle posture may scale compute to zero and stop managed databases. |
 
 See:
 
@@ -37,6 +41,17 @@ See:
 - [Deployment](deployment.md)
 - [Observability](observability.md)
 - [PostgreSQL persistence](persistence.md)
+
+## Identity domains (do not conflate)
+
+```text
+ECI application login     Microsoft Entra External ID → OIDC JWT → users.id → application_role
+Mailbox login             Gmail / Microsoft Graph delegated OAuth → credential store
+Cloud workload identity   Azure Managed Identity / AWS ECS Task Role
+Deploy identity           GitHub OIDC → Azure UAMI / AWS IAM deploy role
+```
+
+Signing into ECI does not grant mailbox access. Mailbox OAuth does not determine Platform Owner. Owner authorization uses verified `(issuer, subject)` mapping—not email.
 
 ## Microsoft Foundry (implemented)
 
@@ -94,8 +109,14 @@ Independent CLI Bedrock capability was verified before implementation. Offline a
 
 Microsoft Foundry and Amazon Bedrock share `app/providers/common/` for ECI prompt construction, structured-output models, JSON validation, and domain mapping. That package is not a generic LLM framework. `MockAIProvider` does not use it.
 
+Provider-specific adapters remain behind the shared application-facing contract. Do not imply Foundry and Bedrock are interchangeable at the infrastructure level. Do not treat Azure vs AWS AI latency as a pure cloud-performance comparison—model/provider differences also matter.
+
 ## Deployment (implemented)
 
 One Docker image runs locally with mock, on Azure Container Apps with Foundry, and on ECS Fargate with Bedrock. Hosting uses workload identity, not static cloud keys. Azure App Service and AWS App Runner are not used.
 
-GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`. Phase 16B provisioned Azure Database for PostgreSQL Flexible Server `eci-pg-dev-susanta`. Phase 16D provisioned Amazon RDS `eci-pg-dev` (historical schema `13a0001`). **Historical** Phase 16F schema head was `16f0001` with application lineage `3fa3412` (AWS task definition `eci-api-dev:8`). **Current** schema head is `18d0001`; AWS retained task definition after Phase 18 is `eci-api-dev:10` (ECS `0/0/0`, RDS stopped). Phase 16C live-validated Azure Graph → Foundry Analyze → Propose → Approve and stopped before Send. Phase 16D live-validated AWS HTTPS hosting only (historical image `0050b30` / `eci-api-dev:6`). Phase 16E certified AWS Gmail → Bedrock, including one historical Send. Phase 16F re-validated Azure Outlook connect-another → Foundry and AWS Gmail multi-account → Bedrock, both stopping before Send, then paused compute and both databases. Phase 18 live-validated secure attachment intelligence on crossed paths (Azure Outlook → Foundry; AWS External ID + Gmail → Bedrock) with **no Send**, then returned compute/databases to scaled/stopped. Temporary database stop is not indefinite. See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [Observability](observability.md), [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md), and [Phase 18](../roadmap/phase-18-secure-attachment-intelligence.md).
+GitHub Actions CI/CD and GitHub OIDC deploy federation are implemented. Azure Key Vault and AWS Secrets Manager are Phase 13E mailbox OAuth credential stores; they are not `DATABASE_URL` secret backends. Phase 7 observability is implemented; tracing, custom metrics, dashboards, and alerts remain deferred. Phase 9 persistence is PostgreSQL-compatible and proven with ephemeral CI `postgres:16`. Phase 16 provisioned colocated managed databases per cloud. Current schema head is `19b0001`. Cost-aware idle posture may scale compute to zero and stop managed databases—restart is required for meaningful live testing.
+
+Technical cloud validation includes application identity and Platform Owner activation on AWS and Azure (presentation indicator included). That is technical validation only—**Phase 17D external business-user verification remains deferred**.
+
+See [Deployment](deployment.md), [PostgreSQL persistence](persistence.md), [Observability](observability.md), [Phase 16](../roadmap/phase-16-cloud-browser-multicloud-validation.md), [Phase 18](../roadmap/phase-18-secure-attachment-intelligence.md), and [Phase 19](../roadmap/phase-19-platform-owner-identity-and-application-rbac.md).

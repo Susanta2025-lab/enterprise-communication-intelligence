@@ -1,10 +1,14 @@
-# Enterprise Communication Intelligence Platform
+# Enterprise Communication Intelligence (ECI)
 
-**ECI Platform** is a production-oriented enterprise AI system that turns business communications into structured, actionable intelligence—summaries, priority, action items, draft replies, and (with explicit user action) secure attachment analysis—while keeping humans in control of every external side effect.
+**ECI** is a production-oriented enterprise AI communication platform.
 
-It is engineered as a **provider-independent** platform: the same application image runs with a deterministic mock AI provider locally, **Microsoft Foundry** on Azure, and **Amazon Bedrock** on AWS. Mailbox integrations today cover **Gmail** and **Microsoft Graph / Outlook**. Application login uses **Microsoft Entra External ID** (OIDC / MSAL), separate from mailbox OAuth and from cloud workload identities.
+**Register. Connect. Analyze.**
 
-This repository is a practical demonstration of AI solution architecture, clean engineering, and multi-cloud validation—not a claim of production SaaS certification or external-user validation.
+It turns business communications into structured, actionable intelligence—summaries, priority, action items, draft replies, and (with explicit user action) secure attachment analysis—while keeping humans in control of every external side effect.
+
+The same application image runs with a deterministic mock AI provider locally, **Microsoft Foundry** on Azure, and **Amazon Bedrock** on AWS. Mailbox integrations today cover **Gmail** and **Microsoft Graph / Outlook**. Application login uses **Microsoft Entra External ID** (OIDC / MSAL), separate from mailbox OAuth and from cloud workload identities.
+
+This repository demonstrates enterprise application identity, connected mailbox workflows, AI-assisted analysis, secure attachment intelligence, controlled workflow execution, application RBAC, provider-independent AI architecture, and independent AWS and Azure deployments. It is not a claim of commercially production-ready SaaS certification or external business-user acceptance.
 
 ---
 
@@ -17,7 +21,8 @@ ECI addresses that with:
 - structured communication analysis behind a stable domain contract;
 - explicit, permissioned human workflow (Propose → Approve → Execute/Send);
 - fail-closed secure attachment intelligence (metadata-first; content only on explicit Analyze);
-- one codebase across Azure and AWS AI/hosting stacks.
+- application RBAC anchored to verified identity, not email;
+- one codebase across independent Azure and AWS deployments (no cross-cloud database replication).
 
 ---
 
@@ -30,9 +35,10 @@ ECI addresses that with:
 | Secure attachments | Metadata listing; explicit single-attachment Analyze for PDF / DOCX / TXT; JPEG/PNG gated when image AI is unavailable; XLSX unsupported (fail-closed) |
 | Workflow | Explicit Propose / Approve / Reject / Execute (Send)—never automatic from analyze or attachment analysis |
 | Application auth | Microsoft Entra External ID + MSAL; five delegated `communications:*` scopes |
+| Application RBAC | Persisted `application_role` (`user` \| `owner`); server-side `require_owner`; `/api/v1/me` and owner-only `/api/v1/admin/ping` |
 | AI providers | `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider` |
 | Hosting | Azure Container Apps + Static Web Apps; AWS ECS Fargate + CloudFront/S3/ALB |
-| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses) |
+| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses); separate DB per cloud |
 | Credential stores | Azure Key Vault / AWS Secrets Manager (opaque `credential_ref`; no tokens in PostgreSQL) |
 | Malware scanning | ClamAV client → external clamd (not embedded in the API image); production fails closed without a real scanner |
 
@@ -57,6 +63,7 @@ flowchart TB
     Mailbox[Mailbox list / analyze]
     Attach[Attachment analyze]
     Workflow[Workflow propose / approve / execute]
+    RBAC[Identity mapping / application RBAC]
   end
 
   subgraph domain [Domain]
@@ -82,6 +89,7 @@ flowchart TB
   FastAPI --> Mailbox
   FastAPI --> Attach
   FastAPI --> Workflow
+  FastAPI --> RBAC
   Analysis --> Ports
   Mailbox --> Ports
   Attach --> Ports
@@ -95,6 +103,7 @@ flowchart TB
   Analysis --> PG
   Attach --> PG
   Workflow --> PG
+  RBAC --> PG
   Gmail --> KV
   Graph --> KV
 ```
@@ -105,35 +114,132 @@ Dependency direction stays:
 
 Domain code does not depend on FastAPI, Azure SDK, AWS SDK, or HTTP clients. Cloud SDKs stay inside provider and infrastructure adapters.
 
-Identity domains stay separate:
+AI provider pattern (application/domain boundary is cloud-neutral; infrastructure adapters are not interchangeable):
 
 ```text
-ECI application login     Microsoft Entra External ID → OIDC JWT → users.id
-Mailbox login             Gmail / Microsoft Graph delegated OAuth → credential store
-Cloud workload identity   Azure Managed Identity / AWS ECS Task Role
-Deploy identity           GitHub OIDC → Azure UAMI / AWS IAM deploy role
+ECI application / service layer
+             ↓
+       AI provider contract
+          ↙        ↘
+    Microsoft      Amazon
+     Foundry        Bedrock
 ```
 
 ---
 
-## Multi-cloud validation status
+## Identity model
 
-Phase 18 attachment intelligence was **live-validated across Azure and AWS using crossed provider paths**: Outlook with Azure / Microsoft Foundry, and Gmail with AWS / Amazon Bedrock, with the post-fix Outlook / Graph contract **regression-verified locally** (focused mocked suites; **86 tests passed**; no shared-contract regression; no code changes required for that verification).
+**ECI application login ≠ mailbox login.**
 
-This is engineered multi-cloud validation of owner-controlled paths—not production SaaS certification and **not** Phase 17D external business-user verification.
-
-| Cloud | Live path validated in Phase 18 | Retained state after validation |
+| Identity class | What it is | What it is not |
 | --- | --- | --- |
-| **Azure** | Outlook / Graph mailbox; explicit PDF / DOCX → ClamAV → Foundry; XLSX unsupported; JPEG/PNG gated before retrieval when image AI unavailable; **no Send** | ACA scaled to 0; Azure PostgreSQL stopped; SWA remains serverless |
-| **AWS** | External ID application login; protected API auth; Gmail OAuth; metadata-only attachment listing; explicit PDF / DOCX → ClamAV → Bedrock → persistence; XLSX / PNG / JPEG pre-retrieval gates; **no** Propose / Approve / Execute / Send | Task definition `eci-api-dev:10`; ECS desired/running/pending `0/0/0`; RDS `eci-pg-dev` stopped |
+| Application identity | Entra External ID OIDC → verified `(issuer, subject)` → `users.id` → persisted `application_role` | Does not grant mailbox access |
+| Mailbox identity | Separate Gmail / Microsoft Graph delegated OAuth → credential store | Does not determine Platform Owner |
+| Workload identity | Azure Managed Identity / AWS ECS Task Role | Not an end-user login |
+| Database identity | PostgreSQL roles/credentials | Not application RBAC |
+| Deploy identity | GitHub OIDC → Azure UAMI / AWS IAM deploy role | Not runtime product login |
 
-Schema head includes Alembic `18d0001`. Closure commit for the AWS live-validation record: `99b4836`.
+Authorization for Platform Owner is:
 
-**Image analysis:** PNG / JPEG analysis did **not** succeed in Phase 18 live validation. Current AI adapters report image input unavailable; images were correctly gated **before** attachment retrieval. Multimodal image analysis may be a future capability only—not live-supported today.
+```text
+verified (issuer, subject)
+        ↓
+external identity mapping
+        ↓
+internal users.id
+        ↓
+persisted application_role
+```
 
-**Gmail attachment identity (Phase 18 fix):** Gmail’s `body.attachmentId` can change across `messages.get` responses. ECI previously exposed that ephemeral value as `provider_attachment_id`, so Analyze re-list could miss the attachment. Gmail now exposes stable MIME `partId` as the opaque id; only on explicit Analyze does the Gmail connector resolve `partId` → current `attachmentId` and call `attachments.get`. Graph continues to use its stable Graph attachment id. Details: [Phase 18 roadmap](docs/roadmap/phase-18-secure-attachment-intelligence.md).
+Email may appear in the UI for display, but it is **not** the authorization key. New or mapped users remain ordinary `user` unless explicitly promoted. Owner checks use server-side persistence—not a frontend badge or client-supplied role.
 
-Do **not** read this as “Outlook was live-tested on AWS after the Gmail fix.”
+First-owner bootstrap uses the operator CLI with an **internal user UUID** (the target must already have an external identity mapping). A conflicting second-owner bootstrap is refused:
+
+```bash
+python -m app.cli.promote_owner --user-id <internal-user-uuid>
+```
+
+Do not put live internal user UUIDs or owner emails into documentation examples.
+
+---
+
+## Multi-cloud design
+
+The same application, domain, and API are intentionally cloud-neutral. **Azure and AWS deployments are independent.** There is **no** cross-cloud database replication—each cloud has its own PostgreSQL and cloud resources.
+
+### Azure
+
+```text
+Azure Static Web Apps
+        ↓
+Azure Container Apps
+        ↓
+Azure Database for PostgreSQL Flexible Server
+        ↓
+Microsoft Foundry (GPT-5.4-mini)
+```
+
+Supporting services include Azure Key Vault, managed identity, and Log Analytics. Region: **Spain Central**.
+
+### AWS
+
+```text
+S3 + CloudFront (SPA)
+        ↓
+CloudFront API distribution
+        ↓
+Application Load Balancer
+        ↓
+ECS Fargate
+        ↓
+RDS PostgreSQL
+        ↓
+Amazon Bedrock (Claude Haiku 4.5)
+```
+
+Supporting services include AWS Secrets Manager, ECS Task Role, and CloudWatch. Region: **eu-south-2**.
+
+Detailed comparison: [docs/cloud/comparison.md](docs/cloud/comparison.md).
+
+Do not treat AI latency differences between Azure and AWS as a pure cloud-performance comparison—model and provider differences also matter. Neutral cloud presentation in the UI is not an official Microsoft or AWS endorsement.
+
+---
+
+## Platform Owner deployment indicator
+
+Authenticated Platform Owners see an owner-visible deployment presentation indicator alongside the Platform Owner badge (for example **Platform Owner** with **Azure** or **AWS**). Expanded presentation may show safe labels such as:
+
+| Cloud | AI | Region |
+| --- | --- | --- |
+| Azure | Microsoft Foundry | Spain Central |
+| AWS | Amazon Bedrock | eu-south-2 |
+
+This metadata is **presentation only**. It has no authorization significance, must not determine owner access, must not replace server-side RBAC, and must not expose infrastructure secrets or private identifiers.
+
+---
+
+## Frontend cloud builds
+
+Manual cloud-specific Vite builds avoid accidental cross-environment configuration leakage:
+
+```bash
+# Azure
+cd frontend
+npm run build -- --mode azure
+
+# AWS
+cd frontend
+npm run build -- --mode aws
+```
+
+Do **not** use a generic `npm run build` as the manual Azure deployment command.
+
+Configuration model:
+
+- **AWS:** tracked `frontend/.env.aws` contains **public presentation metadata only**. Operator/auth/API values remain local, environment, or CI supplied (for example `.env.aws.local`).
+- **Azure:** operator-specific settings may come from ignored `.env.azure.local` (or CI/environment variables). There is no tracked `frontend/.env.azure` in this repository.
+
+Never place secrets, tokens, or client secrets in frontend env files.
 
 ---
 
@@ -141,6 +247,7 @@ Do **not** read this as “Outlook was live-tested on AWS after the Gmail fix.�
 
 - Fail-closed production auth (`APP_ENV=production` requires `AUTH_MODE=oidc`).
 - Distinct permissions: `communications:read`, `analyze`, `connect`, `workflow`, `send`.
+- Application RBAC (`user` / `owner`) is separate from mailbox OAuth and from `communications:*` scopes.
 - Raw message bodies and raw attachment bytes are not durable product storage for analysis history.
 - Attachment path: explicit user action → retrieve one → ClamAV → parse → AI; unsupported / dangerous cases fail closed.
 - Privacy-safe operational logs (no tokens, secrets, or sensitive message/attachment bodies).
@@ -148,17 +255,32 @@ Do **not** read this as “Outlook was live-tested on AWS after the Gmail fix.�
 
 ---
 
+## Technical cloud validation status
+
+Technical deployments have been validated on both clouds. This is **technical deployment validation**, not Phase 17D external business-user acceptance.
+
+| Cloud | Validated (technical) |
+| --- | --- |
+| **AWS** | Frontend and backend operational; persistence during validation; application identity; first Platform Owner activation; `/api/v1/me`; owner-only `/api/v1/admin/ping`; owner deployment indicator shows AWS |
+| **Azure** | Frontend operational; `/health` and `/api/v1/readiness`; PostgreSQL persistence during runtime check; application sign-in; `/api/v1/me`-backed owner state in UI; owner deployment indicator shows Azure; existing connected-mailbox state loads |
+
+Phase 18 also live-validated secure attachment intelligence on crossed paths (Outlook → Azure / Foundry; Gmail → AWS / Bedrock) without Send. Image analysis is not live-supported today (adapters report image input unavailable; JPEG/PNG gated before retrieval).
+
+Development and demo cloud resources may be intentionally stopped when not in use to control cost. Meaningful live testing requires an active serving revision (Azure Container App) or running ECS service, and an available PostgreSQL instance on that cloud.
+
+---
+
 ## Testing and quality evidence
 
-- Offline, deterministic backend tests (pytest) and frontend typecheck / lint / test / build.
-- GitHub Actions CI: pip check, ruff, pytest, ephemeral PostgreSQL integration, frontend jobs.
-- Phase closures record live validation separately from offline regression; live proofs use owner-controlled mailboxes and stop before Send unless a phase explicitly records otherwise (Phase 16E historically included one manual Gmail Send; Phase 18 did not Send).
+The repository includes automated backend and frontend test coverage (offline, deterministic). GitHub Actions CI runs pip check, ruff, pytest, ephemeral PostgreSQL integration, and frontend jobs.
+
+Phase closures record live validation separately from offline regression. Live proofs use owner-controlled paths and stop before Send unless a phase explicitly records otherwise (Phase 16E historically included one manual Gmail Send; Phase 18 did not Send).
 
 ---
 
 ## Current project status
 
-### Completed through Phase 18
+### Completed through Phase 19
 
 Phases **1–16** are completed (foundation through cloud-hosted browser and multi-cloud mailbox→AI validation).
 
@@ -167,7 +289,11 @@ Phases **1–16** are completed (foundation through cloud-hosted browser and mul
 - **17A–17C:** CLOSED / PASS (External ID product login, controlled validation, Gmail ID-token clock-skew hardening).
 - **17D** external business-user verification: **DEFERRED / OUT OF CURRENT RELEASE SCOPE**.
 
-**Phase 18 — Secure Attachment Intelligence:** **CLOSED / PASS** (offline implementation, Azure Outlook→Foundry live attachment path, AWS External ID + Gmail→Bedrock live attachment path).
+**Phase 18 — Secure Attachment Intelligence:** **CLOSED / PASS**.
+
+**Phase 19 — Platform Owner Identity & Application RBAC:** **CLOSED / PASS** (schema `19b0001`, server-side owner authorization, bootstrap CLI, `/me`, owner-aware UI). Follow-up technical deployment validation exercised first Platform Owner activation and the owner deployment indicator on AWS and Azure.
+
+External business-user verification remains deferred and outside the currently completed release scope.
 
 ### Realistic remaining work
 
@@ -177,7 +303,6 @@ Phases **1–16** are completed (foundation through cloud-hosted browser and mul
 - Automatic replies, retry/reconciliation, exactly-once delivery.
 - Full 2×2×2 cloud × mailbox × AI matrix (validated crossed paths only).
 - Distributed tracing, custom metrics/dashboards/alerts, DB backup/PITR/HA/DR hardening.
-- Standing cloud cost for retained ALB / ECR / CloudFront / S3 / logging where applicable.
 
 Stopped managed databases may automatically restart after the provider stop interval (AWS currently 7 days). Privileged RDS / Azure PostgreSQL start-stop remains an operator action.
 
@@ -226,6 +351,8 @@ npm run dev            # http://localhost:5173
 
 Set `CORS_ALLOWED_ORIGINS=http://localhost:5173` on the API. Configure mailbox OAuth client ids/redirects per `.env.example` when exercising connectors. Prefer `CREDENTIAL_STORE_BACKEND=memory` only for local/dev; production rejects `memory`.
 
+Application login alone does not authorize a mailbox—mailbox testing requires an explicit separate OAuth operation. Prefer an ordinary application `user` for external evaluation; do not share the Platform Owner account with reviewers. AI execution and attachment retrieval may incur provider cost; Send/workflow execution should remain separately controlled.
+
 **Quality checks**
 
 ```bash
@@ -252,11 +379,13 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Topic | Link |
 | --- | --- |
 | Roadmap index | [docs/roadmap/README.md](docs/roadmap/README.md) |
+| Phase 19 (RBAC / owner) | [docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md](docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md) |
 | Phase 18 (attachments) | [docs/roadmap/phase-18-secure-attachment-intelligence.md](docs/roadmap/phase-18-secure-attachment-intelligence.md) |
 | Phase 17 (External ID) | [docs/roadmap/phase-17-external-id-external-user-onboarding.md](docs/roadmap/phase-17-external-id-external-user-onboarding.md) |
 | Architecture | [docs/architecture/README.md](docs/architecture/README.md) |
 | ADRs | [docs/decisions/README.md](docs/decisions/README.md) |
 | Cloud / AI providers | [docs/cloud/README.md](docs/cloud/README.md) |
+| Cloud comparison | [docs/cloud/comparison.md](docs/cloud/comparison.md) |
 | Authentication | [docs/cloud/authentication.md](docs/cloud/authentication.md) |
 | API | [docs/api/README.md](docs/api/README.md) |
 | Diagrams | [docs/diagrams/README.md](docs/diagrams/README.md) |
@@ -273,6 +402,7 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Phases 1–16 | Completed |
 | Phase 17 – External ID & external user onboarding | 17A–17C CLOSED / PASS; **17D deferred** |
 | Phase 18 – Secure Attachment Intelligence | **CLOSED / PASS** |
+| Phase 19 – Platform Owner Identity & Application RBAC | **CLOSED / PASS** |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 
