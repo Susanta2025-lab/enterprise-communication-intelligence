@@ -188,7 +188,7 @@ jobs:
             exit 1
           fi
 
-      - name: Production Vite build
+      - name: Azure Vite build
         env:
           VITE_ECI_API_BASE_URL: ${{ vars.VITE_ECI_API_BASE_URL }}
           VITE_ENTRA_AUTHORITY: ${{ vars.VITE_ENTRA_AUTHORITY }}
@@ -199,7 +199,7 @@ jobs:
           VITE_ECI_CLOUD_PROVIDER: azure
           VITE_ECI_AI_PROVIDER: microsoft_foundry
           VITE_ECI_CLOUD_REGION: Spain Central
-        run: npm run build
+        run: npm run build:azure
 
       - name: Azure OIDC login
         uses: azure/login@v2

@@ -30,7 +30,7 @@ Region: **eu-south-2**. Supporting services include AWS Secrets Manager, ECS Tas
 
 **Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires a running ECS/Fargate service and an available RDS instance. Do not keep paid development infrastructure running continuously. Retained ALB / ECR / CloudFront / S3 / logging may still incur standing cost while retained.
 
-**Manual SPA build (AWS):** from `frontend/`, use `npm run build -- --mode aws`. Tracked `frontend/.env.aws` contains public presentation metadata only; auth/API values remain local, environment, or CI supplied.
+**Manual SPA build (AWS):** from `frontend/`, use `npm run build:aws` (equivalent: `npm run build -- --mode aws`). Tracked `frontend/.env.aws` contains public presentation metadata only; auth/API values remain local, environment, or CI supplied.
 
 Schema head includes Alembic `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
 

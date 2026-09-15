@@ -26,7 +26,7 @@ Region: **Spain Central**. Supporting services include Azure Key Vault, managed 
 
 **Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires an active serving Container App revision and an available PostgreSQL instance. Do not keep paid development infrastructure running continuously.
 
-**Manual SPA build (Azure):** from `frontend/`, use `npm run build -- --mode azure`. Do not use a generic `npm run build` as the manual Azure deployment command. There is no tracked `frontend/.env.azure`; operator values may come from ignored `.env.azure.local` or CI/environment variables.
+**Manual SPA build (Azure):** from `frontend/`, use `npm run build:azure` (equivalent: `npm run build -- --mode azure`). Do not use a generic `npm run build` as the manual Azure deployment command. Tracked `frontend/.env.azure` contains public presentation metadata only; operator auth/API values may come from ignored `.env.azure.local` or CI/environment variables.
 
 Schema head includes Alembic `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
 

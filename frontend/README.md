@@ -58,18 +58,20 @@ Use explicit Vite modes for manual cloud builds so Azure and AWS configuration d
 
 ```bash
 # Azure
-npm run build -- --mode azure
+npm run build:azure
+# equivalent: npm run build -- --mode azure
 
 # AWS
-npm run build -- --mode aws
+npm run build:aws
+# equivalent: npm run build -- --mode aws
 ```
 
-Do **not** treat a generic `npm run build` as the manual Azure deployment command.
+Do **not** treat a generic `npm run build` as the manual Azure (or AWS) deployment command.
 
 Configuration notes:
 
-- **AWS:** tracked `.env.aws` holds **public presentation metadata only** (`aws` / `amazon_bedrock` / `eu-south-2`). Auth and API base URL values should stay in ignored local files or CI variables.
-- **Azure:** there is no tracked `.env.azure`. Operator-specific values may come from ignored `.env.azure.local` and/or environment variables (including CI).
+- **Azure:** tracked `.env.azure` holds **public presentation metadata only** (`azure` / `microsoft_foundry` / `Spain Central`). Auth and API values stay in ignored `.env.azure.local` and/or CI/environment variables.
+- **AWS:** tracked `.env.aws` holds **public presentation metadata only** (`aws` / `amazon_bedrock` / `eu-south-2`). Auth and API values stay in ignored `.env.aws.local` and/or CI/environment variables.
 - Presentation vars are not credentials and not authorization inputs.
 
 ## Scripts
@@ -80,6 +82,8 @@ npm run typecheck
 npm run lint
 npm run test -- --run
 npm run build
+npm run build:azure
+npm run build:aws
 ```
 
 ## Validation notes

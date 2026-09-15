@@ -225,21 +225,24 @@ Manual cloud-specific Vite builds avoid accidental cross-environment configurati
 ```bash
 # Azure
 cd frontend
-npm run build -- --mode azure
+npm run build:azure
+# equivalent: npm run build -- --mode azure
 
 # AWS
-cd frontend
-npm run build -- --mode aws
+npm run build:aws
+# equivalent: npm run build -- --mode aws
 ```
 
-Do **not** use a generic `npm run build` as the manual Azure deployment command.
+Do **not** use a generic `npm run build` as the manual Azure or AWS deployment command.
 
 Configuration model:
 
+- **Azure:** tracked `frontend/.env.azure` contains **public presentation metadata only**. Operator/auth/API values remain local, environment, or CI supplied (for example `.env.azure.local`).
 - **AWS:** tracked `frontend/.env.aws` contains **public presentation metadata only**. Operator/auth/API values remain local, environment, or CI supplied (for example `.env.aws.local`).
-- **Azure:** operator-specific settings may come from ignored `.env.azure.local` (or CI/environment variables). There is no tracked `frontend/.env.azure` in this repository.
 
-Never place secrets, tokens, or client secrets in frontend env files.
+`.env.local` is shared across Vite modes; use `.env.azure.local` and `.env.aws.local` for mode-specific operator values.
+
+Never place secrets, tokens, or client secrets in frontend env files. Presentation metadata has no authorization significance.
 
 ---
 
