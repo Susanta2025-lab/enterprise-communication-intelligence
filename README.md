@@ -1,4 +1,3 @@
-# Enterprise Communication Intelligence (ECI)
 <p align="center">
   <img src="frontend/public/eci-mark.svg" alt="ECI Platform logo" width="96">
 </p>
