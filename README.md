@@ -10,7 +10,7 @@
 
 **ECI** is a production-oriented enterprise AI communication platform.
 
-**Register. Connect. Analyze.**
+
 
 It turns business communications into structured, actionable intelligence—summaries, priority, action items, draft replies, and (with explicit user action) secure attachment analysis—while keeping humans in control of every external side effect.
 
