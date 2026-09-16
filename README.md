@@ -1,4 +1,13 @@
 # Enterprise Communication Intelligence (ECI)
+<p align="center">
+  <img src="frontend/public/eci-mark.svg" alt="ECI Platform logo" width="96">
+</p>
+
+<h1 align="center">Enterprise Communication Intelligence (ECI)</h1>
+
+<p align="center">
+  <strong>Register. Connect. Analyze.</strong>
+</p>
 
 **ECI** is a production-oriented enterprise AI communication platform.
 
