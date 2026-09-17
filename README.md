@@ -300,9 +300,9 @@ Phases **1–16** are completed (foundation through cloud-hosted browser and mul
 - **17A–17C:** CLOSED / PASS (External ID product login, controlled validation, Gmail ID-token clock-skew hardening).
 - **17D** external business-user verification: **DEFERRED / OUT OF CURRENT RELEASE SCOPE**.
 
-**Phase 18 — Secure Attachment Intelligence:** **CLOSED / PASS**.
+**Phase 18 — Secure Attachment Intelligence:** **Completed / PASS**.
 
-**Phase 19 — Platform Owner Identity & Application RBAC:** **CLOSED / PASS** (schema `19b0001`, server-side owner authorization, bootstrap CLI, `/me`, owner-aware UI). Follow-up technical deployment validation exercised first Platform Owner activation and the owner deployment indicator on AWS and Azure.
+**Phase 19 — Platform Owner Identity & Application RBAC:** **Completed / PASS** (schema `19b0001`, server-side owner authorization, bootstrap CLI, `/me`, owner-aware UI). Follow-up technical deployment validation exercised first Platform Owner activation and the owner deployment indicator on AWS and Azure.
 
 External business-user verification remains deferred and outside the currently completed release scope.
 
@@ -412,8 +412,8 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | --- | --- |
 | Phases 1–16 | Completed |
 | Phase 17 – External ID & external user onboarding | 17A–17C CLOSED / PASS; **17D deferred** |
-| Phase 18 – Secure Attachment Intelligence | **CLOSED / PASS** |
-| Phase 19 – Platform Owner Identity & Application RBAC | **CLOSED / PASS** |
+| Phase 18 – Secure Attachment Intelligence | **Completed / PASS** |
+| Phase 19 – Platform Owner Identity & Application RBAC | **Completed / PASS** |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 
