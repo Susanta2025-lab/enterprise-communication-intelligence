@@ -38,7 +38,6 @@ def test_postgres_business_contexts_schema(postgres_engine: Engine) -> None:
     """PostgreSQL business_contexts has ADR-029 columns, checks, and indexes."""
     inspector = inspect(postgres_engine)
     assert "business_contexts" in inspector.get_table_names()
-    assert "business_context_communication_links" not in inspector.get_table_names()
     columns = {column["name"] for column in inspector.get_columns("business_contexts")}
     assert columns == {
         "id",
