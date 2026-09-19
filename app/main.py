@@ -21,6 +21,10 @@ from app.application.exceptions import (
     AttachmentProcessingError,
     AttachmentScannerUnavailableError,
     AttachmentScanRejectedError,
+    BusinessContextCommunicationLinkConflictError,
+    BusinessContextCommunicationLinkNotFoundError,
+    BusinessContextConflictError,
+    BusinessContextNotFoundError,
     ConnectedMailboxNotAvailableError,
     ConnectorAccountConflictError,
     ConnectorAccountNotFoundError,
@@ -157,6 +161,48 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("attachment_analysis_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(BusinessContextNotFoundError)
+    async def business_context_not_found_handler(
+        _request: Request,
+        exc: BusinessContextNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("business_context_not_found", error_class=error_class(exc))
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(BusinessContextConflictError)
+    async def business_context_conflict_handler(
+        _request: Request,
+        exc: BusinessContextConflictError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info("business_context_conflict", error_class=error_class(exc))
+        return JSONResponse(status_code=409, content={"detail": exc.message})
+
+    @application.exception_handler(BusinessContextCommunicationLinkNotFoundError)
+    async def business_context_communication_link_not_found_handler(
+        _request: Request,
+        exc: BusinessContextCommunicationLinkNotFoundError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info(
+            "business_context_communication_link_not_found",
+            error_class=error_class(exc),
+        )
+        return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(BusinessContextCommunicationLinkConflictError)
+    async def business_context_communication_link_conflict_handler(
+        _request: Request,
+        exc: BusinessContextCommunicationLinkConflictError,
+    ) -> JSONResponse:
+        logger = get_logger(__name__)
+        logger.info(
+            "business_context_communication_link_conflict",
+            error_class=error_class(exc),
+        )
+        return JSONResponse(status_code=409, content={"detail": exc.message})
 
     @application.exception_handler(AttachmentNotSupportedError)
     async def attachment_not_supported_handler(

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { useCurrentUser } from "../auth/useCurrentUser";
 import type { AiProvider, CloudProvider } from "../config/env";
+import { CONTEXTS_PATH, DASHBOARD_PATH } from "../navigation/paths";
 import { ECI_CYAN, ECI_NAVY } from "./branding/eciBrand";
 import { DeploymentBadge } from "./DeploymentBadge";
 import { EciMark } from "./branding/EciMark";
@@ -35,26 +37,46 @@ export function AppShell({ children, deployment }: AppShellProps) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <EciMark className="h-10 w-10 shrink-0" title="ECI" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Enterprise Communication Intelligence
-              </p>
-              <h1 className="text-lg font-semibold" style={{ color: ECI_NAVY }}>
-                ECI Platform
-              </h1>
-              <p
-                className="mt-0.5 text-sm tracking-wide text-slate-600"
-                data-testid="eci-tagline"
-              >
-                Register. Connect. Analyze.
-              </p>
-            </div>
+            <Link to={DASHBOARD_PATH} className="flex min-w-0 items-center gap-3">
+              <EciMark className="h-10 w-10 shrink-0" title="ECI" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Enterprise Communication Intelligence
+                </p>
+                <h1 className="text-lg font-semibold" style={{ color: ECI_NAVY }}>
+                  ECI Platform
+                </h1>
+                <p
+                  className="mt-0.5 text-sm tracking-wide text-slate-600"
+                  data-testid="eci-tagline"
+                >
+                  Register. Connect. Analyze.
+                </p>
+              </div>
+            </Link>
           </div>
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <nav className="flex flex-wrap items-center gap-3 text-sm" aria-label="Primary">
+              <Link
+                to={DASHBOARD_PATH}
+                className="inline-flex min-h-11 items-center font-medium text-slate-700 underline-offset-2 hover:underline"
+              >
+                Dashboard
+              </Link>
+              <Link
+                to={CONTEXTS_PATH}
+                className="inline-flex min-h-11 items-center font-medium text-slate-700 underline-offset-2 hover:underline"
+                data-testid="nav-contexts"
+              >
+                Contexts
+              </Link>
+            </nav>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               {displayName ? (
-                <p className="min-w-0 break-words text-sm text-slate-600" data-testid="signed-in-account">
+                <p
+                  className="min-w-0 break-words text-sm text-slate-600"
+                  data-testid="signed-in-account"
+                >
                   Signed in as {displayName}
                 </p>
               ) : (
@@ -82,7 +104,11 @@ export function AppShell({ children, deployment }: AppShellProps) {
                 </>
               ) : null}
             </div>
-            <Button className="w-full sm:w-auto" onClick={() => void logout()} disabled={interactionInProgress}>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => void logout()}
+              disabled={interactionInProgress}
+            >
               Sign out
             </Button>
           </div>

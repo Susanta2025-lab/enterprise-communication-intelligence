@@ -7,6 +7,8 @@ from app.infrastructure.storage.models import (
     Analysis,
     AttachmentAnalysisRow,
     Base,
+    BusinessContextCommunicationLinkRow,
+    BusinessContextRow,
     ConnectorAccount,
     ExternalIdentity,
     MailboxAuthorizationSession,
@@ -51,13 +53,17 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
         "workflow_actions",
         "mailbox_authorization_sessions",
         "attachment_analyses",
+        "business_contexts",
+        "business_context_communication_links",
     } <= tables
     assert "messages" not in tables
+    assert "communications" not in tables
     assert "connections" not in tables
     assert "oauth_tokens" not in tables
     assert "connector_credentials" not in tables
     assert "tenants" not in tables
     assert "workflows" not in tables
+    assert "business_context_attachment_links" not in tables
 
 
 def test_user_columns_exclude_pii(sqlite_engine: Engine) -> None:
@@ -118,6 +124,29 @@ def test_foreign_keys_cascade_to_users(sqlite_engine: Engine) -> None:
     assert all(fk["referred_table"] != "analyses" for fk in attachment_fks)
     assert all(fk["referred_table"] != "workflow_actions" for fk in attachment_fks)
     assert all(fk["referred_table"] != "attachment_analyses" for fk in workflow_fks)
+    context_fks = inspector.get_foreign_keys("business_contexts")
+    assert any(
+        fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
+        for fk in context_fks
+    )
+    assert all(fk["referred_table"] != "analyses" for fk in context_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in context_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in context_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in context_fks)
+    link_fks = inspector.get_foreign_keys("business_context_communication_links")
+    assert any(
+        fk["referred_table"] == "users" and fk["constrained_columns"] == ["user_id"]
+        for fk in link_fks
+    )
+    assert any(
+        fk["referred_table"] == "business_contexts"
+        and fk["constrained_columns"] == ["business_context_id"]
+        for fk in link_fks
+    )
+    assert all(fk["referred_table"] != "analyses" for fk in link_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in link_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in link_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in link_fks)
 
 
 def test_analysis_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -169,6 +198,8 @@ def test_orm_metadata_matches_mapped_classes() -> None:
         "workflow_actions",
         "mailbox_authorization_sessions",
         "attachment_analyses",
+        "business_contexts",
+        "business_context_communication_links",
     }
     assert User.__tablename__ == "users"
     assert ExternalIdentity.__tablename__ == "external_identities"
@@ -177,6 +208,11 @@ def test_orm_metadata_matches_mapped_classes() -> None:
     assert WorkflowAction.__tablename__ == "workflow_actions"
     assert MailboxAuthorizationSession.__tablename__ == "mailbox_authorization_sessions"
     assert AttachmentAnalysisRow.__tablename__ == "attachment_analyses"
+    assert BusinessContextRow.__tablename__ == "business_contexts"
+    assert (
+        BusinessContextCommunicationLinkRow.__tablename__
+        == "business_context_communication_links"
+    )
 
 
 def test_connector_account_columns_are_minimized(sqlite_engine: Engine) -> None:
@@ -314,6 +350,70 @@ def test_workflow_action_columns_are_minimized(sqlite_engine: Engine) -> None:
     assert "thread_id" not in columns
     assert "conversation_id" not in columns
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+
+
+def test_business_context_columns_are_minimized(sqlite_engine: Engine) -> None:
+    """Business contexts store organizational metadata only, no hierarchy or tenancy."""
+    inspector = inspect(sqlite_engine)
+    columns = {column["name"] for column in inspector.get_columns("business_contexts")}
+    assert columns == {
+        "id",
+        "user_id",
+        "type",
+        "title",
+        "description",
+        "reference",
+        "status",
+        "archived_at",
+        "created_at",
+        "updated_at",
+    }
+    assert "parent_context_id" not in columns
+    assert "organization_id" not in columns
+    assert "tenant_id" not in columns
+    assert "clio_matter_id" not in columns
+    assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+    indexes = {index["name"] for index in inspector.get_indexes("business_contexts")}
+    assert "ix_business_contexts_user_id_created_at_id" in indexes
+    assert "ix_business_contexts_user_id_status_updated_at" in indexes
+    check_names = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("business_contexts")
+    }
+    assert "ck_business_contexts_type" in check_names
+    assert "ck_business_contexts_status" in check_names
+    assert "ck_business_contexts_status_archived_at" in check_names
+
+
+def test_business_context_communication_link_columns_are_minimized(
+    sqlite_engine: Engine,
+) -> None:
+    """Provenance links store only association identifiers, not message content."""
+    inspector = inspect(sqlite_engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("business_context_communication_links")
+    }
+    assert columns == {
+        "id",
+        "business_context_id",
+        "user_id",
+        "connector_account_id",
+        "provider_message_id",
+        "analysis_id",
+        "associated_by_user_id",
+        "associated_at",
+        "association_source",
+    }
+    assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
+    assert "subject" not in columns
+    assert "summary_text" not in columns
+    indexes = {
+        index["name"]
+        for index in inspector.get_indexes("business_context_communication_links")
+    }
+    assert "ix_bcc_links_context_associated_at_id" in indexes
+    assert "ix_bcc_links_user_connector_message" in indexes
 
 
 def test_schema_excludes_token_columns(sqlite_engine: Engine) -> None:

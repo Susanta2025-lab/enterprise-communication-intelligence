@@ -10,6 +10,8 @@ from uuid import UUID, uuid4
 from app.core.exceptions import PersistenceError
 from app.domain.enums import (
     ApplicationRole,
+    BusinessContextStatus,
+    BusinessContextType,
     ConnectorAccountStatus,
     MailboxAuthorizationProvider,
     WorkflowActionStatus,
@@ -19,6 +21,10 @@ from app.domain.interfaces.attachment_analysis_repository import (
     AttachmentAnalysisRecord,
     NewAttachmentAnalysis,
 )
+from app.domain.interfaces.business_context_communication_link_repository import (
+    BusinessContextCommunicationLinkRepository,
+)
+from app.domain.interfaces.business_context_repository import BusinessContextRepository
 from app.domain.interfaces.connector_account_repository import (
     ConnectorAccountRecord,
     ConnectorAccountRepository,
@@ -37,10 +43,15 @@ from app.domain.interfaces.workflow_action_repository import (
     WorkflowActionSaveOutcome,
     WorkflowActionSaveResult,
 )
+from app.domain.models.business_context import BusinessContext
+from app.domain.models.business_context_communication_link import (
+    BusinessContextCommunicationLink,
+)
 from app.domain.models.workflow import WorkflowAction
 
 _DUPLICATE_IDENTITY = "External identity is already registered."
 _DUPLICATE_CONNECTOR_ACCOUNT = "Connector account is already registered."
+_DUPLICATE_COMMUNICATION_LINK = "Duplicate communication link."
 
 
 class InMemoryIdentityRepository(IdentityRepository):
@@ -534,6 +545,164 @@ def _copy_workflow_action(action: WorkflowAction) -> WorkflowAction:
     )
 
 
+class InMemoryBusinessContextRepository(BusinessContextRepository):
+    """Dict-backed BusinessContext repository used by unit tests."""
+
+    def __init__(self, contexts: dict[UUID, BusinessContext]) -> None:
+        self._contexts = contexts
+
+    def add(self, context: BusinessContext) -> BusinessContext:
+        stored = _copy_business_context(context)
+        self._contexts[stored.id] = stored
+        return _copy_business_context(stored)
+
+    def get_owned(self, context_id: UUID, user_id: UUID) -> BusinessContext | None:
+        stored = self._contexts.get(context_id)
+        if stored is None or stored.owner_user_id != user_id:
+            return None
+        return _copy_business_context(stored)
+
+    def list_owned(
+        self,
+        user_id: UUID,
+        limit: int,
+        offset: int,
+        *,
+        status: BusinessContextStatus | None = BusinessContextStatus.ACTIVE,
+        type: BusinessContextType | None = None,
+        reference: str | None = None,
+    ) -> list[BusinessContext]:
+        if limit < 1 or offset < 0:
+            return []
+        owned = [
+            context
+            for context in self._contexts.values()
+            if context.owner_user_id == user_id
+            and (status is None or context.status is status)
+            and (type is None or context.type is type)
+            and (reference is None or context.reference == reference)
+        ]
+        owned.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        return [
+            _copy_business_context(item) for item in owned[offset : offset + min(limit, 100)]
+        ]
+
+    def save_owned(self, context: BusinessContext) -> BusinessContext | None:
+        stored = self._contexts.get(context.id)
+        if stored is None or stored.owner_user_id != context.owner_user_id:
+            return None
+        saved = _copy_business_context(context)
+        self._contexts[context.id] = saved
+        return _copy_business_context(saved)
+
+
+def _copy_business_context(context: BusinessContext) -> BusinessContext:
+    return BusinessContext.rehydrate(
+        id=context.id,
+        owner_user_id=context.owner_user_id,
+        type=context.type,
+        title=context.title,
+        description=context.description,
+        reference=context.reference,
+        status=context.status,
+        archived_at=context.archived_at,
+        created_at=context.created_at,
+        updated_at=context.updated_at,
+    )
+
+
+class InMemoryBusinessContextCommunicationLinkRepository(
+    BusinessContextCommunicationLinkRepository
+):
+    """Dict-backed provenance-link repository used by unit tests."""
+
+    def __init__(self, links: dict[UUID, BusinessContextCommunicationLink]) -> None:
+        self._links = links
+
+    def add(
+        self, link: BusinessContextCommunicationLink
+    ) -> BusinessContextCommunicationLink:
+        for stored in self._links.values():
+            if (
+                stored.business_context_id == link.business_context_id
+                and stored.connector_account_id == link.connector_account_id
+                and stored.provider_message_id == link.provider_message_id
+            ):
+                raise PersistenceError(_DUPLICATE_COMMUNICATION_LINK)
+        copied = _copy_communication_link(link)
+        self._links[copied.id] = copied
+        return _copy_communication_link(copied)
+
+    def get_owned(
+        self, link_id: UUID, user_id: UUID
+    ) -> BusinessContextCommunicationLink | None:
+        stored = self._links.get(link_id)
+        if stored is None or stored.owner_user_id != user_id:
+            return None
+        return _copy_communication_link(stored)
+
+    def get_by_provenance_owned(
+        self,
+        business_context_id: UUID,
+        connector_account_id: UUID,
+        provider_message_id: str,
+        user_id: UUID,
+    ) -> BusinessContextCommunicationLink | None:
+        for stored in self._links.values():
+            if (
+                stored.business_context_id == business_context_id
+                and stored.connector_account_id == connector_account_id
+                and stored.provider_message_id == provider_message_id
+                and stored.owner_user_id == user_id
+            ):
+                return _copy_communication_link(stored)
+        return None
+
+    def list_for_context_owned(
+        self,
+        business_context_id: UUID,
+        user_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> list[BusinessContextCommunicationLink]:
+        if limit < 1 or offset < 0:
+            return []
+        owned = [
+            link
+            for link in self._links.values()
+            if link.business_context_id == business_context_id
+            and link.owner_user_id == user_id
+        ]
+        owned.sort(key=lambda item: (item.associated_at, item.id), reverse=True)
+        return [
+            _copy_communication_link(item)
+            for item in owned[offset : offset + min(limit, 100)]
+        ]
+
+    def remove_owned(self, link_id: UUID, user_id: UUID) -> bool:
+        stored = self._links.get(link_id)
+        if stored is None or stored.owner_user_id != user_id:
+            return False
+        del self._links[link_id]
+        return True
+
+
+def _copy_communication_link(
+    link: BusinessContextCommunicationLink,
+) -> BusinessContextCommunicationLink:
+    return BusinessContextCommunicationLink.rehydrate(
+        id=link.id,
+        business_context_id=link.business_context_id,
+        owner_user_id=link.owner_user_id,
+        connector_account_id=link.connector_account_id,
+        provider_message_id=link.provider_message_id,
+        analysis_id=link.analysis_id,
+        associated_by_user_id=link.associated_by_user_id,
+        associated_at=link.associated_at,
+        association_source=link.association_source,
+    )
+
+
 class InMemoryUnitOfWork(PersistenceUnitOfWork):
     """Minimal unit of work that records commit/rollback/close."""
 
@@ -549,6 +718,10 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
             dict[UUID, MailboxAuthorizationSessionRecord] | None
         ) = None,
         workflow_actions: dict[UUID, WorkflowAction] | None = None,
+        business_contexts: dict[UUID, BusinessContext] | None = None,
+        business_context_communication_links: (
+            dict[UUID, BusinessContextCommunicationLink] | None
+        ) = None,
         fail_commit: bool = False,
         fail_on_enter: Exception | None = None,
         commit_error: Exception | None = None,
@@ -572,6 +745,14 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         self.workflow_action_store = (
             workflow_actions if workflow_actions is not None else {}
         )
+        self.business_context_store = (
+            business_contexts if business_contexts is not None else {}
+        )
+        self.business_context_communication_link_store = (
+            business_context_communication_links
+            if business_context_communication_links is not None
+            else {}
+        )
         self._identity_repository = InMemoryIdentityRepository(
             self.identities,
             self.application_roles,
@@ -590,6 +771,14 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
         )
         self._workflow_actions = InMemoryWorkflowActionRepository(
             self.workflow_action_store
+        )
+        self._business_contexts = InMemoryBusinessContextRepository(
+            self.business_context_store
+        )
+        self._business_context_communication_links = (
+            InMemoryBusinessContextCommunicationLinkRepository(
+                self.business_context_communication_link_store
+            )
         )
         self.fail_commit = fail_commit
         self.fail_on_enter = fail_on_enter
@@ -624,6 +813,16 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     @property
     def workflow_actions(self) -> InMemoryWorkflowActionRepository:
         return self._workflow_actions
+
+    @property
+    def business_contexts(self) -> InMemoryBusinessContextRepository:
+        return self._business_contexts
+
+    @property
+    def business_context_communication_links(
+        self,
+    ) -> InMemoryBusinessContextCommunicationLinkRepository:
+        return self._business_context_communication_links
 
     def commit(self) -> None:
         self.commit_calls += 1

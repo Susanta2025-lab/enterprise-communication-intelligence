@@ -59,6 +59,10 @@ Exception handlers are registered on the FastAPI app:
 |---|---|---|---|
 | `AnalysisNotFoundError` | `404` | `{"detail": "Analysis not found."}` | `analysis_not_found` (info) |
 | `WorkflowActionNotFoundError` | `404` | `{"detail": "Workflow action not found."}` | `workflow_action_not_found` (info) |
+| `BusinessContextNotFoundError` | `404` | `{"detail": "Business context not found."}` | `business_context_not_found` (info) |
+| `BusinessContextConflictError` | `409` | `{"detail": "Business context cannot be updated."}` | `business_context_conflict` (info) |
+| `BusinessContextCommunicationLinkNotFoundError` | `404` | `{"detail": "Business context communication link not found."}` | `business_context_communication_link_not_found` (info) |
+| `BusinessContextCommunicationLinkConflictError` | `409` | `{"detail": "Business context communication link cannot be created."}` | `business_context_communication_link_conflict` (info) |
 | `AnalysisHasNoDraftReplyError` | `409` | `{"detail": "Analysis has no usable draft reply."}` | `analysis_has_no_draft_reply` (info) |
 | `InvalidWorkflowTransitionError` | `409` | `{"detail": "Invalid workflow state transition."}` | `invalid_workflow_transition` (info) |
 | `WorkflowActionConflictError` | `409` | `{"detail": "Workflow action was updated concurrently."}` | `workflow_action_conflict` (warning) |
@@ -142,13 +146,13 @@ Readiness returns the same generic `503` body when persistence is configured and
 | Status | Meaning | Source |
 |---|---|---|
 | `200` | Successful request | Normal route return. Analyze may omit `analysis_id` after a post-inference save failure. Workflow approve/reject/execute return the updated action. Execute 200 + `failed` is a recorded definite provider rejection. |
-| `201` | Workflow action created | `POST /api/v1/workflow-actions` |
-| `204` | Owned analysis deleted | `DELETE /api/v1/analyses/{analysis_id}` |
-| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, mailbox listing, mailbox-backed analyze, and Gmail/Microsoft authorize always (`AUTH_MODE=disabled` included). The Google and Microsoft callbacks are public. |
-| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize; `communications:read` for mailbox listing; `communications:read` and `communications:analyze` for mailbox-backed analyze |
+| `201` | Workflow action or BusinessContext / provenance link created | `POST /api/v1/workflow-actions`, `POST /api/v1/contexts`, `POST /api/v1/contexts/{id}/communications` |
+| `204` | Owned analysis or provenance link deleted | `DELETE /api/v1/analyses/{analysis_id}`, `DELETE /api/v1/contexts/{id}/communications/{link_id}` |
+| `401` | Missing or invalid bearer token | Analyze when `AUTH_MODE=oidc`; history, workflow, execute, mailbox listing, mailbox-backed analyze, contexts, and Gmail/Microsoft authorize always (`AUTH_MODE=disabled` included). The Google and Microsoft callbacks are public. |
+| `403` | Authenticated token lacks the route permission | `communications:analyze` for analyze/history/contexts CRUD; `communications:workflow` for proposal/approval; `communications:send` for execute; `communications:connect` for Gmail/Microsoft authorize, disconnect, and reauthorize; `communications:read` for mailbox listing; `communications:read` and `communications:analyze` for mailbox-backed analyze and context provenance association |
 | `400` | Mailbox OAuth or pagination failure | Invalid/expired/consumed state, Google consent denial, sanitized authorization failure, or invalid mailbox list cursor |
-| `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError`, `WorkflowActionNotFoundError`, `ConnectorAccountNotFoundError`, or `MailboxMessageNotFoundError` |
-| `409` | Workflow or mailbox conflict | No usable draft, invalid transition, concurrent update, not executable, re-execute of EXECUTING/EXECUTED/FAILED, connector account not reauthorizable, or owned mailbox not currently usable for read/analyze |
+| `404` | Resource unknown or not owned by the caller | `AnalysisNotFoundError`, `WorkflowActionNotFoundError`, `ConnectorAccountNotFoundError`, `MailboxMessageNotFoundError`, `BusinessContextNotFoundError`, or `BusinessContextCommunicationLinkNotFoundError` |
+| `409` | Workflow, mailbox, or BusinessContext conflict | No usable draft, invalid transition, concurrent update, not executable, re-execute of EXECUTING/EXECUTED/FAILED, connector account not reauthorizable, owned mailbox not currently usable for read/analyze, archived context mutation, duplicate provenance association, or associate-on-archived |
 | `422` | Request failed schema validation | FastAPI/Pydantic default behavior |
 | `500` | Application or configuration error (`ECIPlatformError` and subclasses, including `ConfigurationError`, `AnalysisFailedError`) | `app/main.py` exception handler |
 | `503` | Persistence unavailable, missing mailbox secret after `EXECUTING` (provider request did not occur), uncertain provider outcome, or readiness probe failure (`ServiceUnavailableError` / `PersistenceError`). Execute 503 after TX1 leaves the row `EXECUTING`; do not retry automatically. Persistence failure before TX1 leaves the prior status unchanged and does not reach the provider. Not every 503 means a send may have occurred. | `app/main.py` exception handlers |

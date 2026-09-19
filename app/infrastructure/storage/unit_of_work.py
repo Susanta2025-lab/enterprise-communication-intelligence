@@ -14,6 +14,10 @@ from app.domain.interfaces.analysis_repository import AnalysisRepository
 from app.domain.interfaces.attachment_analysis_repository import (
     AttachmentAnalysisRepository,
 )
+from app.domain.interfaces.business_context_communication_link_repository import (
+    BusinessContextCommunicationLinkRepository,
+)
+from app.domain.interfaces.business_context_repository import BusinessContextRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.mailbox_authorization_session_repository import (
@@ -24,6 +28,12 @@ from app.domain.interfaces.workflow_action_repository import WorkflowActionRepos
 from app.infrastructure.storage.repositories.analysis import SqlAlchemyAnalysisRepository
 from app.infrastructure.storage.repositories.attachment_analysis import (
     SqlAlchemyAttachmentAnalysisRepository,
+)
+from app.infrastructure.storage.repositories.business_context import (
+    SqlAlchemyBusinessContextRepository,
+)
+from app.infrastructure.storage.repositories.business_context_communication_link import (
+    SqlAlchemyBusinessContextCommunicationLinkRepository,
 )
 from app.infrastructure.storage.repositories.connector_account import (
     SqlAlchemyConnectorAccountRepository,
@@ -55,6 +65,10 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             MailboxAuthorizationSessionRepository | None
         ) = None
         self._attachment_analyses: AttachmentAnalysisRepository | None = None
+        self._business_contexts: BusinessContextRepository | None = None
+        self._business_context_communication_links: (
+            BusinessContextCommunicationLinkRepository | None
+        ) = None
 
     @property
     def identity_repository(self) -> IdentityRepository:
@@ -98,6 +112,22 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             raise PersistenceError(_INACTIVE)
         return self._attachment_analyses
 
+    @property
+    def business_contexts(self) -> BusinessContextRepository:
+        """BusinessContext repository bound to this unit of work."""
+        if self._business_contexts is None:
+            raise PersistenceError(_INACTIVE)
+        return self._business_contexts
+
+    @property
+    def business_context_communication_links(
+        self,
+    ) -> BusinessContextCommunicationLinkRepository:
+        """BusinessContext communication-link repository bound to this unit of work."""
+        if self._business_context_communication_links is None:
+            raise PersistenceError(_INACTIVE)
+        return self._business_context_communication_links
+
     def commit(self) -> None:
         """Commit the current unit of work."""
         session = self._require_session()
@@ -133,6 +163,10 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
                 SqlAlchemyMailboxAuthorizationSessionRepository(session)
             )
             self._attachment_analyses = SqlAlchemyAttachmentAnalysisRepository(session)
+            self._business_contexts = SqlAlchemyBusinessContextRepository(session)
+            self._business_context_communication_links = (
+                SqlAlchemyBusinessContextCommunicationLinkRepository(session)
+            )
             return self
         except SQLAlchemyError:
             if session is not None:
@@ -147,6 +181,8 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             self._workflow_actions = None
             self._mailbox_authorization_sessions = None
             self._attachment_analyses = None
+            self._business_contexts = None
+            self._business_context_communication_links = None
             raise PersistenceError(_GENERIC_OPERATION_FAILURE) from None
 
     def __exit__(
@@ -177,6 +213,8 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         self._workflow_actions = None
         self._mailbox_authorization_sessions = None
         self._attachment_analyses = None
+        self._business_contexts = None
+        self._business_context_communication_links = None
         if session is None:
             return
         session.close()

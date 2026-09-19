@@ -12,13 +12,28 @@ from app.core.telemetry import elapsed_ms, error_class
 from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
+from app.domain.schemas.context_suggestion import (
+    BusinessContextSuggestionRequest,
+    BusinessContextSuggestionResult,
+)
 from app.providers.common.output import (
     AnalysisOutputError,
     parse_analysis_output,
     to_communication_analysis,
 )
 from app.providers.common.prompts import SYSTEM_PROMPT, build_user_prompt
-from app.providers.microsoft_foundry.output import FOUNDRY_ANALYSIS_JSON_SCHEMA
+from app.providers.common.suggestion_output import (
+    parse_context_suggestion_output,
+    to_business_context_suggestion_result,
+)
+from app.providers.common.suggestion_prompts import (
+    CONTEXT_SUGGESTION_SYSTEM_PROMPT,
+    build_context_suggestion_user_prompt,
+)
+from app.providers.microsoft_foundry.output import (
+    FOUNDRY_ANALYSIS_JSON_SCHEMA,
+    FOUNDRY_CONTEXT_SUGGESTION_JSON_SCHEMA,
+)
 
 logger = get_logger(__name__)
 
@@ -114,6 +129,67 @@ class MicrosoftFoundryProvider(AIProvider):
             deployment=self._model_deployment,
             operation="analyze",
             duration_ms=elapsed_ms(started_at),
+        )
+        return result
+
+    def suggest_business_context(
+        self,
+        request: BusinessContextSuggestionRequest,
+    ) -> BusinessContextSuggestionResult:
+        """Suggest BusinessContext candidates through Microsoft Foundry."""
+        logger.info(
+            "microsoft_foundry_context_suggestion_requested",
+            provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            operation="suggest_business_context",
+            candidate_count=len(request.candidates),
+        )
+        started_at = time.perf_counter()
+
+        try:
+            response = self._get_openai_client().responses.create(
+                model=self._model_deployment,
+                instructions=CONTEXT_SUGGESTION_SYSTEM_PROMPT,
+                input=build_context_suggestion_user_prompt(request),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "business_context_suggestion",
+                        "strict": True,
+                        "schema": FOUNDRY_CONTEXT_SUGGESTION_JSON_SCHEMA,
+                    }
+                },
+            )
+            output_text = getattr(response, "output_text", None)
+            if not isinstance(output_text, str):
+                raise AnalysisOutputError(
+                    "Microsoft Foundry returned a response without JSON text output."
+                )
+
+            output = parse_context_suggestion_output(output_text)
+            result = to_business_context_suggestion_result(
+                output,
+                request,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "microsoft_foundry_context_suggestion_failed",
+                provider=self.PROVIDER_NAME,
+                deployment=self._model_deployment,
+                operation="suggest_business_context",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "microsoft_foundry_context_suggestion_completed",
+            provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            operation="suggest_business_context",
+            duration_ms=elapsed_ms(started_at),
+            suggestion_count=len(result.suggestions),
         )
         return result
 

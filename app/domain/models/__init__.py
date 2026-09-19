@@ -15,6 +15,15 @@ from app.domain.models.attachment import (
     AttachmentTextSection,
     ParsedAttachment,
 )
+from app.domain.models.business_context import (
+    DESCRIPTION_MAX_LENGTH,
+    REFERENCE_MAX_LENGTH,
+    TITLE_MAX_LENGTH,
+    BusinessContext,
+)
+from app.domain.models.business_context_communication_link import (
+    BusinessContextCommunicationLink,
+)
 from app.domain.models.capabilities import (
     is_mail_read_allowed,
     is_mail_send_executable,
@@ -33,13 +42,18 @@ __all__ = [
     "AttachmentContent",
     "AttachmentMetadata",
     "AttachmentTextSection",
+    "BusinessContext",
+    "BusinessContextCommunicationLink",
+    "DESCRIPTION_MAX_LENGTH",
     "ParsedAttachment",
     "CommunicationAnalysis",
     "CommunicationMessage",
     "DraftReply",
     "MessageMetadata",
     "Priority",
+    "REFERENCE_MAX_LENGTH",
     "Summary",
+    "TITLE_MAX_LENGTH",
     "WorkflowAction",
     "normalize_communication_capabilities",
     "parse_stored_communication_capabilities",

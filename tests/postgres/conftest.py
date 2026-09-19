@@ -49,7 +49,9 @@ def _truncate(engine: Engine) -> None:
                     text(
                         "TRUNCATE TABLE mailbox_authorization_sessions, "
                         "workflow_actions, attachment_analyses, analyses, "
-                        "external_identities, connector_accounts, users CASCADE"
+                        "business_context_communication_links, business_contexts, "
+                        "external_identities, "
+                        "connector_accounts, users CASCADE"
                     )
                 )
 

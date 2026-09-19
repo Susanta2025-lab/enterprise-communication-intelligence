@@ -13,6 +13,10 @@ from app.domain.interfaces.attachment_analysis_repository import (
 )
 from app.domain.interfaces.attachment_parser import AttachmentParser
 from app.domain.interfaces.attachment_scanner import AttachmentScanner, AttachmentScanResult
+from app.domain.interfaces.business_context_communication_link_repository import (
+    BusinessContextCommunicationLinkRepository,
+)
+from app.domain.interfaces.business_context_repository import BusinessContextRepository
 from app.domain.interfaces.communication_action_executor import (
     CommunicationActionExecution,
     CommunicationActionExecutor,
@@ -73,6 +77,8 @@ __all__ = [
     "AnalysisRecord",
     "AnalysisRepository",
     "AttachmentMetadataPage",
+    "BusinessContextCommunicationLinkRepository",
+    "BusinessContextRepository",
     "CommunicationActionExecution",
     "CommunicationActionExecutor",
     "CommunicationActionExecutorFactory",

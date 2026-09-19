@@ -11,12 +11,25 @@ from app.core.telemetry import elapsed_ms, error_class
 from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
+from app.domain.schemas.context_suggestion import (
+    BusinessContextSuggestionRequest,
+    BusinessContextSuggestionResult,
+)
 from app.providers.amazon_bedrock.output import (
     BEDROCK_ANALYSIS_JSON_SCHEMA,
+    BEDROCK_CONTEXT_SUGGESTION_JSON_SCHEMA,
     extract_converse_output_text,
 )
 from app.providers.common.output import parse_analysis_output, to_communication_analysis
 from app.providers.common.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.providers.common.suggestion_output import (
+    parse_context_suggestion_output,
+    to_business_context_suggestion_result,
+)
+from app.providers.common.suggestion_prompts import (
+    CONTEXT_SUGGESTION_SYSTEM_PROMPT,
+    build_context_suggestion_user_prompt,
+)
 
 logger = get_logger(__name__)
 
@@ -116,6 +129,76 @@ class AmazonBedrockProvider(AIProvider):
             region=self._region,
             operation="analyze",
             duration_ms=elapsed_ms(started_at),
+        )
+        return result
+
+    def suggest_business_context(
+        self,
+        request: BusinessContextSuggestionRequest,
+    ) -> BusinessContextSuggestionResult:
+        """Suggest BusinessContext candidates through Amazon Bedrock."""
+        logger.info(
+            "amazon_bedrock_context_suggestion_requested",
+            provider=self.PROVIDER_NAME,
+            model_id=self._model_id,
+            region=self._region,
+            operation="suggest_business_context",
+            candidate_count=len(request.candidates),
+        )
+        started_at = time.perf_counter()
+
+        try:
+            response = self._get_bedrock_runtime_client().converse(
+                modelId=self._model_id,
+                system=[{"text": CONTEXT_SUGGESTION_SYSTEM_PROMPT}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"text": build_context_suggestion_user_prompt(request)}
+                        ],
+                    }
+                ],
+                outputConfig={
+                    "textFormat": {
+                        "type": "json_schema",
+                        "structure": {
+                            "jsonSchema": {
+                                "schema": BEDROCK_CONTEXT_SUGGESTION_JSON_SCHEMA,
+                                "name": "business_context_suggestion",
+                                "description": "Structured BusinessContext suggestions.",
+                            }
+                        },
+                    }
+                },
+            )
+            output_text = extract_converse_output_text(response)
+            output = parse_context_suggestion_output(output_text)
+            result = to_business_context_suggestion_result(
+                output,
+                request,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "amazon_bedrock_context_suggestion_failed",
+                provider=self.PROVIDER_NAME,
+                model_id=self._model_id,
+                region=self._region,
+                operation="suggest_business_context",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "amazon_bedrock_context_suggestion_completed",
+            provider=self.PROVIDER_NAME,
+            model_id=self._model_id,
+            region=self._region,
+            operation="suggest_business_context",
+            duration_ms=elapsed_ms(started_at),
+            suggestion_count=len(result.suggestions),
         )
         return result
 

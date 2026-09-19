@@ -69,11 +69,15 @@ def test_repositories_share_the_same_session(session_factory: sessionmaker) -> N
         workflow_session = uow.workflow_actions._session  # type: ignore[attr-defined]
         authorization_session = uow.mailbox_authorization_sessions._session  # type: ignore[attr-defined]
         attachment_session = uow.attachment_analyses._session  # type: ignore[attr-defined]
+        context_session = uow.business_contexts._session  # type: ignore[attr-defined]
+        link_session = uow.business_context_communication_links._session  # type: ignore[attr-defined]
         assert identity_session is analysis_session
         assert analysis_session is connector_session
         assert connector_session is workflow_session
         assert workflow_session is authorization_session
         assert authorization_session is attachment_session
+        assert attachment_session is context_session
+        assert context_session is link_session
         assert identity_session is uow._session
 
 

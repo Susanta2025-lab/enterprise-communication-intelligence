@@ -90,6 +90,16 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    business_contexts: Mapped[list["BusinessContextRow"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    business_context_communication_links: Mapped[
+        list["BusinessContextCommunicationLinkRow"]
+    ] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class ExternalIdentity(Base):
@@ -424,3 +434,147 @@ class AttachmentAnalysisRow(Base):
     request_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="attachment_analyses")
+
+
+class BusinessContextRow(Base):
+    """User-owned BusinessContext. Flat organizational container only.
+
+    Does not store communication bodies, attachment bytes, vendor ids, or
+    tenancy columns. Provenance associations live in
+    ``business_context_communication_links``.
+    """
+
+    __tablename__ = "business_contexts"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ("
+            "'matter', 'case', 'project', 'client', 'transaction', 'account', 'other'"
+            ")",
+            name="ck_business_contexts_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'archived')",
+            name="ck_business_contexts_status",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND archived_at IS NULL) OR "
+            "(status = 'archived' AND archived_at IS NOT NULL)",
+            name="ck_business_contexts_status_archived_at",
+        ),
+        Index(
+            "ix_business_contexts_user_id_created_at_id",
+            "user_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_business_contexts_user_id_status_updated_at",
+            "user_id",
+            "status",
+            "updated_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    type: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    user: Mapped[User] = relationship(back_populates="business_contexts")
+    communication_links: Mapped[list["BusinessContextCommunicationLinkRow"]] = (
+        relationship(
+            back_populates="business_context",
+            cascade="all, delete-orphan",
+        )
+    )
+
+
+class BusinessContextCommunicationLinkRow(Base):
+    """Authoritative BusinessContext ↔ provider-message provenance link.
+
+    Identity is ``(connector_account_id, provider_message_id)`` scoped to a
+    context. ``connector_account_id`` and ``analysis_id`` are provenance UUIDs
+    without database foreign keys. Never stores message bodies or attachment
+    bytes. Never cascades to analyses, workflows, or connector accounts.
+    """
+
+    __tablename__ = "business_context_communication_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_context_id",
+            "connector_account_id",
+            "provider_message_id",
+            name="uq_bcc_links_context_connector_message",
+        ),
+        CheckConstraint(
+            "association_source IN ('manual')",
+            name="ck_business_context_communication_links_association_source",
+        ),
+        CheckConstraint(
+            "length(trim(provider_message_id)) > 0",
+            name="ck_business_context_communication_links_provider_message_id",
+        ),
+        Index(
+            "ix_bcc_links_context_associated_at_id",
+            "business_context_id",
+            "associated_at",
+            "id",
+        ),
+        Index(
+            "ix_bcc_links_user_connector_message",
+            "user_id",
+            "connector_account_id",
+            "provider_message_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    business_context_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("business_contexts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    connector_account_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    provider_message_id: Mapped[str] = mapped_column(Text, nullable=False)
+    analysis_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    associated_by_user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    associated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+    association_source: Mapped[str] = mapped_column(Text, nullable=False)
+
+    user: Mapped[User] = relationship(
+        back_populates="business_context_communication_links"
+    )
+    business_context: Mapped[BusinessContextRow] = relationship(
+        back_populates="communication_links"
+    )

@@ -4,7 +4,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.providers.common.output import AnalysisOutput
+from app.providers.common.suggestion_output import ContextSuggestionOutput
 
 # Pydantic already emits additionalProperties=false for extra="forbid" models,
 # which Amazon Bedrock structured output requires. The schema is serialized as
@@ -16,9 +19,9 @@ class BedrockOutputError(ValueError):
     """Raised when Amazon Bedrock returns an unusable Converse response shape."""
 
 
-def build_bedrock_json_schema() -> str:
-    """Serialize the shared analysis schema for Bedrock Converse structured output."""
-    return json.dumps(AnalysisOutput.model_json_schema(), separators=(",", ":"), sort_keys=True)
+def build_bedrock_json_schema(model: type[BaseModel] = AnalysisOutput) -> str:
+    """Serialize a shared domain schema for Bedrock Converse structured output."""
+    return json.dumps(model.model_json_schema(), separators=(",", ":"), sort_keys=True)
 
 
 def extract_converse_output_text(response: Any) -> str:
@@ -61,4 +64,7 @@ def extract_converse_output_text(response: Any) -> str:
     raise BedrockOutputError("Amazon Bedrock returned a response without structured text output.")
 
 
-BEDROCK_ANALYSIS_JSON_SCHEMA = build_bedrock_json_schema()
+BEDROCK_ANALYSIS_JSON_SCHEMA = build_bedrock_json_schema(AnalysisOutput)
+BEDROCK_CONTEXT_SUGGESTION_JSON_SCHEMA = build_bedrock_json_schema(
+    ContextSuggestionOutput
+)

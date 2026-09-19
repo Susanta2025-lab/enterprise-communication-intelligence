@@ -19,6 +19,8 @@ _REQUIRED_TABLES = {
     "workflow_actions",
     "mailbox_authorization_sessions",
     "attachment_analyses",
+    "business_contexts",
+    "business_context_communication_links",
 }
 _FORBIDDEN_TABLES = {
     "messages",
@@ -50,6 +52,8 @@ def test_alembic_revision_graph_is_valid() -> None:
         "16f0001",
         "18d0001",
         "19b0001",
+        "20b0001",
+        "20c0001",
     }
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
@@ -59,8 +63,10 @@ def test_alembic_revision_graph_is_valid() -> None:
     assert revisions["16f0001"].down_revision == "13a0001"
     assert revisions["18d0001"].down_revision == "16f0001"
     assert revisions["19b0001"].down_revision == "18d0001"
-    assert script.get_heads() == ["19b0001"]
-    assert script.get_current_head() == "19b0001"
+    assert revisions["20b0001"].down_revision == "19b0001"
+    assert revisions["20c0001"].down_revision == "20b0001"
+    assert script.get_heads() == ["20c0001"]
+    assert script.get_current_head() == "20c0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -153,7 +159,17 @@ def test_offline_upgrade_sql_compiles_without_oidc_or_connection(
     assert "reauth_required" in sql
     assert "application_role" in sql
     assert "ck_users_application_role" in sql
+    assert "CREATE TABLE business_contexts" in sql
+    assert "ck_business_contexts_type" in sql
+    assert "ck_business_contexts_status" in sql
+    assert "ck_business_contexts_status_archived_at" in sql
+    assert "ix_business_contexts_user_id_created_at_id" in sql
+    assert "ix_business_contexts_user_id_status_updated_at" in sql
+    assert "CREATE TABLE business_context_communication_links" in sql
+    assert "uq_bcc_links_context_connector_message" in sql
+    assert "ck_business_context_communication_links_association_source" in sql
     assert "CREATE TABLE workflows" not in sql
+    assert "CREATE TABLE communications" not in sql
     assert secret not in sql
     assert secret not in result.stderr
 
@@ -290,6 +306,68 @@ def test_display_identity_connect_another_migration_creates_expected_schema() ->
         assert f'"{forbidden}"' not in migration
 
 
+def test_business_contexts_migration_creates_expected_schema() -> None:
+    """The 20B migration adds business_contexts without provenance links."""
+    migration = (
+        _ROOT / "alembic" / "versions" / "20b0001_business_contexts.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "20b0001"' in migration
+    assert 'down_revision: str | None = "19b0001"' in migration
+    assert 'op.create_table(\n        "business_contexts"' in migration
+    assert "ck_business_contexts_type" in migration
+    assert "ck_business_contexts_status" in migration
+    assert "ck_business_contexts_status_archived_at" in migration
+    assert "ix_business_contexts_user_id_created_at_id" in migration
+    assert "ix_business_contexts_user_id_status_updated_at" in migration
+    assert 'ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE")' in migration
+    assert 'op.drop_table("business_contexts")' in migration
+    assert "business_context_communication_links" not in migration
+    assert "parent_context_id" not in migration
+    assert "organization_id" not in migration
+    assert "tenant_id" not in migration
+    assert "access_token" not in migration
+    assert "refresh_token" not in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
+
+
+def test_business_context_communication_links_migration_creates_expected_schema() -> None:
+    """The 20C migration adds provenance links without a communications table."""
+    migration = (
+        _ROOT
+        / "alembic"
+        / "versions"
+        / "20c0001_business_context_communication_links.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision: str = "20c0001"' in migration
+    assert 'down_revision: str | None = "20b0001"' in migration
+    assert 'op.create_table(\n        "business_context_communication_links"' in migration
+    assert (
+        "uq_bcc_links_context_connector_message" in migration
+    )
+    assert (
+        "ck_business_context_communication_links_association_source" in migration
+    )
+    assert (
+        "ck_business_context_communication_links_provider_message_id" in migration
+    )
+    assert (
+        "ix_bcc_links_context_associated_at_id" in migration
+    )
+    assert (
+        "ix_bcc_links_user_connector_message" in migration
+    )
+    assert 'op.drop_table("business_context_communication_links")' in migration
+    assert 'create_table(\n        "communications"' not in migration
+    assert "business_context_attachment_links" not in migration
+    assert "parent_context_id" not in migration
+    assert "organization_id" not in migration
+    assert "tenant_id" not in migration
+    assert "access_token" not in migration
+    for forbidden in _FORBIDDEN_TABLES:
+        assert f'"{forbidden}"' not in migration
+
+
 def test_attachment_analyses_migration_creates_expected_schema() -> None:
     """The 18D migration adds structured attachment-analysis history only."""
     migration = (
@@ -372,6 +450,8 @@ def test_assert_at_head_passes_when_current_matches_script_head(
             "workflow_actions",
             "mailbox_authorization_sessions",
             "attachment_analyses",
+            "business_contexts",
+            "business_context_communication_links",
             "alembic_version",
         },
     )

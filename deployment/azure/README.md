@@ -2,9 +2,9 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 19 application RBAC is implemented; schema head is `19b0001`.** Cost-aware retained posture keeps compute/database stopped when idle (ACA scaled to zero, PostgreSQL Stopped, SWA serverless). Historical Phase 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
+**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 20 Azure live validation PASS** (Alembic head `20c0001`; ACA `eci-api:ed5eebc-p20g` / `eci-api-dev--0000011`; SWA `eci-web-dev`). AWS Phase 20 validation remains pending and out of scope for this runbook. Cost-aware retained posture may stop compute/database when idle after operator instruction (do not auto-stop after Azure PASS). Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
 
-## Current Azure posture (Phase 19 + technical validation)
+## Current Azure posture (Phase 20 Azure live validation — PASS)
 
 Application path (cloud-neutral app; Azure-specific hosting):
 
@@ -20,21 +20,57 @@ Microsoft Foundry (GPT-5.4-mini)
 
 Region: **Spain Central**. Supporting services include Azure Key Vault, managed identity, and Log Analytics. Azure and AWS are **independent** deployments—no cross-cloud database replication.
 
+**Phase 20 cloud impact (executed in authorized Azure live validation):**
+
+| Change | Required? | Result |
+|---|---|---|
+| DB migration to `20c0001` (`20b0001` + `20c0001`) | **Yes** | **PASS** |
+| Backend image deploy (contexts + suggestion APIs) | **Yes** | **PASS** (`ed5eebc-p20g`) |
+| Frontend SWA deploy (`/contexts`, Add to Context, Suggest) | **Yes** | **PASS** |
+| Live Foundry `suggest_business_context` smoke | **Yes** | **PASS** (advisory; no auto-link) |
+| New Azure infrastructure | **No** | None created |
+| New Key Vault secrets | **No** | None created |
+| New Managed Identity / IAM | **No** | None created |
+| New Entra API scopes | **No** | Reused `communications:*` |
+
 **Technical deployment validation (not Phase 17D):** frontend operational; backend `/health` and `/api/v1/readiness`; PostgreSQL persistence during runtime check; application sign-in; `/api/v1/me`-backed Platform Owner state in the UI; owner deployment indicator shows Azure; existing connected-mailbox state loads. External business-user verification remains deferred.
 
-**Identity reminder:** ECI application login ≠ mailbox login. Platform Owner authorization uses verified `(issuer, subject)` → external identity mapping → `users.id` → persisted `application_role`. Mailbox OAuth does not grant owner. The owner deployment indicator is presentation only.
+**Identity reminder:** ECI application login ≠ mailbox login. Platform Owner authorization uses verified `(issuer, subject)` → external identity mapping → `users.id` → persisted `application_role`. Mailbox OAuth does not grant owner. Platform Owner does **not** bypass BusinessContext ownership (ADR-029). The owner deployment indicator is presentation only.
 
-**Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires an active serving Container App revision and an available PostgreSQL instance. Do not keep paid development infrastructure running continuously.
+**Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires an active serving Container App revision and an available PostgreSQL instance. Do not keep paid development infrastructure running continuously. Prefer sequential cloud validation (Azure, then stop; then AWS).
 
 **Manual SPA build (Azure):** from `frontend/`, use `npm run build:azure` (equivalent: `npm run build -- --mode azure`). Do not use a generic `npm run build` as the manual Azure deployment command. Tracked `frontend/.env.azure` contains public presentation metadata only; operator auth/API values may come from ignored `.env.azure.local` or CI/environment variables.
 
-Schema head includes Alembic `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
+Schema head for Phase 20 validation: Alembic `20c0001` (`business_contexts` + `business_context_communication_links`). Prior Phase 19 head was `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
 
 ```bash
 python -m app.cli.promote_owner --user-id <internal-user-uuid>
 ```
 
 Do not document live internal user UUIDs or secrets here.
+
+### Phase 20 Azure live-validation procedure (historical checklist — executed PASS)
+
+1. Inspect PostgreSQL / ACA state before mutation (do not blindly start/stop).
+2. Migrate Azure PostgreSQL to Alembic head `20c0001` via operator one-shot (`alembic upgrade head`).
+3. Build/push backend image from current `master` working tree (includes Phase 20) to ACR; update ACA revision only (preserve MI/env/secrets/scale).
+4. Build SPA with `npm run build:azure` and deploy to existing SWA `eci-web-dev`.
+5. Verify `/health` and `/api/v1/readiness` HTTP 200.
+6. Sign in via External ID; protected API smoke; Contexts navigation.
+7. BusinessContext smoke: create → list → get → patch → archive → restore (no mailbox required).
+8. Manual association: owned Outlook connector + message → associate → list → duplicate conflict → remove.
+9. Timeline: open workspace timeline; confirm owned persisted events only.
+10. AI suggestion: analyze a message (Foundry) → Suggest Context → confirm associate remains manual (no auto-link).
+11. Attachment regression: context paths must not retrieve attachment bytes.
+12. Workflow regression: Propose → Approve / Reject presented; do not Send unless an established safe target exists.
+13. Rollback readiness: previous ACA revision/image retained; prefer app rollback over schema downgrade.
+14. Do **not** auto-stop Azure after PASS — wait for operator instruction before stop/scale-down or AWS validation.
+
+See [Phase 20](../../docs/roadmap/phase-20-business-context-matter-intelligence.md) and [ADR-029](../../docs/decisions/ADR-029-business-context-foundation-and-provenance-association.md).
+
+## Phase 19 retained posture note (historical schema head `19b0001`)
+
+Phase 19 application RBAC remains in force. Schema progressed to `20c0001` for Phase 20. Historical Phase 18 / 16F banners below remain historical.
 
 ## Phase 18 retained state (historical)
 

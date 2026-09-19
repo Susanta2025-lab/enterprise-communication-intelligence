@@ -1,7 +1,6 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes, useParams } from "react-router-dom";
 
 import type { EciApiClient } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
@@ -10,6 +9,8 @@ import { AppShell } from "./components/AppShell";
 import { AppErrorBoundary } from "./components/feedback/AppErrorBoundary";
 import { SignInPanel } from "./components/SignInPanel";
 import type { FrontendConfig } from "./config/env";
+import { ContextWorkspacePage } from "./pages/ContextWorkspacePage";
+import { ContextsListPage } from "./pages/ContextsListPage";
 import { HomePage } from "./pages/HomePage";
 import { MailboxWorkspacePage } from "./pages/MailboxWorkspacePage";
 import { createQueryClient } from "./query/queryClient";
@@ -33,6 +34,14 @@ export function App({ apiClient, config }: AppProps) {
   );
 }
 
+function ContextWorkspaceRoute({ apiClient }: { apiClient: EciApiClient }) {
+  const { contextId } = useParams<{ contextId: string }>();
+  if (!contextId) {
+    return null;
+  }
+  return <ContextWorkspacePage apiClient={apiClient} contextId={contextId} />;
+}
+
 function AppRoutes({ apiClient, config }: AppProps) {
   const { isAuthenticated, interactionInProgress } = useAuth();
   const queryClient = useQueryClient();
@@ -41,6 +50,7 @@ function AppRoutes({ apiClient, config }: AppProps) {
     if (!isAuthenticated) {
       queryClient.removeQueries({ queryKey: ["mailbox-attachments"] });
       queryClient.removeQueries({ queryKey: ["attachment-analyses"] });
+      queryClient.removeQueries({ queryKey: ["contexts"] });
     }
   }, [isAuthenticated, queryClient]);
 
@@ -69,6 +79,11 @@ function AppRoutes({ apiClient, config }: AppProps) {
       >
         <Routes>
           <Route path="/" element={<HomePage apiClient={apiClient} />} />
+          <Route path="/contexts" element={<ContextsListPage apiClient={apiClient} />} />
+          <Route
+            path="/contexts/:contextId"
+            element={<ContextWorkspaceRoute apiClient={apiClient} />}
+          />
           <Route
             path="/mailbox/:connectorAccountId"
             element={<MailboxWorkspacePage apiClient={apiClient} />}

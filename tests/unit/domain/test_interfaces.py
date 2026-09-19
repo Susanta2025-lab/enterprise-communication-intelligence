@@ -13,6 +13,8 @@ from app.domain.interfaces import (
     AttachmentAnalysisRepository,
     AttachmentParser,
     AttachmentScanner,
+    BusinessContextCommunicationLinkRepository,
+    BusinessContextRepository,
     CommunicationActionExecution,
     CommunicationActionExecutor,
     CommunicationActionExecutorFactory,
@@ -85,6 +87,8 @@ def test_repository_interfaces_are_abstract() -> None:
     assert issubclass(IdentityRepository, ABC)
     assert issubclass(AnalysisRepository, ABC)
     assert issubclass(AttachmentAnalysisRepository, ABC)
+    assert issubclass(BusinessContextRepository, ABC)
+    assert issubclass(BusinessContextCommunicationLinkRepository, ABC)
     assert issubclass(ConnectorAccountRepository, ABC)
     assert issubclass(WorkflowActionRepository, ABC)
     assert issubclass(MailboxAuthorizationSessionRepository, ABC)
@@ -96,6 +100,10 @@ def test_repository_interfaces_are_abstract() -> None:
         AnalysisRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         AttachmentAnalysisRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        BusinessContextRepository()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        BusinessContextCommunicationLinkRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         ConnectorAccountRepository()  # type: ignore[abstract]
     with pytest.raises(TypeError):
@@ -264,6 +272,8 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.analysis_repository as analysis_repository
     import app.domain.interfaces.attachment_parser as attachment_parser
     import app.domain.interfaces.attachment_scanner as attachment_scanner
+    import app.domain.interfaces.business_context_communication_link_repository as bcc_link_repo
+    import app.domain.interfaces.business_context_repository as business_context_repository
     import app.domain.interfaces.communication_action_executor as communication_action_executor
     import app.domain.interfaces.communication_action_executor_factory as executor_factory_port
     import app.domain.interfaces.communication_connector as communication_connector
@@ -276,6 +286,8 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
     import app.domain.interfaces.workflow_action_repository as workflow_action_repository
     import app.domain.models.analysis as analysis_models
     import app.domain.models.attachment as attachment_models
+    import app.domain.models.business_context as business_context_models
+    import app.domain.models.business_context_communication_link as bcc_link_models
     import app.domain.models.message as message_models
     import app.domain.models.workflow as workflow_models
     import app.domain.schemas.analysis as analysis_schemas
@@ -288,6 +300,8 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         attachment_parser,
         attachment_scanner,
         analysis_repository,
+        business_context_repository,
+        bcc_link_repo,
         communication_action_executor,
         executor_factory_port,
         communication_connector,
@@ -300,6 +314,8 @@ def test_domain_package_has_no_fastapi_dependency() -> None:
         workflow_action_repository,
         analysis_models,
         attachment_models,
+        business_context_models,
+        bcc_link_models,
         message_models,
         workflow_models,
         analysis_schemas,

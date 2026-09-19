@@ -162,3 +162,69 @@ class WorkflowActionStatus(StrEnum):
     EXECUTING = "executing"
     EXECUTED = "executed"
     FAILED = "failed"
+
+
+class BusinessContextType(StrEnum):
+    """Constrained organizational type for a ``BusinessContext``.
+
+    Stored as portable text with a database check constraint. Not a
+    PostgreSQL enum and not industry-specific case-system metadata.
+    """
+
+    MATTER = "matter"
+    CASE = "case"
+    PROJECT = "project"
+    CLIENT = "client"
+    TRANSACTION = "transaction"
+    ACCOUNT = "account"
+    OTHER = "other"
+
+
+class BusinessContextStatus(StrEnum):
+    """Minimal archive lifecycle for a ``BusinessContext``.
+
+    ``ACTIVE`` ↔ ``ARCHIVED`` only. Hard delete is unsupported as product
+    behavior in Phase 20.
+    """
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class AssociationSource(StrEnum):
+    """How a BusinessContext communication provenance link became authoritative.
+
+    Phase 20 persists only ``manual``. Future sources require an additive
+    migration and must still pass through ownership-validated association.
+    """
+
+    MANUAL = "manual"
+
+
+class ContextMatchStrength(StrEnum):
+    """AI ranking signal for a BusinessContext suggestion.
+
+    Labels are model ranking cues, not calibrated statistical probabilities.
+    """
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ContextTimelineEventType(StrEnum):
+    """Reconstructible BusinessContext timeline event kinds (read model only).
+
+    Not persisted. Values are projected from durable owned records.
+    """
+
+    CONTEXT_CREATED = "context_created"
+    CONTEXT_ARCHIVED = "context_archived"
+    COMMUNICATION_ASSOCIATED = "communication_associated"
+    ANALYSIS_COMPLETED = "analysis_completed"
+    ATTACHMENT_ANALYSIS_COMPLETED = "attachment_analysis_completed"
+    WORKFLOW_PROPOSED = "workflow_proposed"
+    WORKFLOW_APPROVED = "workflow_approved"
+    WORKFLOW_REJECTED = "workflow_rejected"
+    WORKFLOW_EXECUTED = "workflow_executed"
+    WORKFLOW_FAILED = "workflow_failed"

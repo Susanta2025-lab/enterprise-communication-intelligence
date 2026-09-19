@@ -39,18 +39,21 @@ ECI addresses that with:
 | Area | What exists today |
 | --- | --- |
 | Communication analysis | Summary, priority, category, action items, AI draft suggestion |
+| Business context | Flat user-owned matter/case/project/client/transaction/account organization; manual communication association; context timeline; AI-assisted suggestions with human confirmation (never autonomous assignment) |
 | Mailboxes | Gmail and Microsoft Graph/Outlook: connect, list, selected-message analyze |
 | Secure attachments | Metadata listing; explicit single-attachment Analyze for PDF / DOCX / TXT; JPEG/PNG gated when image AI is unavailable; XLSX unsupported (fail-closed) |
-| Workflow | Explicit Propose / Approve / Reject / Execute (Send)—never automatic from analyze or attachment analysis |
+| Workflow | Explicit Propose / Approve / Reject / Execute (Send)—never automatic from analyze, attachment analysis, or context suggestion |
 | Application auth | Microsoft Entra External ID + MSAL; five delegated `communications:*` scopes |
 | Application RBAC | Persisted `application_role` (`user` \| `owner`); server-side `require_owner`; `/api/v1/me` and owner-only `/api/v1/admin/ping` |
 | AI providers | `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider` |
 | Hosting | Azure Container Apps + Static Web Apps; AWS ECS Fargate + CloudFront/S3/ALB |
-| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses); separate DB per cloud |
+| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses, business contexts); separate DB per cloud |
 | Credential stores | Azure Key Vault / AWS Secrets Manager (opaque `credential_ref`; no tokens in PostgreSQL) |
 | Malware scanning | ClamAV client → external clamd (not embedded in the API image); production fails closed without a real scanner |
 
-**Phase 18 invariant:** ECI never explicitly retrieves, decodes, persists, or analyzes attachment content without an explicit user action for that specific attachment. There is no automatic attachment download. Listing remains content-free. Raw attachment bytes are not durably persisted. ClamAV runs before parsing or AI. Unsupported or dangerous cases fail closed. Attachment analysis cannot trigger Propose, Approve, Execute, or Send.
+**Phase 18 invariant:** ECI never explicitly retrieves, decodes, persists, or analyzes attachment content without an explicit user action for that specific attachment. There is no automatic attachment download. Listing remains content-free. Raw attachment bytes are not durably persisted. ClamAV runs before parsing or AI. Unsupported or dangerous cases fail closed. Attachment analysis cannot trigger Propose, Approve, Execute, or Send. Context open / timeline / association / AI suggestion never retrieve attachment bytes.
+
+**Not yet productized:** XLSX tabular intelligence; durable deadlines/work items; DMS/CRM/case-system sync; autonomous context assignment.
 
 ---
 
@@ -70,6 +73,7 @@ flowchart TB
     Analysis[Communication analysis]
     Mailbox[Mailbox list / analyze]
     Attach[Attachment analyze]
+    Context[Business context / timeline / suggest]
     Workflow[Workflow propose / approve / execute]
     RBAC[Identity mapping / application RBAC]
   end
@@ -96,11 +100,13 @@ flowchart TB
   FastAPI --> Analysis
   FastAPI --> Mailbox
   FastAPI --> Attach
+  FastAPI --> Context
   FastAPI --> Workflow
   FastAPI --> RBAC
   Analysis --> Ports
   Mailbox --> Ports
   Attach --> Ports
+  Context --> Ports
   Workflow --> Ports
   Ports --> Mock
   Ports --> Foundry
@@ -110,6 +116,7 @@ flowchart TB
   Ports --> ClamAV
   Analysis --> PG
   Attach --> PG
+  Context --> PG
   Workflow --> PG
   RBAC --> PG
   Gmail --> KV
@@ -414,6 +421,7 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Phase 17 – External ID & external user onboarding | 17A–17C CLOSED / PASS; **17D deferred** |
 | Phase 18 – Secure Attachment Intelligence | **Completed / PASS** |
 | Phase 19 – Platform Owner Identity & Application RBAC | **Completed / PASS** |
+| Phase 20 – Business Context & Matter Intelligence | **IN PROGRESS** — local hardening PASS; live multi-cloud validation pending |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 

@@ -2,9 +2,9 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Amazon ECS on Fargate in `eu-south-2`.
 
-**Status:** Prompt 7 live deployment completed. Phase 7C verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. **Phase 19 application RBAC is implemented; schema head is `19b0001`.** Cost-aware retained posture keeps ECS at `0/0/0` and RDS Stopped when idle. Historical Phase 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+**Status:** Prompt 7 live deployment completed. Phase 7C verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. **Phase 20 Business Context AWS live validation is PASS** (Alembic head `20c0001`; ECS task definition `eci-api-dev:12` / image `ed5eebc-p20g`; SPA CloudFront invalidation completed). Cost-aware idle posture may return ECS to `0/0/0` and Stop RDS when the operator requests it; post-20G resources may still be running until that instruction. Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
 
-## Current AWS posture (Phase 19 + technical validation)
+## Current AWS posture (Phase 20 live validation PASS)
 
 Application path (cloud-neutral app; AWS-specific hosting):
 
@@ -24,21 +24,60 @@ Amazon Bedrock (Claude Haiku 4.5)
 
 Region: **eu-south-2**. Supporting services include AWS Secrets Manager, ECS Task Role, and CloudWatch. Azure and AWS are **independent** deployments—no cross-cloud database replication.
 
+**Phase 20 cloud impact (executed during authorized 20G AWS live validation):**
+
+| Change | Required? | 20G result |
+|---|---|---|
+| RDS migration to `20c0001` (`20b0001` + `20c0001`) | **Yes** | **Done** (`eci-pg-dev`) |
+| Backend ECS task definition / image update | **Yes** | **Done** (`eci-api-dev:12` / `ed5eebc-p20g`) |
+| Frontend S3 + CloudFront SPA deploy | **Yes** | **Done** (invalidation Completed; S3 `--delete` denied) |
+| Live Bedrock `suggest_business_context` smoke | **Yes** (after deploy) | **PASS** (advisory-only) |
+| New AWS infrastructure | **No** | None |
+| New Secrets Manager secrets | **Likely no** (reuse `DATABASE_URL` + mailbox OAuth) | None |
+| New IAM policies | **Likely no** (Bedrock InvokeModel already on task role) | None |
+| New Entra API scopes | **No** | None |
+
 **Technical deployment validation (not Phase 17D):** frontend and backend operational; persistence during validation; application identity; first Platform Owner activation; `/api/v1/me`; owner-only `/api/v1/admin/ping`; owner deployment indicator shows AWS. External business-user verification remains deferred.
 
-**Identity reminder:** ECI application login ≠ mailbox login. Platform Owner authorization uses verified `(issuer, subject)` → external identity mapping → `users.id` → persisted `application_role`. Mailbox OAuth does not grant owner. The owner deployment indicator is presentation only.
+**Identity reminder:** ECI application login ≠ mailbox login. Platform Owner authorization uses verified `(issuer, subject)` → external identity mapping → `users.id` → persisted `application_role`. Mailbox OAuth does not grant owner. Platform Owner does **not** bypass BusinessContext ownership (ADR-029). The owner deployment indicator is presentation only.
 
-**Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires a running ECS/Fargate service and an available RDS instance. Do not keep paid development infrastructure running continuously. Retained ALB / ECR / CloudFront / S3 / logging may still incur standing cost while retained.
+**Cost-aware runtime:** development/demo resources may be stopped when not in use. Meaningful live testing requires a running ECS/Fargate service and an available RDS instance. Do not keep paid development infrastructure running continuously. Retained ALB / ECR / CloudFront / S3 / logging may still incur standing cost while retained. Prefer sequential validation after Azure (start AWS only when Azure window is complete or intentionally paused).
 
 **Manual SPA build (AWS):** from `frontend/`, use `npm run build:aws` (equivalent: `npm run build -- --mode aws`). Tracked `frontend/.env.aws` contains public presentation metadata only; auth/API values remain local, environment, or CI supplied.
 
-Schema head includes Alembic `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
+Schema head for Phase 20 validation: Alembic `20c0001`. Prior Phase 19 head was `19b0001` (`users.application_role`). First-owner bootstrap (operator only):
 
 ```bash
 python -m app.cli.promote_owner --user-id <internal-user-uuid>
 ```
 
 Do not document live internal user UUIDs, account IDs, or secrets here.
+
+### Phase 20 AWS live-validation procedure (historical checklist — executed; PASS)
+
+Do not re-run unless a later prompt re-authorizes mutation. Summary of the authorized 20G path:
+
+1. Start RDS `eci-pg-dev` (privileged Console path; `eci-developer` lacks start/stop).
+2. Set ECS service `eci-api-dev` desired count to serve traffic; ensure ALB target healthy.
+3. Build/push image to ECR; register new task definition; update service (Phase 20 APIs).
+4. Run `alembic upgrade head` against RDS (target `20c0001`). Operator one-shot; not on container boot. If app `DATABASE_URL` secret `GetSecretValue` is denied to the operator IAM user, use RDS `MasterUserSecret` as a one-shot migrate path.
+5. Build SPA with `npm run build:aws`; sync to private S3 origin; invalidate CloudFront SPA distribution.
+6. Verify API CloudFront → ALB → ECS: `/health` and `/api/v1/readiness` 200.
+7. Sign in via External ID; confirm `/api/v1/me` and owner probe if applicable.
+8. BusinessContext smoke: create/list/get/patch/archive/restore without mailbox.
+9. Manual association with owned Gmail connector provenance.
+10. Timeline smoke on owned context.
+11. AI suggestion against Amazon Bedrock; confirm advisory-only; manual associate after failure still works.
+12. Attachment regression: Gmail metadata list; explicit PDF/DOCX Analyze; XLSX gate; no context byte retrieve.
+13. Workflow regression: Propose/Approve unchanged; no Execute/Send required for Phase 20 proof.
+14. Rollback: previous ECS task definition; previous SPA bundle; avoid casual schema downgrade—prefer app rollback + forward-fix if migrate already succeeded.
+15. Return ECS to `0/0/0` and Stop RDS when the operator requests cost-aware idle posture (not automatic on docs-only closure).
+
+See [Phase 20](../../docs/roadmap/phase-20-business-context-matter-intelligence.md) and [ADR-029](../../docs/decisions/ADR-029-business-context-foundation-and-provenance-association.md).
+
+## Phase 19 retained posture note (historical schema head `19b0001`)
+
+Phase 19 application RBAC remains in force. Schema progressed to `20c0001` for Phase 20. Historical Phase 18 / 16F banners below remain historical.
 
 ## Phase 18 retained state (historical)
 

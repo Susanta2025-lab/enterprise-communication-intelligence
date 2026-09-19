@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { EciApiClient } from "../api/client";
@@ -60,14 +61,16 @@ function renderCurrentUser(options: {
   });
 
   render(
-    <AuthStub session={session}>
-      <CurrentUserProvider apiClient={apiClient}>
-        {options.includeShell ? <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell> : <Probe />}
-        <PermissionGate permission="communications:send">
-          <span data-testid="send-gate">send-allowed</span>
-        </PermissionGate>
-      </CurrentUserProvider>
-    </AuthStub>,
+    <MemoryRouter>
+      <AuthStub session={session}>
+        <CurrentUserProvider apiClient={apiClient}>
+          {options.includeShell ? <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell> : <Probe />}
+          <PermissionGate permission="communications:send">
+            <span data-testid="send-gate">send-allowed</span>
+          </PermissionGate>
+        </CurrentUserProvider>
+      </AuthStub>
+    </MemoryRouter>,
   );
 
   return { fetchImpl, apiClient };
@@ -171,36 +174,40 @@ describe("CurrentUserProvider", () => {
       fetchImpl,
     });
     const { rerender } = render(
-      <AuthStub
-        session={createAuthSession({
-          isAuthenticated: true,
-          accountKey: "home-account-1",
-          displayName: "Ada Lovelace",
-        })}
-      >
-        <CurrentUserProvider apiClient={apiClient}>
-          <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
-          <Probe />
-        </CurrentUserProvider>
-      </AuthStub>,
+      <MemoryRouter>
+        <AuthStub
+          session={createAuthSession({
+            isAuthenticated: true,
+            accountKey: "home-account-1",
+            displayName: "Ada Lovelace",
+          })}
+        >
+          <CurrentUserProvider apiClient={apiClient}>
+            <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
+            <Probe />
+          </CurrentUserProvider>
+        </AuthStub>
+      </MemoryRouter>,
     );
 
     expect(await screen.findByTestId("owner-badge")).toHaveTextContent("Platform Owner");
     await waitFor(() => expect(screen.getByTestId("me-owner")).toHaveTextContent("yes"));
 
     rerender(
-      <AuthStub
-        session={createAuthSession({
-          isAuthenticated: false,
-          accountKey: null,
-          displayName: null,
-        })}
-      >
-        <CurrentUserProvider apiClient={apiClient}>
-          <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
-          <Probe />
-        </CurrentUserProvider>
-      </AuthStub>,
+      <MemoryRouter>
+        <AuthStub
+          session={createAuthSession({
+            isAuthenticated: false,
+            accountKey: null,
+            displayName: null,
+          })}
+        >
+          <CurrentUserProvider apiClient={apiClient}>
+            <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
+            <Probe />
+          </CurrentUserProvider>
+        </AuthStub>
+      </MemoryRouter>,
     );
 
     await waitFor(() => expect(screen.getByTestId("me-status")).toHaveTextContent("anonymous"));

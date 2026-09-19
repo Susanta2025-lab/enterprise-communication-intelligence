@@ -13,6 +13,13 @@ from app.application.services.attachment_analysis_history import (
     AttachmentAnalysisHistoryService,
 )
 from app.application.services.attachment_inspection import AttachmentInspectionService
+from app.application.services.business_context_communication_links import (
+    BusinessContextCommunicationLinkService,
+)
+from app.application.services.business_context_suggestions import (
+    BusinessContextSuggestionService,
+)
+from app.application.services.business_contexts import BusinessContextService
 from app.application.services.communication_analysis import CommunicationAnalysisService
 from app.application.services.communication_analysis_workflow import (
     CommunicationAnalysisWorkflowService,
@@ -31,6 +38,7 @@ from app.application.services.connected_mailbox_listing import (
 )
 from app.application.services.connector_account_oauth import ConnectorAccountOAuthService
 from app.application.services.connector_accounts import ConnectorAccountService
+from app.application.services.context_timeline import ContextTimelineService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAuthService
@@ -843,6 +851,43 @@ def get_workflow_action_service(
 ) -> WorkflowActionService:
     """Build the workflow action service for authenticated workflow endpoints."""
     return WorkflowActionService(identity_resolver, uow_factory)
+
+
+def get_business_context_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> BusinessContextService:
+    """Build the BusinessContext service for authenticated context endpoints."""
+    return BusinessContextService(identity_resolver, uow_factory)
+
+
+def get_business_context_communication_link_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> BusinessContextCommunicationLinkService:
+    """Build the provenance-link service for authenticated association endpoints."""
+    return BusinessContextCommunicationLinkService(identity_resolver, uow_factory)
+
+
+def get_business_context_suggestion_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+    ai_provider: Annotated[AIProvider, Depends(get_ai_provider)],
+) -> BusinessContextSuggestionService:
+    """Build the non-authoritative BusinessContext suggestion service."""
+    return BusinessContextSuggestionService(
+        identity_resolver,
+        uow_factory,
+        ai_provider,
+    )
+
+
+def get_context_timeline_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> ContextTimelineService:
+    """Build the BusinessContext timeline read service."""
+    return ContextTimelineService(identity_resolver, uow_factory)
 
 
 def get_workflow_action_execution_service(

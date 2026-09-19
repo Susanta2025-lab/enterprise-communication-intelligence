@@ -22,6 +22,28 @@ import {
   type ListMailboxAttachmentsQuery,
 } from "./attachments";
 import {
+  CONTEXTS_PATH,
+  contextArchivePath,
+  contextCommunicationLinkPath,
+  contextCommunicationsPath,
+  contextPath,
+  contextRestorePath,
+  contextSuggestionsPath,
+  contextTimelinePath,
+  type AssociateCommunicationRequest,
+  type BusinessContext,
+  type BusinessContextCommunicationLink,
+  type BusinessContextCommunicationLinkListResponse,
+  type BusinessContextCreateRequest,
+  type BusinessContextListResponse,
+  type BusinessContextUpdateRequest,
+  type ContextSuggestionListResponse,
+  type ContextSuggestionRequest,
+  type ContextTimelineListResponse,
+  type ListContextsQuery,
+  type ListContextTimelineQuery,
+} from "./contexts";
+import {
   connectorAccountMessageAnalyzePath,
   connectorAccountMessagesPath,
   MAILBOX_UI_PAGE_SIZE,
@@ -236,6 +258,105 @@ export class EciApiClient {
     return this.requestJson<WorkflowActionResponse>("POST", workflowActionExecutePath(actionId));
   }
 
+  async listContexts(query: ListContextsQuery = {}): Promise<BusinessContextListResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(query.limit ?? 20));
+    params.set("offset", String(query.offset ?? 0));
+    if (query.status) {
+      params.set("status", query.status);
+    }
+    if (query.type) {
+      params.set("type", query.type);
+    }
+    if (query.reference) {
+      params.set("reference", query.reference);
+    }
+    if (query.includeArchived) {
+      params.set("include_archived", "true");
+    }
+    return this.requestJson<BusinessContextListResponse>(
+      "GET",
+      `${CONTEXTS_PATH}?${params.toString()}`,
+    );
+  }
+
+  async createContext(body: BusinessContextCreateRequest): Promise<BusinessContext> {
+    return this.requestJson<BusinessContext>("POST", CONTEXTS_PATH, body);
+  }
+
+  async getContext(contextId: string): Promise<BusinessContext> {
+    return this.requestJson<BusinessContext>("GET", contextPath(contextId));
+  }
+
+  async updateContext(
+    contextId: string,
+    body: BusinessContextUpdateRequest,
+  ): Promise<BusinessContext> {
+    return this.requestJson<BusinessContext>("PATCH", contextPath(contextId), body);
+  }
+
+  async archiveContext(contextId: string): Promise<BusinessContext> {
+    return this.requestJson<BusinessContext>("POST", contextArchivePath(contextId));
+  }
+
+  async restoreContext(contextId: string): Promise<BusinessContext> {
+    return this.requestJson<BusinessContext>("POST", contextRestorePath(contextId));
+  }
+
+  async listContextCommunications(
+    contextId: string,
+    query: { limit?: number; offset?: number } = {},
+  ): Promise<BusinessContextCommunicationLinkListResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(query.limit ?? 20));
+    params.set("offset", String(query.offset ?? 0));
+    return this.requestJson<BusinessContextCommunicationLinkListResponse>(
+      "GET",
+      `${contextCommunicationsPath(contextId)}?${params.toString()}`,
+    );
+  }
+
+  async associateContextCommunication(
+    contextId: string,
+    body: AssociateCommunicationRequest,
+  ): Promise<BusinessContextCommunicationLink> {
+    return this.requestJson<BusinessContextCommunicationLink>(
+      "POST",
+      contextCommunicationsPath(contextId),
+      body,
+    );
+  }
+
+  async suggestContextAssociations(
+    body: ContextSuggestionRequest,
+  ): Promise<ContextSuggestionListResponse> {
+    return this.requestJson<ContextSuggestionListResponse>(
+      "POST",
+      contextSuggestionsPath(),
+      body,
+    );
+  }
+
+  async removeContextCommunication(contextId: string, linkId: string): Promise<void> {
+    await this.requestJson<undefined>(
+      "DELETE",
+      contextCommunicationLinkPath(contextId, linkId),
+    );
+  }
+
+  async getContextTimeline(
+    contextId: string,
+    query: ListContextTimelineQuery = {},
+  ): Promise<ContextTimelineListResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(query.limit ?? 20));
+    params.set("offset", String(query.offset ?? 0));
+    return this.requestJson<ContextTimelineListResponse>(
+      "GET",
+      `${contextTimelinePath(contextId)}?${params.toString()}`,
+    );
+  }
+
   private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
     let token: string;
     try {
@@ -272,7 +393,14 @@ export class EciApiClient {
       );
     }
 
-    return (await response.json()) as T;
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
   }
 }
 

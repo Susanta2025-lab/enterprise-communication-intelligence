@@ -62,6 +62,8 @@ def test_primary_keys(postgres_engine: Engine) -> None:
         "workflow_actions",
         "mailbox_authorization_sessions",
         "attachment_analyses",
+        "business_contexts",
+        "business_context_communication_links",
     ):
         pk = inspector.get_pk_constraint(table)
         assert pk["constrained_columns"] == ["id"]
@@ -131,6 +133,37 @@ def test_foreign_keys_cascade_to_users(postgres_engine: Engine) -> None:
     assert all(fk["referred_table"] != "analyses" for fk in attachment_fks)
     assert all(fk["referred_table"] != "workflow_actions" for fk in attachment_fks)
     assert all(fk["referred_table"] != "attachment_analyses" for fk in workflow_fks)
+    context_fks = inspector.get_foreign_keys("business_contexts")
+    context_user_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in context_fks
+    )
+    assert context_user_ok
+    assert all(fk["referred_table"] != "analyses" for fk in context_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in context_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in context_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in context_fks)
+    link_fks = inspector.get_foreign_keys("business_context_communication_links")
+    link_user_ok = any(
+        fk["referred_table"] == "users"
+        and fk["constrained_columns"] == ["user_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in link_fks
+    )
+    link_context_ok = any(
+        fk["referred_table"] == "business_contexts"
+        and fk["constrained_columns"] == ["business_context_id"]
+        and str((fk.get("options") or {}).get("ondelete", "")).upper() == "CASCADE"
+        for fk in link_fks
+    )
+    assert link_user_ok
+    assert link_context_ok
+    assert all(fk["referred_table"] != "analyses" for fk in link_fks)
+    assert all(fk["referred_table"] != "connector_accounts" for fk in link_fks)
+    assert all(fk["referred_table"] != "workflow_actions" for fk in link_fks)
+    assert all(fk["referred_table"] != "attachment_analyses" for fk in link_fks)
 
 
 def test_external_identity_unique_constraint_named(postgres_engine: Engine) -> None:
@@ -158,6 +191,17 @@ def test_expected_indexes(postgres_engine: Engine) -> None:
     attachment_indexes = {index["name"] for index in inspector.get_indexes("attachment_analyses")}
     assert "ix_attachment_analyses_user_id_created_at_id" in attachment_indexes
     assert "ix_attachment_analyses_user_connector_message" in attachment_indexes
+    context_indexes = {index["name"] for index in inspector.get_indexes("business_contexts")}
+    assert "ix_business_contexts_user_id_created_at_id" in context_indexes
+    assert "ix_business_contexts_user_id_status_updated_at" in context_indexes
+    link_indexes = {
+        index["name"]
+        for index in inspector.get_indexes("business_context_communication_links")
+    }
+    assert (
+        "ix_bcc_links_context_associated_at_id" in link_indexes
+    )
+    assert "ix_bcc_links_user_connector_message" in link_indexes
 
 
 def test_nullability(postgres_engine: Engine) -> None:
@@ -249,6 +293,17 @@ def test_schema_excludes_sensitive_columns(postgres_engine: Engine) -> None:
             assert "extracted_text" not in columns
             assert "draft_reply" not in columns
             assert "raw_bytes" not in columns
+        if table == "business_contexts":
+            assert "parent_context_id" not in columns
+            assert "organization_id" not in columns
+            assert "tenant_id" not in columns
+            assert "access_token" not in columns
+            assert "clio_matter_id" not in columns
+        if table == "business_context_communication_links":
+            assert "subject" not in columns
+            assert "summary_text" not in columns
+            assert "body" not in columns
+            assert "access_token" not in columns
 
 
 def test_python_uuid_round_trip_types(postgres_engine: Engine) -> None:

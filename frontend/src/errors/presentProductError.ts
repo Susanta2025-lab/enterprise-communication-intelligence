@@ -19,7 +19,15 @@ export type ProductOperation =
   | "review"
   | "execute"
   | "workflow_refresh"
-  | "api_smoke";
+  | "api_smoke"
+  | "context_list"
+  | "context_get"
+  | "context_mutate"
+  | "context_associate"
+  | "context_communications"
+  | "context_disassociate"
+  | "context_suggest"
+  | "context_timeline";
 
 export type ProductErrorPresentation = {
   message: string;
@@ -89,6 +97,22 @@ export function presentProductError(
       return presentWorkflowRefreshError(status);
     case "api_smoke":
       return presentApiSmokeError(status);
+    case "context_list":
+      return presentContextListError(status);
+    case "context_get":
+      return presentContextGetError(status);
+    case "context_mutate":
+      return presentContextMutateError(status);
+    case "context_associate":
+      return presentContextAssociateError(status);
+    case "context_communications":
+      return presentContextCommunicationsError(status);
+    case "context_disassociate":
+      return presentContextDisassociateError(status);
+    case "context_suggest":
+      return presentContextSuggestError(status);
+    case "context_timeline":
+      return presentContextTimelineError(status);
   }
 }
 
@@ -495,6 +519,222 @@ function presentApiSmokeError(status: number | null): ProductErrorPresentation {
   }
   return presentation({
     message: "Protected API connectivity could not be verified.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextListError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Viewing contexts requires the communications:analyze permission.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Contexts are temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "Contexts could not be loaded.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextGetError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Opening a context requires the communications:analyze permission.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That context is unavailable.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "This context is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The context could not be loaded.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+    showDashboardLink: true,
+  });
+}
+
+function presentContextMutateError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Managing contexts requires the communications:analyze permission.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That context is unavailable.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 409) {
+    return presentation({
+      message: "This context cannot be updated in its current state.",
+      retryLabel: REFRESH_LABEL,
+    });
+  }
+  if (status === 422) {
+    return presentation({
+      message: "Check the context fields and try again.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Context changes are temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The context could not be updated.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextAssociateError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message:
+        "Associating a communication requires communications:read and communications:analyze.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That context or mailbox connection is unavailable.",
+    });
+  }
+  if (status === 409) {
+    return presentation({
+      message:
+        "This communication is already associated with the context, or the context is archived.",
+    });
+  }
+  if (status === 422) {
+    return presentation({
+      message: "The association request could not be validated.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Association is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The communication could not be associated.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextCommunicationsError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message:
+        "Listing associations requires communications:read and communications:analyze.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That context is unavailable.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Linked communications are temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "Linked communications could not be loaded.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextDisassociateError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message:
+        "Removing an association requires communications:read and communications:analyze.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That association or context is unavailable.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Removing the association is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The association could not be removed.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextSuggestError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message:
+        "Requesting context suggestions requires communications:read and communications:analyze.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That analysis or mailbox connection is unavailable for suggestions.",
+    });
+  }
+  if (status === 422) {
+    return presentation({
+      message: "The suggestion request could not be validated.",
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "Context suggestions are temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "AI context suggestions could not be loaded. You can still associate manually.",
+    retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
+  });
+}
+
+function presentContextTimelineError(status: number | null): ProductErrorPresentation {
+  if (status === 403) {
+    return presentation({
+      message: "Viewing the timeline requires the communications:analyze permission.",
+    });
+  }
+  if (status === 404) {
+    return presentation({
+      message: "That context is unavailable.",
+      showDashboardLink: true,
+    });
+  }
+  if (status === 503) {
+    return presentation({
+      message: "The timeline is temporarily unavailable.",
+      retryLabel: TRY_AGAIN_LABEL,
+    });
+  }
+  return presentation({
+    message: "The timeline could not be loaded.",
     retryLabel: status === 500 || status === null ? TRY_AGAIN_LABEL : null,
   });
 }

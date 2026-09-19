@@ -227,3 +227,39 @@ class OwnerBootstrapConflictError(ECIPlatformError):
 
     def __init__(self) -> None:
         super().__init__("Owner bootstrap could not update application role.")
+
+
+class BusinessContextNotFoundError(ECIPlatformError):
+    """Raised when a business context is unknown or not owned by the caller."""
+
+    def __init__(self) -> None:
+        super().__init__("Business context not found.")
+
+
+class BusinessContextConflictError(ECIPlatformError):
+    """Raised when a business context cannot be updated in its current state.
+
+    Covers mutations against archived contexts. The public message does not
+    distinguish transition details.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Business context cannot be updated.")
+
+
+class BusinessContextCommunicationLinkNotFoundError(ECIPlatformError):
+    """Raised when a provenance link is unknown or not owned by the caller."""
+
+    def __init__(self) -> None:
+        super().__init__("Business context communication link not found.")
+
+
+class BusinessContextCommunicationLinkConflictError(ECIPlatformError):
+    """Raised when a provenance association conflicts with current state.
+
+    Covers duplicate provenance triples and new associations on archived
+    contexts. The public message does not distinguish those cases.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Business context communication link cannot be created.")

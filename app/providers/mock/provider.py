@@ -1,10 +1,11 @@
 """Deterministic mock AI provider for local development and tests."""
 
 import time
+from uuid import UUID
 
 from app.core.logging import get_logger
 from app.core.telemetry import elapsed_ms, error_class
-from app.domain.enums import MessageCategory, PriorityLevel
+from app.domain.enums import ContextMatchStrength, MessageCategory, PriorityLevel
 from app.domain.exceptions import AttachmentImageInputUnsupportedError
 from app.domain.interfaces import AIProvider
 from app.domain.models import (
@@ -16,6 +17,11 @@ from app.domain.models import (
     Summary,
 )
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
+from app.domain.schemas.context_suggestion import (
+    BusinessContextSuggestionItem,
+    BusinessContextSuggestionRequest,
+    BusinessContextSuggestionResult,
+)
 
 logger = get_logger(__name__)
 
@@ -35,6 +41,7 @@ _APPROVAL_KEYWORDS = ("approve", "approval", "sign off")
 _INCIDENT_KEYWORDS = ("outage", "incident", "breach", "down")
 _INQUIRY_KEYWORDS = ("could you", "can you", "how do", "what is", "?")
 _REQUEST_KEYWORDS = ("please", "need you to", "kindly", "request")
+_MAX_SUGGESTIONS = 3
 
 
 class MockAIProvider(AIProvider):
@@ -42,8 +49,16 @@ class MockAIProvider(AIProvider):
 
     PROVIDER_NAME = "mock"
 
-    def __init__(self, *, supports_image_input: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        supports_image_input: bool = False,
+        suggestion_result: BusinessContextSuggestionResult | None = None,
+        suggestion_error: Exception | None = None,
+    ) -> None:
         self._supports_image_input = supports_image_input
+        self._suggestion_result = suggestion_result
+        self._suggestion_error = suggestion_error
 
     def supports_image_input(self) -> bool:
         """Return the explicit mock image-capability flag. Default is off."""
@@ -78,6 +93,46 @@ class MockAIProvider(AIProvider):
         )
         return result
 
+    def suggest_business_context(
+        self,
+        request: BusinessContextSuggestionRequest,
+    ) -> BusinessContextSuggestionResult:
+        """Suggest BusinessContext candidates using deterministic heuristics."""
+        logger.info(
+            "mock_context_suggestion_requested",
+            provider=self.PROVIDER_NAME,
+            operation="suggest_business_context",
+            candidate_count=len(request.candidates),
+        )
+        started_at = time.perf_counter()
+
+        try:
+            if self._suggestion_error is not None:
+                raise self._suggestion_error
+            if self._suggestion_result is not None:
+                result = self._suggestion_result.model_copy(deep=True)
+                result.provider = self.PROVIDER_NAME
+            else:
+                result = self._suggest(request)
+        except Exception as exc:
+            logger.error(
+                "mock_context_suggestion_failed",
+                provider=self.PROVIDER_NAME,
+                operation="suggest_business_context",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "mock_context_suggestion_completed",
+            provider=self.PROVIDER_NAME,
+            operation="suggest_business_context",
+            duration_ms=elapsed_ms(started_at),
+            suggestion_count=len(result.suggestions),
+        )
+        return result
+
     def _analyze(self, request: CommunicationRequest) -> CommunicationAnalysisResult:
         """Run the deterministic keyword analysis without telemetry."""
         if request.attachment_images and not self._supports_image_input:
@@ -108,6 +163,96 @@ class MockAIProvider(AIProvider):
             analysis=analysis,
             provider=self.PROVIDER_NAME,
         )
+
+    def _suggest(
+        self,
+        request: BusinessContextSuggestionRequest,
+    ) -> BusinessContextSuggestionResult:
+        """Match candidates against analysis evidence with simple token overlap."""
+        if not request.candidates:
+            return BusinessContextSuggestionResult(
+                suggestions=[],
+                no_match_reason="No active contexts were available to compare.",
+                provider=self.PROVIDER_NAME,
+            )
+
+        evidence_tokens = _tokenize(
+            " ".join(
+                [
+                    request.evidence.summary_text,
+                    request.evidence.category,
+                    request.evidence.priority,
+                    *request.evidence.action_item_descriptions,
+                ]
+            )
+        )
+        scored: list[tuple[int, UUID, ContextMatchStrength, str]] = []
+        for candidate in request.candidates:
+            candidate_text = " ".join(
+                part
+                for part in (
+                    candidate.title,
+                    candidate.reference or "",
+                    candidate.description or "",
+                    candidate.type.value,
+                )
+                if part
+            )
+            candidate_tokens = _tokenize(candidate_text)
+            overlap = len(evidence_tokens & candidate_tokens)
+            if overlap <= 0:
+                continue
+            if overlap >= 3:
+                strength = ContextMatchStrength.HIGH
+            elif overlap == 2:
+                strength = ContextMatchStrength.MEDIUM
+            else:
+                strength = ContextMatchStrength.LOW
+            scored.append(
+                (
+                    overlap,
+                    candidate.business_context_id,
+                    strength,
+                    "Matched tokens from title/reference against analysis evidence.",
+                )
+            )
+
+        scored.sort(key=lambda item: (-item[0], str(item[1])))
+        suggestions = [
+            BusinessContextSuggestionItem(
+                business_context_id=context_id,
+                match_strength=strength,
+                rationale=rationale,
+            )
+            for _score, context_id, strength, rationale in scored[:_MAX_SUGGESTIONS]
+        ]
+        if not suggestions:
+            return BusinessContextSuggestionResult(
+                suggestions=[],
+                no_match_reason="No suitable active context matched the analysis.",
+                provider=self.PROVIDER_NAME,
+            )
+        return BusinessContextSuggestionResult(
+            suggestions=suggestions,
+            no_match_reason=None,
+            provider=self.PROVIDER_NAME,
+        )
+
+
+def _tokenize(text: str) -> set[str]:
+    """Return lowercase alphanumeric tokens of length >= 3."""
+    tokens: set[str] = set()
+    current: list[str] = []
+    for char in text.lower():
+        if char.isalnum():
+            current.append(char)
+            continue
+        if len(current) >= 3:
+            tokens.add("".join(current))
+        current = []
+    if len(current) >= 3:
+        tokens.add("".join(current))
+    return tokens
 
 
 def _combined_text(request: CommunicationRequest) -> str:

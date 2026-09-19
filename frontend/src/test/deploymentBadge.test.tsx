@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { EciApiClient } from "../api/client";
@@ -36,17 +37,19 @@ function renderOwnerShell(deployment: typeof TEST_AZURE_DEPLOYMENT | typeof TEST
   });
 
   render(
-    <AuthStub
-      session={createAuthSession({
-        isAuthenticated: true,
-        accountKey: "home-account-owner",
-        displayName: "Ada Lovelace",
-      })}
-    >
-      <CurrentUserProvider apiClient={apiClient}>
-        <AppShell deployment={deployment}>content</AppShell>
-      </CurrentUserProvider>
-    </AuthStub>,
+    <MemoryRouter>
+      <AuthStub
+        session={createAuthSession({
+          isAuthenticated: true,
+          accountKey: "home-account-owner",
+          displayName: "Ada Lovelace",
+        })}
+      >
+        <CurrentUserProvider apiClient={apiClient}>
+          <AppShell deployment={deployment}>content</AppShell>
+        </CurrentUserProvider>
+      </AuthStub>
+    </MemoryRouter>,
   );
 }
 
@@ -154,17 +157,19 @@ describe("owner shell deployment indicator", () => {
     });
 
     render(
-      <AuthStub
-        session={createAuthSession({
-          isAuthenticated: true,
-          accountKey: "home-account-1",
-          displayName: "Ada Lovelace",
-        })}
-      >
-        <CurrentUserProvider apiClient={apiClient}>
-          <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
-        </CurrentUserProvider>
-      </AuthStub>,
+      <MemoryRouter>
+        <AuthStub
+          session={createAuthSession({
+            isAuthenticated: true,
+            accountKey: "home-account-1",
+            displayName: "Ada Lovelace",
+          })}
+        >
+          <CurrentUserProvider apiClient={apiClient}>
+            <AppShell deployment={TEST_AZURE_DEPLOYMENT}>content</AppShell>
+          </CurrentUserProvider>
+        </AuthStub>
+      </MemoryRouter>,
     );
 
     expect(await screen.findByTestId("signed-in-account")).toHaveTextContent("Ada Lovelace");

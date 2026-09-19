@@ -1,6 +1,6 @@
 # Endpoints
 
-All HTTP endpoints implemented in the repository as of completed Phase 16F-A2. Phase 10 added **no** connector message-ingestion HTTP endpoints. There is no `/api/v1/connectors` route. Phase 13 adds mailbox OAuth lifecycle HTTP (authorize, callback, disconnect, reauthorize). Phase 14 adds bounded mailbox listing and selected-message analyze. Phase 15 consumes these endpoints from the browser SPA but adds no new HTTP routes. Phase 16F-A2 adds connect-another authorize starts and optional `display_identity` on the owned connector list. There is no mailbox sync, search, attachment, bulk, webhook, or worker route.
+All HTTP endpoints implemented in the repository as of **Phase 20F — AI-Assisted Context Suggestions** (Phase 20G local hardening in progress; live multi-cloud validation pending). Earlier intro framing through Phase 16F-A2 remains historically accurate for mailbox OAuth/list routes below; Phase 20D adds `/api/v1/contexts` BusinessContext CRUD/lifecycle and provenance association; Phase 20E adds the ownership-scoped timeline read model; Phase 20F adds advisory `POST /api/v1/contexts/suggestions`.
 
 ## `GET /health`
 
@@ -493,3 +493,145 @@ Served in Phase 14C.
 - **Not returned:** raw message body, `credential_ref`, tokens, or provider OAuth metadata
 - **Status codes:** `401` unauthenticated; `403` missing read or analyze; `404` unknown/not-owned account or unknown provider message; `409` owned account not currently usable, including after confirmed permanent refresh failure that persisted `REAUTH_REQUIRED`; `422` invalid body; `500` unexpected normalization/internal failure; `503` transient credential/provider unavailability. Repeated analyze requests for the same message may create separate analyses.
 - **Behavior:** ownership and mailbox usability are established before credential I/O, mailbox HTTP, or AI. Confirmed permanent OAuth refresh failure marks the exact owned `ACTIVE` account `REAUTH_REQUIRED` without deleting the credential, clearing grants, or disconnecting. AI and history run only after a normalized `CommunicationMessage` exists. Draft replies remain suggestions. No workflow action is created and no send/reply occurs.
+
+---
+
+## Phase 20D — BusinessContext APIs
+
+Phase 20D exposes user-owned BusinessContext CRUD/lifecycle and communication provenance association. There is still **no** durable `communications` table. Phase 20E adds the timeline read-model endpoint. Phase 20F adds advisory AI context suggestions. Context APIs never retrieve mailbox bodies or attachment bytes. Suggestion invokes the configured `AIProvider` only; it never creates associations.
+
+Ownership is always bound from the authenticated principal via `(issuer, subject)` → `users.id`. Clients cannot supply `user_id` / `owner_user_id`. Platform Owner (`application_role=owner`) does **not** bypass object ownership. Unknown and cross-user resources return `404` (not `403`).
+
+### `POST /api/v1/contexts`
+
+**Purpose:** Create an active BusinessContext owned by the authenticated caller. Mailbox connection is not required.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/contexts`
+- **Request body:** `BusinessContextCreateRequest` — `type`, `title`, optional `description`, optional `reference`
+- **Authentication:** always required. Permission `communications:analyze`.
+- **Response model:** `BusinessContextResponse` (`id`, `type`, `title`, `description`, `reference`, `status`, `archived_at`, `created_at`, `updated_at`). Does not expose `user_id`.
+- **Status codes:** `201` created; `401` / `403`; `422` invalid body; `503` persistence unavailable
+
+Default lifecycle: `status=active`, `archived_at=null`.
+
+### `GET /api/v1/contexts`
+
+**Purpose:** List BusinessContexts owned by the authenticated caller.
+
+- **Authentication:** `communications:analyze`
+- **Query:** `limit` (1–100, default 20), `offset` (≥0), `status` (default `active`), `type`, `reference`, `include_archived` (when `true`, returns every lifecycle state)
+- **Response model:** `BusinessContextListResponse` (`items`, `limit`, `offset`)
+- **Status codes:** `200` (empty page when the caller has no identity mapping); `401` / `403`; `503`
+
+### `GET /api/v1/contexts/{context_id}`
+
+**Purpose:** Retrieve one owned BusinessContext.
+
+- **Authentication:** `communications:analyze`
+- **Status codes:** `200`; `401` / `403`; `404` unknown or not owned; `503`
+
+### `PATCH /api/v1/contexts/{context_id}`
+
+**Purpose:** Partially update mutable fields (`type`, `title`, `description`, `reference`) on an owned **active** context. Explicit `null` clears optional fields. Ownership and lifecycle fields are rejected (`422`).
+
+- **Authentication:** `communications:analyze`
+- **Status codes:** `200`; `401` / `403`; `404`; `409` archived / not mutable; `422`; `503`
+
+### `POST /api/v1/contexts/{context_id}/archive`
+
+**Purpose:** Archive an owned context (`active` → `archived`). Idempotent when already archived. Does not delete links, analyses, workflows, connectors, or provider mail.
+
+- **Authentication:** `communications:analyze`
+- **Status codes:** `200`; `401` / `403`; `404`; `503`
+
+### `POST /api/v1/contexts/{context_id}/restore`
+
+**Purpose:** Restore an owned context (`archived` → `active`). Idempotent when already active.
+
+- **Authentication:** `communications:analyze`
+- **Status codes:** `200`; `401` / `403`; `404`; `503`
+
+Hard delete (`DELETE /api/v1/contexts/{context_id}`) is **not** exposed.
+
+### `POST /api/v1/contexts/{context_id}/communications`
+
+**Purpose:** Create a manual provenance association to a provider-backed message using owned `(connector_account_id, provider_message_id)`. Optional `analysis_id` must be owned and match the same provenance.
+
+- **Authentication:** `communications:read` **and** `communications:analyze` (no `communications:context` scope)
+- **Request body:** `BusinessContextCommunicationAssociateRequest`
+- **Response model:** `BusinessContextCommunicationLinkResponse`
+- **Status codes:**
+  - `201` created
+  - `401` / `403`
+  - `404` unknown/not-owned context, connector, or analysis
+  - `409` duplicate association or archived context
+  - `422` / `503`
+- **Behavior:** Does not call Gmail/Graph, retrieve attachments, scan, parse, or invoke AI. Connector usability is not required for association.
+
+### `GET /api/v1/contexts/{context_id}/communications`
+
+**Purpose:** List durable provenance-link metadata for an owned context (including archived). Does not fetch mailbox content.
+
+- **Authentication:** `communications:read` and `communications:analyze`
+- **Query:** `limit` / `offset`
+- **Response model:** `BusinessContextCommunicationLinkListResponse`
+- **Status codes:** `200`; `401` / `403`; `404`; `503`
+
+### `DELETE /api/v1/contexts/{context_id}/communications/{link_id}`
+
+**Purpose:** Remove only the association row (allowed for archived contexts). Uses durable link UUID, not provider message id in the path.
+
+- **Authentication:** `communications:read` and `communications:analyze`
+- **Status codes:** `204`; `401` / `403`; `404`; `503`
+
+---
+
+## Phase 20E — Context timeline read model
+
+### `GET /api/v1/contexts/{context_id}/timeline`
+
+**Purpose:** Return a bounded, ownership-scoped **read model** assembled from durable BusinessContext, communication-link, analysis, attachment-analysis, and workflow records. Not an event store; no timeline table.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/contexts/{context_id}/timeline`
+- **Authentication:** always required. Permission `communications:analyze`. Mailbox connection is not required.
+- **Query:** `limit` (1–100, default 20), `offset` (≥0)
+- **Response model:** `ContextTimelineListResponse` (`items`, `limit`, `offset`)
+- **Item fields:** `id` (deterministic projection id), `type`, `occurred_at`, `title`, optional `summary`, optional `source_type` / `source_id`, optional `connector_account_id` / `provider_message_id`
+- **Event types (when reconstructible):** `context_created`, `context_archived` (current archive state only), `communication_associated`, `analysis_completed`, `attachment_analysis_completed`, `workflow_proposed`, `workflow_approved`, `workflow_rejected`, `workflow_executed`, `workflow_failed`
+- **Ordering:** `occurred_at` descending, then `id` ascending
+- **Status codes:** `200`; `401` / `403`; `404` unknown or not owned; `503`
+- **Behavior:** Does not call Gmail/Graph, retrieve attachments, scan, parse, or invoke AI. Platform Owner does not bypass ownership. Disassociation and restore transitions are not fabricated after they clear durable markers.
+
+**Limitations:** Archive/restore history is incomplete when `archived_at` is cleared on restore. Direct-text analyses and workflows without execution-target provenance are omitted.
+
+---
+
+## Phase 20F — AI-assisted context suggestions
+
+### `POST /api/v1/contexts/suggestions`
+
+**Purpose:** Return non-authoritative BusinessContext suggestions for an owned communication analysis. Human confirmation uses the existing associate API (`association_source=manual`). Suggestions are never persisted and never create links.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/contexts/suggestions`
+- **Authentication:** always required. Permissions `communications:read` **and** `communications:analyze`.
+- **Request body:** `BusinessContextSuggestionRequestBody` — `connector_account_id`, `provider_message_id`, `analysis_id`
+- **Response model:** `BusinessContextSuggestionListResponse` — `suggestions` (≤3), optional `no_match_reason`, optional `provider`
+- **Suggestion item fields:** `business_context_id`, `type`, `title`, optional `reference`, `match_strength` (`high` \| `medium` \| `low`), `rationale`
+- **Status codes:**
+  - `200` suggestions or empty match
+  - `401` / `403`
+  - `404` unknown/not-owned analysis or connector, or provenance mismatch
+  - `422` invalid body
+  - `500` unexpected AI normalization failure (mapped safely)
+  - `503` persistence or provider unavailability
+- **Behavior:**
+  - Candidates are owned **active** contexts only (max 50)
+  - Model-returned IDs are revalidated; hallucinated / foreign / archived IDs are discarded
+  - Does not call Gmail/Graph, retrieve attachments, scan, parse mailbox content, approve, execute, or send
+  - Platform Owner does not bypass ownership
+  - AI failure does not prevent subsequent manual association
+
+**Non-goals:** Autonomous assignment; `ai_confirmed` association source; suggestion persistence table; tool calling.

@@ -17,6 +17,7 @@ import { MessageAnalysisSection } from "../components/mailbox/MessageAnalysisSec
 import { WorkflowReviewPanel } from "../components/mailbox/WorkflowReviewPanel";
 import { MessageList } from "../components/mailbox/MessageList";
 import { SelectedMessagePanel } from "../components/mailbox/SelectedMessagePanel";
+import { AddToContextPanel } from "../components/contexts/AddToContextPanel";
 import { LoadingSkeleton } from "../components/connectors/LoadingSkeleton";
 import { ProductErrorState } from "../components/feedback/ProductErrorState";
 import { providerLabel } from "../components/connectors/copy";
@@ -308,6 +309,12 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
             >
               {selected ? (
                 <>
+                  <AddToContextPanel
+                    apiClient={apiClient}
+                    connectorAccountId={connectorAccountId ?? ""}
+                    providerMessageId={selected.provider_message_id}
+                    analysisId={analysis.result?.analysis_id ?? null}
+                  />
                   <AttachmentsSection
                     canAnalyze={canAnalyze}
                     imageAnalysisAvailable={imageAnalysisAvailable}

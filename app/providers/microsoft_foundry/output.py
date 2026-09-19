@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.providers.common.output import AnalysisOutput
+from app.providers.common.suggestion_output import ContextSuggestionOutput
 
 _UNSUPPORTED_SCHEMA_KEYS = (
     "title",
@@ -56,3 +57,6 @@ def _make_schema_strict(schema: dict[str, Any]) -> None:
 
 
 FOUNDRY_ANALYSIS_JSON_SCHEMA = build_strict_json_schema(AnalysisOutput)
+FOUNDRY_CONTEXT_SUGGESTION_JSON_SCHEMA = build_strict_json_schema(
+    ContextSuggestionOutput
+)

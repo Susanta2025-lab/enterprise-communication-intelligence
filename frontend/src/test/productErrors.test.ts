@@ -118,6 +118,26 @@ describe("presentProductError", () => {
     }
   });
 
+  it("maps context association, communications list, and disassociate errors distinctly", () => {
+    expect(presentProductError("context_associate", apiError(403)).message).toContain(
+      "Associating a communication",
+    );
+    expect(presentProductError("context_communications", apiError(403)).message).toContain(
+      "Listing associations",
+    );
+    expect(presentProductError("context_disassociate", apiError(403)).message).toContain(
+      "Removing an association",
+    );
+    expect(presentProductError("context_communications", apiError(404)).message).toBe(
+      "That context is unavailable.",
+    );
+    expect(presentProductError("context_disassociate", apiError(404)).message).toBe(
+      "That association or context is unavailable.",
+    );
+    expect(presentProductError("context_suggest", apiError(503)).retryLabel).toBe(TRY_AGAIN_LABEL);
+    expect(presentProductError("context_get", apiError(404)).showDashboardLink).toBe(true);
+  });
+
   it("uses stable action labels", () => {
     expect(SIGN_IN_LABEL).toBe("Sign in");
     expect(TRY_AGAIN_LABEL).toBe("Try again");

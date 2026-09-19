@@ -11,6 +11,22 @@ class InvalidWorkflowTransitionError(Exception):
         super().__init__(self.message)
 
 
+class InvalidBusinessContextTransitionError(Exception):
+    """Raised when a business context cannot move to the requested status."""
+
+    def __init__(self) -> None:
+        self.message = "Invalid business context state transition."
+        super().__init__(self.message)
+
+
+class BusinessContextNotMutableError(Exception):
+    """Raised when a mutation is attempted on a non-active business context."""
+
+    def __init__(self) -> None:
+        self.message = "Business context is not mutable in the current state."
+        super().__init__(self.message)
+
+
 class AttachmentUnsupportedError(Exception):
     """Raised when type, MIME, extension, or signature policy rejects an attachment."""
 
@@ -84,5 +100,16 @@ class AttachmentImageInputUnsupportedError(Exception):
     """Raised when image input is requested but the provider cannot accept it."""
 
     def __init__(self, message: str = "Image analysis is not available.") -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
+class BusinessContextSuggestionUnsupportedError(Exception):
+    """Raised when an AI provider does not implement context suggestion."""
+
+    def __init__(
+        self,
+        message: str = "Business context suggestion is not available.",
+    ) -> None:
         self.message = message
         super().__init__(self.message)
