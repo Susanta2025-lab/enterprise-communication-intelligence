@@ -24,6 +24,7 @@ This directory documents the planned implementation phases for ECI Platform.
 - [Phase 18 – Secure Attachment Intelligence](phase-18-secure-attachment-intelligence.md)
 - [Phase 19 – Platform Owner Identity & Application RBAC](phase-19-platform-owner-identity-and-application-rbac.md)
 - [Phase 20 – Business Context & Matter Intelligence](phase-20-business-context-matter-intelligence.md)
+- [Phase 21 – XLSX / Tabular Intelligence](phase-21-xlsx-tabular-intelligence.md)
 
 ## Status
 
@@ -49,6 +50,7 @@ This directory documents the planned implementation phases for ECI Platform.
 | Phase 18 – Secure Attachment Intelligence | **CLOSED / PASS** |
 | Phase 19 – Platform Owner Identity & Application RBAC | **CLOSED / PASS** (19A–19F); follow-up technical owner activation validated on AWS/Azure (not Phase 17D) |
 | Phase 20 – Business Context & Matter Intelligence | **CLOSED / PASS** (20A–20G; Azure + AWS live validation PASS; Alembic head `20c0001`) |
+| Phase 21 – XLSX / Tabular Intelligence | **CLOSED — 21A–21G PASS**; Azure/AWS manual live validation complete; evidence limits in the [Phase 21G report](../codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations) |
 
 Phase 9A — Persistence Foundation is completed. Phase 9B — User Ownership & Analysis History is completed. Phase 9C — PostgreSQL Integration & CI is completed (GitHub run `32336909759`; 34 PostgreSQL tests; Alembic round-trip). Phase 9D — Cloud Strategy & Final Documentation is completed.
 

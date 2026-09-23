@@ -54,6 +54,7 @@ def test_alembic_revision_graph_is_valid() -> None:
         "19b0001",
         "20b0001",
         "20c0001",
+        "21d0001",
     }
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
@@ -65,8 +66,9 @@ def test_alembic_revision_graph_is_valid() -> None:
     assert revisions["19b0001"].down_revision == "18d0001"
     assert revisions["20b0001"].down_revision == "19b0001"
     assert revisions["20c0001"].down_revision == "20b0001"
-    assert script.get_heads() == ["20c0001"]
-    assert script.get_current_head() == "20c0001"
+    assert revisions["21d0001"].down_revision == "20c0001"
+    assert script.get_heads() == ["21d0001"]
+    assert script.get_current_head() == "21d0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:

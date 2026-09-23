@@ -155,6 +155,36 @@ def test_docm_is_rejected() -> None:
         )
 
 
+def test_spreadsheet_legacy_and_delimited_formats_rejected() -> None:
+    for filename, media_type in (
+        ("legacy.xls", "application/vnd.ms-excel"),
+        (
+            "macro.xlsm",
+            "application/vnd.ms-excel.sheet.macroEnabled.12",
+        ),
+        (
+            "binary.xlsb",
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+        ),
+        ("rows.csv", "text/csv"),
+        ("rows.tsv", "text/tab-separated-values"),
+    ):
+        with pytest.raises(AttachmentUnsupportedError):
+            evaluate_attachment_metadata(
+                _metadata(filename=filename, media_type=media_type, reported_size=64)
+            )
+
+
+def test_xlsx_metadata_is_supported_in_phase21d() -> None:
+    assert evaluate_attachment_metadata(
+        _metadata(
+            filename="budget.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            reported_size=2048,
+        )
+    ) is AttachmentKind.XLSX
+
+
 def test_docx_with_vba_project_fails() -> None:
     payload = _docx_bytes(include_vba=True)
     metadata = _metadata(

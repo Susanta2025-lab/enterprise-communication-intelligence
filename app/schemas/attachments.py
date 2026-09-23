@@ -13,6 +13,7 @@ from app.domain.enums import (
 )
 from app.domain.interfaces.attachment_analysis_repository import AttachmentAnalysisRecord
 from app.domain.models import ActionItem, Priority, Summary
+from app.domain.models.tabular_analysis import TabularAnalysisResult
 from app.domain.models.validation import require_non_empty_text
 
 
@@ -99,6 +100,7 @@ class AttachmentAnalysisResponse(BaseModel):
     category: MessageCategory
     action_items: list[ActionItem] = Field(default_factory=list)
     provider: str | None = None
+    tabular_result: TabularAnalysisResult | None = None
 
 
 class AttachmentAnalysisListResponse(BaseModel):
@@ -133,4 +135,5 @@ def attachment_analysis_from_record(record: AttachmentAnalysisRecord) -> Attachm
         category=MessageCategory(record.category),
         action_items=[ActionItem.model_validate(item) for item in record.action_items],
         provider=record.provider,
+        tabular_result=record.tabular_result,
     )

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.providers.common.output import AnalysisOutput
 from app.providers.common.suggestion_output import ContextSuggestionOutput
+from app.providers.common.tabular_output import TabularAnalysisOutput
 
 _UNSUPPORTED_SCHEMA_KEYS = (
     "title",
@@ -60,3 +61,4 @@ FOUNDRY_ANALYSIS_JSON_SCHEMA = build_strict_json_schema(AnalysisOutput)
 FOUNDRY_CONTEXT_SUGGESTION_JSON_SCHEMA = build_strict_json_schema(
     ContextSuggestionOutput
 )
+FOUNDRY_TABULAR_ANALYSIS_JSON_SCHEMA = build_strict_json_schema(TabularAnalysisOutput)

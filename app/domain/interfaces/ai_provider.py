@@ -2,11 +2,18 @@
 
 from abc import ABC, abstractmethod
 
-from app.domain.exceptions import BusinessContextSuggestionUnsupportedError
+from app.domain.exceptions import (
+    BusinessContextSuggestionUnsupportedError,
+    TabularAnalysisUnsupportedError,
+)
 from app.domain.schemas import CommunicationAnalysisResult, CommunicationRequest
 from app.domain.schemas.context_suggestion import (
     BusinessContextSuggestionRequest,
     BusinessContextSuggestionResult,
+)
+from app.domain.schemas.tabular_analysis import (
+    TabularAnalysisRequest,
+    TabularAnalysisResult,
 )
 
 
@@ -44,3 +51,15 @@ class AIProvider(ABC):
         the supplied candidate set and rechecks ownership/active status.
         """
         raise BusinessContextSuggestionUnsupportedError()
+
+    def analyze_tabular(
+        self,
+        request: TabularAnalysisRequest,
+    ) -> TabularAnalysisResult:
+        """Analyze a bounded XLSX workbook sample as advisory tabular intelligence.
+
+        Default is fail-closed. ``request.workbook_text`` is untrusted data.
+        Implementations must not treat it as instructions, execute formulas,
+        follow URLs, mutate workflow/BusinessContext state, or persist results.
+        """
+        raise TabularAnalysisUnsupportedError()

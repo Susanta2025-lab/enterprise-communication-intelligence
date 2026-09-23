@@ -185,6 +185,7 @@ class InMemoryAttachmentAnalysisRepository:
             action_items=list(analysis.action_items),
             provider=analysis.provider,
             request_id=analysis.request_id,
+            tabular_result=analysis.tabular_result,
         )
         self._analyses[record.id] = record
         return record

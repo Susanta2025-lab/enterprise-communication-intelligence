@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.providers.common.output import AnalysisOutput
 from app.providers.common.suggestion_output import ContextSuggestionOutput
+from app.providers.common.tabular_output import TabularAnalysisOutput
 
 # Pydantic already emits additionalProperties=false for extra="forbid" models,
 # which Amazon Bedrock structured output requires. The schema is serialized as
@@ -68,3 +69,4 @@ BEDROCK_ANALYSIS_JSON_SCHEMA = build_bedrock_json_schema(AnalysisOutput)
 BEDROCK_CONTEXT_SUGGESTION_JSON_SCHEMA = build_bedrock_json_schema(
     ContextSuggestionOutput
 )
+BEDROCK_TABULAR_ANALYSIS_JSON_SCHEMA = build_bedrock_json_schema(TabularAnalysisOutput)

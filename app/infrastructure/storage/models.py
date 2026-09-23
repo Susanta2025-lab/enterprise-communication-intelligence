@@ -372,7 +372,7 @@ class AttachmentAnalysisRow(Base):
     __tablename__ = "attachment_analyses"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('pdf', 'docx', 'jpeg', 'png', 'txt')",
+            "kind IN ('pdf', 'docx', 'jpeg', 'png', 'txt', 'xlsx')",
             name="ck_attachment_analyses_kind",
         ),
         CheckConstraint(
@@ -434,6 +434,10 @@ class AttachmentAnalysisRow(Base):
     request_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="attachment_analyses")
+
+    tabular_result: Mapped[dict[str, Any] | None] = mapped_column(
+        PORTABLE_JSON, nullable=True,
+    )
 
 
 class BusinessContextRow(Base):

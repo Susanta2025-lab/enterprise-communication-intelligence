@@ -22,6 +22,11 @@ from app.domain.schemas.context_suggestion import (
     BusinessContextSuggestionRequest,
     BusinessContextSuggestionResult,
 )
+from app.domain.schemas.tabular_analysis import (
+    TabularAnalysisRequest,
+    TabularAnalysisResult,
+    TabularSheetSummary,
+)
 
 logger = get_logger(__name__)
 
@@ -55,10 +60,14 @@ class MockAIProvider(AIProvider):
         supports_image_input: bool = False,
         suggestion_result: BusinessContextSuggestionResult | None = None,
         suggestion_error: Exception | None = None,
+        tabular_result: TabularAnalysisResult | None = None,
+        tabular_error: Exception | None = None,
     ) -> None:
         self._supports_image_input = supports_image_input
         self._suggestion_result = suggestion_result
         self._suggestion_error = suggestion_error
+        self._tabular_result = tabular_result
+        self._tabular_error = tabular_error
 
     def supports_image_input(self) -> bool:
         """Return the explicit mock image-capability flag. Default is off."""
@@ -130,6 +139,50 @@ class MockAIProvider(AIProvider):
             operation="suggest_business_context",
             duration_ms=elapsed_ms(started_at),
             suggestion_count=len(result.suggestions),
+        )
+        return result
+
+    def analyze_tabular(
+        self,
+        request: TabularAnalysisRequest,
+    ) -> TabularAnalysisResult:
+        """Analyze a bounded workbook sample with deterministic offline heuristics."""
+        logger.info(
+            "mock_tabular_analysis_requested",
+            provider=self.PROVIDER_NAME,
+            operation="analyze_tabular",
+            input_character_count=request.input_character_count,
+            source_truncated=request.source_truncated,
+        )
+        started_at = time.perf_counter()
+
+        try:
+            if self._tabular_error is not None:
+                raise self._tabular_error
+            if self._tabular_result is not None:
+                result = self._tabular_result.model_copy(deep=True)
+                result.provider = self.PROVIDER_NAME
+                if request.source_truncated:
+                    result.source_truncated = True
+            else:
+                result = self._analyze_tabular(request)
+        except Exception as exc:
+            logger.error(
+                "mock_tabular_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                operation="analyze_tabular",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "mock_tabular_analysis_completed",
+            provider=self.PROVIDER_NAME,
+            operation="analyze_tabular",
+            duration_ms=elapsed_ms(started_at),
+            source_truncated=result.source_truncated,
+            sheet_summary_count=len(result.sheet_summaries),
         )
         return result
 
@@ -237,6 +290,107 @@ class MockAIProvider(AIProvider):
             no_match_reason=None,
             provider=self.PROVIDER_NAME,
         )
+
+    def _analyze_tabular(self, request: TabularAnalysisRequest) -> TabularAnalysisResult:
+        """Build a deterministic advisory tabular result from fenced workbook text."""
+        sheet_names = _extract_sheet_names(request.workbook_text)
+        sheet_summaries = [
+            TabularSheetSummary(
+                sheet_name=name[:200],
+                summary=f"Advisory sample summary for sheet '{name}'.",
+            )
+            for name in sheet_names[:10]
+        ]
+        haystack = request.workbook_text.lower()
+        important_fields = _extract_header_fields(request.workbook_text)
+        potential_dates = _collect_keyword_hits(
+            request.workbook_text,
+            (
+                "due",
+                "deadline",
+                "date",
+                "202",
+            ),
+            limit=15,
+        )
+        potential_amounts = _collect_keyword_hits(
+            request.workbook_text,
+            ("€", "$", "£", "amount", "total", "invoice"),
+            limit=15,
+        )
+        potential_actions = _collect_keyword_hits(
+            request.workbook_text,
+            ("approve", "send", "pay", "review", "action", "please"),
+            limit=15,
+        )
+        data_quality: list[str] = []
+        if "formula:=" in haystack:
+            data_quality.append("Formula text is present and treated as inert data.")
+        if request.source_truncated:
+            data_quality.append("Source sample was truncated before analysis.")
+
+        limitations = [
+            "Advisory extraction only; not a complete workbook audit.",
+        ]
+        if request.source_truncated:
+            limitations.append(
+                "Analysis covers only the bounded sample; completeness is not claimed."
+            )
+
+        warnings = list(request.parser_warnings[:20])
+        if "https://" in haystack or "http://" in haystack:
+            warnings.append("URL-like text observed; URLs were not followed.")
+
+        summary = (
+            f"Advisory tabular summary over {len(sheet_names) or 'unspecified'} "
+            f"sheet(s); input_chars={request.input_character_count}."
+        )
+        return TabularAnalysisResult(
+            summary=summary[:2000],
+            sheet_summaries=sheet_summaries,
+            important_fields=important_fields[:20],
+            notable_values_or_patterns=[],
+            data_quality_observations=data_quality[:15],
+            potential_dates=potential_dates,
+            potential_amounts=potential_amounts,
+            potential_action_mentions=potential_actions,
+            warnings=warnings[:20],
+            limitations=limitations[:10],
+            source_truncated=request.source_truncated,
+            provider=self.PROVIDER_NAME,
+        )
+
+
+def _extract_sheet_names(workbook_text: str) -> list[str]:
+    names: list[str] = []
+    for line in workbook_text.splitlines():
+        if line.startswith("name: "):
+            names.append(line[len("name: ") :].strip() or "(unnamed)")
+    return names
+
+
+def _extract_header_fields(workbook_text: str) -> list[str]:
+    fields: list[str] = []
+    for line in workbook_text.splitlines():
+        if line.startswith("header: "):
+            for part in line[len("header: ") :].split(" | "):
+                cleaned = part.strip()
+                if cleaned and cleaned not in fields:
+                    fields.append(cleaned[:200])
+                if len(fields) >= 20:
+                    return fields
+    return fields
+
+
+def _collect_keyword_hits(text: str, keywords: tuple[str, ...], *, limit: int) -> list[str]:
+    hits: list[str] = []
+    lower = text.lower()
+    for keyword in keywords:
+        if keyword.lower() in lower and keyword not in hits:
+            hits.append(f"Observed advisory signal: {keyword}")
+        if len(hits) >= limit:
+            break
+    return hits
 
 
 def _tokenize(text: str) -> set[str]:

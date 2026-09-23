@@ -117,3 +117,7 @@ Thumbs.db
 # Miscellaneous
 # ============================================================================
 .cache/
+
+# Phase 21 local validation and generated deployment artifacts
+/.phase21*.xml
+/.phase21g-artifacts/

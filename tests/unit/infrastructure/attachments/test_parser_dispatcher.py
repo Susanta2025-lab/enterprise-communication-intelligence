@@ -9,6 +9,7 @@ from tests.unit.infrastructure.attachments.fixtures import (
     attachment_content,
     pdf_with_text,
     tiny_jpeg,
+    xlsx_workbook,
 )
 
 
@@ -23,6 +24,22 @@ def test_dispatcher_parses_matching_pdf_kind() -> None:
     )
     assert parsed.kind is AttachmentKind.PDF
     assert "Dispatcher text" in (parsed.extracted_text or "")
+
+
+def test_dispatcher_parses_matching_xlsx_kind() -> None:
+    payload = xlsx_workbook([{"name": "S", "rows": [["H"], ["cell"]]}])
+    parsed = SafeAttachmentParser().parse(
+        attachment_content(
+            payload,
+            filename="budget.xlsx",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        ),
+        AttachmentKind.XLSX,
+    )
+    assert parsed.kind is AttachmentKind.XLSX
+    assert "cell" in (parsed.extracted_text or "")
 
 
 def test_dispatcher_rejects_kind_mismatch() -> None:

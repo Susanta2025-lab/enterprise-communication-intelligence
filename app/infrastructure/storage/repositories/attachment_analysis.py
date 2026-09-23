@@ -3,6 +3,7 @@
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.domain.interfaces.attachment_analysis_repository import (
     AttachmentAnalysisRepository,
     NewAttachmentAnalysis,
 )
+from app.domain.models.tabular_analysis import TabularAnalysisResult
 from app.infrastructure.storage.models import AttachmentAnalysisRow
 
 _MAX_LIST_LIMIT = 100
@@ -26,6 +28,7 @@ class SqlAlchemyAttachmentAnalysisRepository(AttachmentAnalysisRepository):
 
     def save(self, analysis: NewAttachmentAnalysis) -> AttachmentAnalysisRecord:
         """Persist an attachment analysis for ``analysis.user_id``."""
+        tabular = _validated_tabular_result(analysis.tabular_result)
         row = AttachmentAnalysisRow(
             id=analysis.attachment_analysis_id or uuid4(),
             user_id=analysis.user_id,
@@ -48,6 +51,7 @@ class SqlAlchemyAttachmentAnalysisRepository(AttachmentAnalysisRepository):
             action_items=list(analysis.action_items),
             provider=analysis.provider,
             request_id=analysis.request_id,
+            tabular_result=tabular.model_dump(mode="json") if tabular is not None else None,
         )
         try:
             with self._session.begin_nested():
@@ -133,4 +137,15 @@ def _to_record(row: AttachmentAnalysisRow) -> AttachmentAnalysisRecord:
         action_items=list(action_items),
         provider=row.provider,
         request_id=row.request_id,
+        tabular_result=_validated_tabular_result(row.tabular_result),
     )
+
+
+def _validated_tabular_result(value: object) -> TabularAnalysisResult | None:
+    """Validate stored JSON without exposing its contents on a corrupt row."""
+    if value is None:
+        return None
+    try:
+        return TabularAnalysisResult.model_validate(value)
+    except ValidationError:
+        raise PersistenceError("Invalid stored tabular analysis.") from None

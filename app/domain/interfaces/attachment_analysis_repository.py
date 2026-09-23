@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from app.domain.models.tabular_analysis import TabularAnalysisResult
+
 
 @dataclass(frozen=True, slots=True)
 class NewAttachmentAnalysis:
@@ -32,6 +34,7 @@ class NewAttachmentAnalysis:
     summary_confidence: float | None = None
     request_id: UUID | None = None
     attachment_analysis_id: UUID | None = None
+    tabular_result: TabularAnalysisResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +68,7 @@ class AttachmentAnalysisRecord:
     action_items: list[dict[str, Any]]
     provider: str
     request_id: UUID | None
+    tabular_result: TabularAnalysisResult | None = None
 
 
 class AttachmentAnalysisRepository(ABC):

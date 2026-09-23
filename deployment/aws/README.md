@@ -2,9 +2,11 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Amazon ECS on Fargate in `eu-south-2`.
 
-**Status:** Prompt 7 live deployment completed. Phase 7C verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. **Phase 20 Business Context AWS live validation is PASS** (Alembic head `20c0001`; ECS task definition `eci-api-dev:12` / image `ed5eebc-p20g`; SPA CloudFront invalidation completed). Cost-aware idle posture may return ECS to `0/0/0` and Stop RDS when the operator requests it; post-20G resources may still be running until that instruction. Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+**Current status (2026-09-23): Phase 21G deployment and functional validation PASS**, based on operator-reported manual evidence. AWS Gmail → `amazon_bedrock`; RDS `21d0001`; ECS `eci-api-dev:13`, ECR tag `63669ec-p21g-20260923`; bundle `index-BsxIj7rg.js` hashes verified; deployment COMPLETED, running 1/pending 0; health/readiness HTTP 200. See the [Phase 21G closure report](../../docs/codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations) for evidence limits. Earlier posture snapshots and commands below are historical; do not repeat migrations or deployments without separate authorization.
 
-## Current AWS posture (Phase 20 live validation PASS)
+**Historical Phase 20 status:** Prompt 7 live deployment completed. Phase 7C verified CloudWatch Logs and standard ECS metrics, then returned the service to `desiredCount=0`. **Phase 20 Business Context AWS live validation is PASS** (Alembic head `20c0001`; ECS task definition `eci-api-dev:12` / image `ed5eebc-p20g`; SPA CloudFront invalidation completed). Cost-aware idle posture may return ECS to `0/0/0` and Stop RDS when the operator requests it; post-20G resources may still be running until that instruction. Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Do not re-run mutating commands unless a later prompt requests it. Do not delete these resources in documentation-only work.
+
+## Historical AWS posture (Phase 20 live validation PASS)
 
 Application path (cloud-neutral app; AWS-specific hosting):
 
@@ -952,3 +954,37 @@ Historical Phase 6C scope for this runbook (not a current-architecture claim):
 - Azure changes
 - Rebuilding the Docker image
 - Changing ECI application code
+
+
+## Phase 21 XLSX release preparation (historical checklist)
+
+Phase 21G manual deployment and functional validation subsequently passed; see
+[the closure report](../../docs/codex/reports/phase_21g_report.md). This checklist
+is preserved as preparation guidance, not evidence that every listed case was
+exercised live. The migrations and deployments below have already completed.
+
+Earlier Phase 18 XLSX-rejection evidence above is historical. The local Phase 21
+build supports `.xlsx` through explicit Analyze only; `.xls`, `.xlsm`, `.xlsb`,
+`.csv`, and `.tsv` remain unsupported. Listing retrieves metadata only. CLEAN
+scanning precedes container validation and bounded `openpyxl` extraction;
+formulas and URLs remain inert. Validated advisory `tabular_result` is stored in
+existing attachment history, without raw workbook persistence or workflow actions.
+
+Any further cloud work requires separate explicit authorization. First inspect actual runtime,
+image, frontend, database revision, and scanner state; do not repeat a migration
+or deployment that already completed. Rebuild the shared backend with the existing
+`openpyxl>=3.1` declaration; apply migration `21d0001` using the established migration
+runbook before enabling the new backend/frontend. Use the cloud-specific frontend
+build. No new infrastructure or broader IAM is required.
+
+`21d0001` revises `20c0001`, adds nullable JSONB and permits XLSX. Downgrade refuses
+while XLSX rows exist; do not delete real history to force rollback. Retain the
+revision or obtain an explicit data-retention/rollback decision. Locally validated
+round-trips remove synthetic rows only.
+
+Validate owned mailbox metadata listing → explicit XLSX Analyze → real CLEAN
+scanner → provider → complete structured persistence/history → safe UI. Check
+legacy-format rejection, truncation, ownership (including Platform Owner), PDF/DOCX/TXT
+regression, no workflow/BusinessContext mutation, sanitized failures/logs, and
+memory/latency on the existing 1 GiB runtime. Do not Send. Resource stop/resize/delete
+requires explicit authorization. See the [Phase 21 roadmap](../../docs/roadmap/phase-21-xlsx-tabular-intelligence.md).

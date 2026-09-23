@@ -104,7 +104,11 @@ def test_attachment_kind_and_scan_verdict_values() -> None:
         AttachmentKind.JPEG,
         AttachmentKind.PNG,
         AttachmentKind.TXT,
+        AttachmentKind.XLSX,
     ]
+    assert "xls" not in {member.value for member in AttachmentKind}
+    assert "xlsm" not in {member.value for member in AttachmentKind}
+    assert "xlsb" not in {member.value for member in AttachmentKind}
     assert list(AttachmentScanVerdict) == [
         AttachmentScanVerdict.CLEAN,
         AttachmentScanVerdict.MALICIOUS,

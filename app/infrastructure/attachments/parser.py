@@ -9,6 +9,7 @@ from app.infrastructure.attachments.docx import parse_docx_attachment
 from app.infrastructure.attachments.image import parse_image_attachment
 from app.infrastructure.attachments.pdf import parse_pdf_attachment
 from app.infrastructure.attachments.txt import parse_txt_attachment
+from app.infrastructure.attachments.xlsx import parse_xlsx_attachment
 
 
 class SafeAttachmentParser(AttachmentParser):
@@ -25,6 +26,8 @@ class SafeAttachmentParser(AttachmentParser):
             return parse_docx_attachment(content)
         if kind is AttachmentKind.TXT:
             return parse_txt_attachment(content)
+        if kind is AttachmentKind.XLSX:
+            return parse_xlsx_attachment(content)
         if kind in {AttachmentKind.JPEG, AttachmentKind.PNG}:
             return parse_image_attachment(content, kind)
         raise AttachmentParseError()

@@ -41,7 +41,7 @@ ECI addresses that with:
 | Communication analysis | Summary, priority, category, action items, AI draft suggestion |
 | Business context | Flat user-owned matter/case/project/client/transaction/account organization; manual communication association; context timeline; AI-assisted suggestions with human confirmation (never autonomous assignment) |
 | Mailboxes | Gmail and Microsoft Graph/Outlook: connect, list, selected-message analyze |
-| Secure attachments | Metadata listing; explicit single-attachment Analyze for PDF / DOCX / TXT; JPEG/PNG gated when image AI is unavailable; XLSX unsupported (fail-closed) |
+| Secure attachments | Metadata listing; explicit single-attachment Analyze for PDF / DOCX / TXT / XLSX; JPEG/PNG gated when image AI is unavailable; legacy spreadsheet formats unsupported |
 | Workflow | Explicit Propose / Approve / Reject / Execute (Send)—never automatic from analyze, attachment analysis, or context suggestion |
 | Application auth | Microsoft Entra External ID + MSAL; five delegated `communications:*` scopes |
 | Application RBAC | Persisted `application_role` (`user` \| `owner`); server-side `require_owner`; `/api/v1/me` and owner-only `/api/v1/admin/ping` |
@@ -53,7 +53,9 @@ ECI addresses that with:
 
 **Phase 18 invariant:** ECI never explicitly retrieves, decodes, persists, or analyzes attachment content without an explicit user action for that specific attachment. There is no automatic attachment download. Listing remains content-free. Raw attachment bytes are not durably persisted. ClamAV runs before parsing or AI. Unsupported or dangerous cases fail closed. Attachment analysis cannot trigger Propose, Approve, Execute, or Send. Context open / timeline / association / AI suggestion never retrieve attachment bytes.
 
-**Not yet productized:** XLSX tabular intelligence; durable deadlines/work items; DMS/CRM/case-system sync; autonomous context assignment.
+**Phase 21 XLSX support:** `.xlsx` only; `.xls`, `.xlsm`, `.xlsb`, `.csv`, and `.tsv` remain unsupported. Explicit Analyze checks ownership/provenance, retrieves one attachment, and requires a CLEAN scanner verdict before container validation and bounded `openpyxl` extraction. Formulas remain inert; external relationships, workbook links, macros, and connections are rejected. No raw workbook is persisted. Complete validated advisory `tabular_result` is stored in existing attachment history; potential dates, amounts, and actions do not create business state. Azure/Outlook/Foundry and AWS/Gmail/Bedrock deployment and functional validation passed, as manually reported by the operator on 2026-09-23; Phase 21 is CLOSED for the delivered XLSX scope. Live evidence limits are recorded in the [Phase 21G report](docs/codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations). See the [Phase 21 roadmap](docs/roadmap/phase-21-xlsx-tabular-intelligence.md).
+
+**Not yet productized:** durable deadlines/work items; DMS/CRM/case-system sync; autonomous context assignment.
 
 ---
 
@@ -421,7 +423,8 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Phase 17 – External ID & external user onboarding | 17A–17C CLOSED / PASS; **17D deferred** |
 | Phase 18 – Secure Attachment Intelligence | **Completed / PASS** |
 | Phase 19 – Platform Owner Identity & Application RBAC | **Completed / PASS** |
-| Phase 20 – Business Context & Matter Intelligence | **IN PROGRESS** — local hardening PASS; live multi-cloud validation pending |
+| Phase 20 – Business Context & Matter Intelligence | **CLOSED / PASS** — see roadmap for recorded live validation |
+| Phase 21 – XLSX / Tabular Intelligence | **CLOSED — 21A–21G PASS**; Azure/AWS manual live validation complete; evidence limits in the Phase 21G report |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 

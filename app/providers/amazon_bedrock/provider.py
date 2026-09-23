@@ -15,9 +15,14 @@ from app.domain.schemas.context_suggestion import (
     BusinessContextSuggestionRequest,
     BusinessContextSuggestionResult,
 )
+from app.domain.schemas.tabular_analysis import (
+    TabularAnalysisRequest,
+    TabularAnalysisResult,
+)
 from app.providers.amazon_bedrock.output import (
     BEDROCK_ANALYSIS_JSON_SCHEMA,
     BEDROCK_CONTEXT_SUGGESTION_JSON_SCHEMA,
+    BEDROCK_TABULAR_ANALYSIS_JSON_SCHEMA,
     extract_converse_output_text,
 )
 from app.providers.common.output import parse_analysis_output, to_communication_analysis
@@ -29,6 +34,14 @@ from app.providers.common.suggestion_output import (
 from app.providers.common.suggestion_prompts import (
     CONTEXT_SUGGESTION_SYSTEM_PROMPT,
     build_context_suggestion_user_prompt,
+)
+from app.providers.common.tabular_output import (
+    parse_tabular_analysis_output,
+    to_tabular_analysis_result,
+)
+from app.providers.common.tabular_prompts import (
+    TABULAR_ANALYSIS_SYSTEM_PROMPT,
+    build_tabular_analysis_user_prompt,
 )
 
 logger = get_logger(__name__)
@@ -199,6 +212,78 @@ class AmazonBedrockProvider(AIProvider):
             operation="suggest_business_context",
             duration_ms=elapsed_ms(started_at),
             suggestion_count=len(result.suggestions),
+        )
+        return result
+
+    def analyze_tabular(
+        self,
+        request: TabularAnalysisRequest,
+    ) -> TabularAnalysisResult:
+        """Analyze a bounded workbook sample through Amazon Bedrock."""
+        logger.info(
+            "amazon_bedrock_tabular_analysis_requested",
+            provider=self.PROVIDER_NAME,
+            model_id=self._model_id,
+            region=self._region,
+            operation="analyze_tabular",
+            input_character_count=request.input_character_count,
+            source_truncated=request.source_truncated,
+        )
+        started_at = time.perf_counter()
+
+        try:
+            response = self._get_bedrock_runtime_client().converse(
+                modelId=self._model_id,
+                system=[{"text": TABULAR_ANALYSIS_SYSTEM_PROMPT}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"text": build_tabular_analysis_user_prompt(request)}
+                        ],
+                    }
+                ],
+                outputConfig={
+                    "textFormat": {
+                        "type": "json_schema",
+                        "structure": {
+                            "jsonSchema": {
+                                "schema": BEDROCK_TABULAR_ANALYSIS_JSON_SCHEMA,
+                                "name": "tabular_analysis",
+                                "description": "Structured advisory tabular analysis.",
+                            }
+                        },
+                    }
+                },
+            )
+            output_text = extract_converse_output_text(response)
+            output = parse_tabular_analysis_output(output_text)
+            result = to_tabular_analysis_result(
+                output,
+                request,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "amazon_bedrock_tabular_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                model_id=self._model_id,
+                region=self._region,
+                operation="analyze_tabular",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "amazon_bedrock_tabular_analysis_completed",
+            provider=self.PROVIDER_NAME,
+            model_id=self._model_id,
+            region=self._region,
+            operation="analyze_tabular",
+            duration_ms=elapsed_ms(started_at),
+            source_truncated=result.source_truncated,
+            sheet_summary_count=len(result.sheet_summaries),
         )
         return result
 

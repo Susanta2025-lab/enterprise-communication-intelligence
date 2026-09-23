@@ -113,3 +113,14 @@ class BusinessContextSuggestionUnsupportedError(Exception):
     ) -> None:
         self.message = message
         super().__init__(self.message)
+
+
+class TabularAnalysisUnsupportedError(Exception):
+    """Raised when an AI provider does not implement tabular/XLSX analysis."""
+
+    def __init__(
+        self,
+        message: str = "Tabular workbook analysis is not available.",
+    ) -> None:
+        self.message = message
+        super().__init__(self.message)

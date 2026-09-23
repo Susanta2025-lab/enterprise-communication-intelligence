@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { EciApiClient } from "../api/client";
 import type { AttachmentAnalysisResponse } from "../api/attachments";
@@ -19,6 +19,8 @@ export function useAnalyzeAttachment(
   providerMessageId: string | null,
 ) {
   const queryClient = useQueryClient();
+  const inFlight = useRef(false);
+  const scope = useRef(0);
   const [state, setState] = useState<AnalyzeAttachmentState>({
     pendingId: null,
     results: {},
@@ -26,13 +28,18 @@ export function useAnalyzeAttachment(
   });
 
   useEffect(() => {
+    scope.current += 1;
+    inFlight.current = false;
     setState({ pendingId: null, results: {}, errors: {} });
+    return () => { scope.current += 1; };
   }, [connectorAccountId, providerMessageId]);
 
   async function analyze(providerAttachmentId: string): Promise<void> {
-    if (!providerMessageId || state.pendingId === providerAttachmentId) {
+    if (!providerMessageId || inFlight.current) {
       return;
     }
+    inFlight.current = true;
+    const requestScope = scope.current;
     setState((current) => {
       const errors = { ...current.errors };
       delete errors[providerAttachmentId];
@@ -44,15 +51,17 @@ export function useAnalyzeAttachment(
         providerMessageId,
         providerAttachmentId,
       });
+      void queryClient.invalidateQueries({
+        queryKey: attachmentAnalysesQueryKey(connectorAccountId, providerMessageId),
+      });
+      if (scope.current !== requestScope) return;
       setState((current) => ({
         pendingId: current.pendingId === providerAttachmentId ? null : current.pendingId,
         results: { ...current.results, [providerAttachmentId]: result },
         errors: current.errors,
       }));
-      void queryClient.invalidateQueries({
-        queryKey: attachmentAnalysesQueryKey(connectorAccountId, providerMessageId),
-      });
     } catch (error) {
+      if (scope.current !== requestScope) return;
       if (error instanceof EciApiError && error.status === 409) {
         void queryClient.invalidateQueries({ queryKey: CONNECTOR_ACCOUNT_QUERY_KEY });
       }
@@ -61,6 +70,8 @@ export function useAnalyzeAttachment(
         results: current.results,
         errors: { ...current.errors, [providerAttachmentId]: error },
       }));
+    } finally {
+      if (scope.current === requestScope) inFlight.current = false;
     }
   }
 

@@ -307,6 +307,7 @@ def test_attachment_analysis_columns_are_minimized(sqlite_engine: Engine) -> Non
         "action_items",
         "provider",
         "request_id",
+        "tabular_result",
     }
     assert columns.isdisjoint(_FORBIDDEN_COLUMNS)
     assert "extracted_text" not in columns

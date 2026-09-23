@@ -24,6 +24,8 @@ from app.domain.enums import (
     AttachmentExtractedContentStatus,
     AttachmentKind,
     AttachmentScanVerdict,
+    MessageCategory,
+    PriorityLevel,
 )
 from app.domain.exceptions import (
     AttachmentEncryptedError,
@@ -36,11 +38,19 @@ from app.domain.exceptions import (
 from app.domain.interfaces import AttachmentParser, CommunicationConnector
 from app.domain.models import (
     AttachmentAnalysis,
+    AttachmentContent,
     AttachmentTextSection,
+    CommunicationAnalysis,
     CommunicationMessage,
     ParsedAttachment,
+    Priority,
+    Summary,
 )
-from app.domain.schemas import CommunicationRequest
+from app.domain.schemas import (
+    CommunicationRequest,
+    TabularAnalysisResult,
+)
+from app.providers.common.tabular_input import prepare_tabular_analysis_request_from_text
 
 logger = get_logger(__name__)
 
@@ -157,6 +167,16 @@ class AttachmentAnalysisService:
             truncated=parsed.truncated,
         )
 
+        if inspected.kind is AttachmentKind.XLSX:
+            return self._analyze_xlsx(
+                connector=connector,
+                message=message,
+                inspected_kind=inspected.kind,
+                inspected_content=inspected.content,
+                parsed=parsed,
+                size_bucket=size_bucket,
+            )
+
         request = _build_untrusted_request(message, parsed)
         # Defense in depth: capability was already gated before content retrieval.
         if request.attachment_images:
@@ -218,6 +238,92 @@ class AttachmentAnalysisService:
             provider=result.provider,
         )
 
+    def _analyze_xlsx(
+        self,
+        *,
+        connector: CommunicationConnector,
+        message: CommunicationMessage,
+        inspected_kind: AttachmentKind,
+        inspected_content: AttachmentContent,
+        parsed: ParsedAttachment,
+        size_bucket: str,
+    ) -> AttachmentAnalysis:
+        """Route XLSX through the Phase 21C tabular AI contract only."""
+        if not parsed.extracted_text or not parsed.extracted_text.strip():
+            raise AttachmentNotSupportedError()
+
+        tabular_request = prepare_tabular_analysis_request_from_text(
+            parsed.extracted_text,
+            parser_truncated=parsed.truncated,
+            parser_warnings=parsed.warnings,
+            sheet_count=parsed.page_count,
+        )
+        logger.info(
+            "attachment_ai_started",
+            operation="analyze_attachment",
+            provider=connector.provider,
+            size_bucket=size_bucket,
+            kind=inspected_kind.value,
+            input_character_count=tabular_request.input_character_count,
+            source_truncated=tabular_request.source_truncated,
+        )
+        try:
+            tabular = self._analysis.analyze_tabular(tabular_request)
+        except AnalysisFailedError:
+            logger.warning(
+                "attachment_ai_failed",
+                operation="analyze_attachment",
+                provider=connector.provider,
+                result="analysis_failed",
+                size_bucket=size_bucket,
+                kind=inspected_kind.value,
+            )
+            raise
+
+        truncated = bool(
+            parsed.truncated
+            or tabular_request.source_truncated
+            or tabular.source_truncated
+        )
+        status = (
+            AttachmentExtractedContentStatus.TRUNCATED_TEXT
+            if truncated
+            else AttachmentExtractedContentStatus.TEXT
+        )
+        # Completeness is server-authoritative even if an adapter omits it.
+        tabular = tabular.model_copy(update={"source_truncated": truncated})
+        warnings = tuple(dict.fromkeys((*parsed.warnings, *tabular_request.parser_warnings)))
+        analysis = _communication_analysis_from_tabular(
+            tabular,
+            message_id=message.message_id,
+        )
+        logger.info(
+            "attachment_ai_completed",
+            operation="analyze_attachment",
+            provider=tabular.provider,
+            result="analyzed",
+            size_bucket=size_bucket,
+            kind=inspected_kind.value,
+            extracted_status=status.value,
+            truncated=truncated,
+            input_character_count=tabular_request.input_character_count,
+        )
+        return AttachmentAnalysis(
+            source_message_id=inspected_content.source_message_id,
+            source_attachment_id=inspected_content.source_attachment_id,
+            filename=inspected_content.metadata.filename,
+            media_type=inspected_content.metadata.media_type,
+            kind=inspected_kind,
+            extracted_content_status=status,
+            truncated=truncated,
+            warnings=warnings,
+            page_count=parsed.page_count,
+            character_count=parsed.character_count,
+            analysis=analysis,
+            provider=tabular.provider,
+            tabular_result=tabular,
+        )
+
     def _reject_unavailable_image_kind(self, kind: AttachmentKind) -> None:
         """Fail closed for JPEG/PNG when image AI is not configured or not declared."""
         if kind not in _IMAGE_KINDS:
@@ -261,3 +367,22 @@ def _extracted_status(parsed: ParsedAttachment) -> AttachmentExtractedContentSta
     if parsed.truncated:
         return AttachmentExtractedContentStatus.TRUNCATED_TEXT
     return AttachmentExtractedContentStatus.TEXT
+
+
+def _communication_analysis_from_tabular(
+    result: TabularAnalysisResult,
+    *,
+    message_id: str | None,
+) -> CommunicationAnalysis:
+    """Map validated tabular AI output onto the existing analysis persistence shape.
+
+    ``potential_*`` fields remain advisory text only — never workflow entities.
+    """
+    return CommunicationAnalysis(
+        summary=Summary(text=result.summary),
+        priority=Priority(level=PriorityLevel.MEDIUM),
+        category=MessageCategory.GENERAL,
+        action_items=[],
+        draft_reply=None,
+        message_id=message_id,
+    )

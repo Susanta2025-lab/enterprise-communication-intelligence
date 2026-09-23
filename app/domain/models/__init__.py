@@ -33,6 +33,14 @@ from app.domain.models.capabilities import (
     serialize_communication_capabilities,
 )
 from app.domain.models.message import CommunicationMessage, MessageMetadata
+from app.domain.models.workbook_extraction import (
+    ExtractedCell,
+    SheetExtraction,
+    WorkbookExtraction,
+    XlsxCellValueType,
+    XlsxSheetVisibility,
+    XlsxTruncationReason,
+)
 from app.domain.models.workflow import WorkflowAction
 
 __all__ = [
@@ -49,12 +57,18 @@ __all__ = [
     "CommunicationAnalysis",
     "CommunicationMessage",
     "DraftReply",
+    "ExtractedCell",
     "MessageMetadata",
     "Priority",
     "REFERENCE_MAX_LENGTH",
+    "SheetExtraction",
     "Summary",
     "TITLE_MAX_LENGTH",
+    "WorkbookExtraction",
     "WorkflowAction",
+    "XlsxCellValueType",
+    "XlsxSheetVisibility",
+    "XlsxTruncationReason",
     "normalize_communication_capabilities",
     "parse_stored_communication_capabilities",
     "is_mail_read_allowed",

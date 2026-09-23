@@ -78,6 +78,7 @@ export function AttachmentsSection({
               canAnalyze={canAnalyze}
               imageAnalysisAvailable={imageAnalysisAvailable}
               pending={pendingId === item.provider_attachment_id}
+              analysisBusy={pendingId !== null}
               result={resultFor(item.provider_attachment_id)}
               history={historyFor(item.provider_attachment_id)}
               error={errorFor(item.provider_attachment_id)}

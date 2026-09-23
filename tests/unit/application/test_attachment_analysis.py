@@ -267,8 +267,8 @@ def test_image_capability_enabled_with_supporting_provider_analyzes_image() -> N
     assert "untrusted image attachment" in result.analysis.summary.text.lower()
 
 
-def test_xlsx_remains_unsupported_without_retrieval() -> None:
-    scanner = MagicMock()
+def test_malformed_xlsx_is_rejected_after_explicit_retrieval() -> None:
+    scanner = MagicMock(wraps=FakeAttachmentScanner())
     parser = MagicMock()
     provider = MagicMock()
     connector = _TrackingConnector(
@@ -289,10 +289,11 @@ def test_xlsx_remains_unsupported_without_retrieval() -> None:
     service = _service(scanner=scanner, parser=parser, provider=provider)
     with pytest.raises(AttachmentNotSupportedError):
         service.analyze(connector, "fake-msg-001", "att-xlsx", _message())
-    assert connector.content_fetches == []
-    scanner.scan.assert_not_called()
+    assert connector.content_fetches == [("fake-msg-001", "att-xlsx")]
+    scanner.scan.assert_called_once()
     parser.parse.assert_not_called()
     provider.analyze.assert_not_called()
+    provider.analyze_tabular.assert_not_called()
 
 
 def test_txt_path_reaches_mock() -> None:

@@ -1,6 +1,17 @@
 # Cloud Roadmap
 
-This is the cloud-integration view of Phase 6 through completed Phase 14. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+This historical cloud-integration view covers Phase 6 through Phase 16. It is not a substitute for the phase-by-phase roadmap in [`docs/roadmap/`](../roadmap/README.md).
+
+## Phase 21 closure update (2026-09-23)
+
+Operator-reported manual Azure/Outlook/Foundry and AWS/Gmail/Bedrock XLSX
+validation passed; both cloud databases reached `21d0001`, and Phase 21 backends
+and frontends deployed successfully. Phase 21 is CLOSED for the delivered XLSX
+scope. See [the Phase 21 roadmap](../roadmap/phase-21-xlsx-tabular-intelligence.md)
+and [Phase 21G evidence limits](../codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations).
+The older runtime, schema, attachment-support and stopped-resource statements
+below are historical snapshots, not current cloud state. This update involved
+no cloud access; further operations require separate authorization.
 
 ## Provider integration
 

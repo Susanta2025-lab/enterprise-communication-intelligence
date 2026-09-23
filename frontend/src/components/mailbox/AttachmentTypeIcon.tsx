@@ -12,7 +12,7 @@ export function AttachmentTypeIcon({ filename, mediaType }: AttachmentTypeIconPr
       className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-semibold text-slate-700"
       aria-hidden="true"
     >
-      {type === "Other" ? "FILE" : type.slice(0, 3)}
+      {type === "Other" ? "FILE" : type === "XLSX" ? "XLSX" : type.slice(0, 3)}
     </span>
   );
 }

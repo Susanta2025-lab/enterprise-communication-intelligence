@@ -64,6 +64,7 @@ class AttachmentAnalysisHistoryService:
             ],
             provider=result.provider or "unknown",
             request_id=bound_request_id_as_uuid(),
+            tabular_result=result.tabular_result,
         )
         try:
             with self._unit_of_work_factory() as uow:

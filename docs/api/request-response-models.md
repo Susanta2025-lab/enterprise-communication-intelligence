@@ -410,3 +410,33 @@ The mailbox-backed analyze response reuses `CommunicationAnalysisResponse`. It d
 - `ErrorResponse` (`app/schemas/errors.py`) — `detail: str`; used only for OpenAPI documentation of error responses (see [Error Handling](error-handling.md))
 
 These are not reused as domain models; they exist purely to describe the shape of the health/readiness/error responses in OpenAPI.
+
+
+## TabularAnalysisResult (Phase 21)
+
+`AttachmentAnalysisResponse` adds nullable `tabular_result`; kind includes `xlsx`.
+Legacy PDF/DOCX/TXT and image history retain null. XLSX preserves all validated
+fields on write and validates stored JSON on read. Unknown/corrupt fields are
+not trusted. No raw workbook, XML, extracted grid, prompt, or provider response
+is stored. `page_count` represents sheet count for XLSX.
+
+| Field | Bound / meaning |
+|---|---|
+| `summary` | 1–2,000 characters; advisory summary |
+| `sheet_summaries` | Up to 10; sheet name ≤200 and summary 1–500 characters |
+| `important_fields` | Up to 20 strings, ≤200 characters each |
+| `notable_values_or_patterns` | Up to 20 strings, ≤300 characters each |
+| `data_quality_observations` | Up to 15 strings, ≤300 characters each |
+| `potential_dates` / `potential_amounts` | Each up to 15 strings, ≤200 characters each |
+| `potential_action_mentions` | Up to 15 strings, ≤300 characters each |
+| `warnings` | Up to 20 strings, ≤200 characters each |
+| `limitations` | Up to 10 strings, ≤300 characters each; separate from warnings |
+| `source_truncated` | Boolean; server preserves parser/AI-input truncation |
+| `provider` | Nullable opaque provider identifier, ≤64 characters |
+
+Lists default to empty. Potential fields are observations, never authoritative
+deadlines, payment instructions, or workflow tasks. The UI discloses sampling
+when either outer `truncated` or inner `source_truncated` is true, omits empty
+sections, and renders all workbook-derived output as escaped text without links.
+The provider-neutral workbook input cap is 32,768 characters; trusted prompt
+instructions/metadata add framing overhead. Formulas are never executed.

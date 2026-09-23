@@ -1,8 +1,17 @@
 import { MAX_ATTACHMENT_CONTENT_BYTES } from "../api/attachments";
 
-export type FriendlyAttachmentType = "PDF" | "DOCX" | "TXT" | "JPEG" | "PNG" | "Other";
+export type FriendlyAttachmentType = "PDF" | "DOCX" | "TXT" | "XLSX" | "JPEG" | "PNG" | "Other";
 
-const SUPPORTED_TYPES = new Set<FriendlyAttachmentType>(["PDF", "DOCX", "TXT", "JPEG", "PNG"]);
+const SUPPORTED_TYPES = new Set<FriendlyAttachmentType>(["PDF", "DOCX", "TXT", "XLSX", "JPEG", "PNG"]);
+const UNSUPPORTED_SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsm", ".xlsb", ".csv", ".tsv"]);
+const UNSUPPORTED_SPREADSHEET_MEDIA_TYPES = new Set([
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+  "text/csv",
+  "application/csv",
+  "text/tab-separated-values",
+]);
 
 export function extensionOf(filename: string): string {
   const trimmed = filename.trim();
@@ -19,6 +28,12 @@ export function friendlyAttachmentType(
 ): FriendlyAttachmentType {
   const media = mediaType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
   const extension = extensionOf(filename);
+  if (UNSUPPORTED_SPREADSHEET_EXTENSIONS.has(extension) || UNSUPPORTED_SPREADSHEET_MEDIA_TYPES.has(media)) {
+    return "Other";
+  }
+  if (extension === ".xlsx" || media === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+    return "XLSX";
+  }
   if (media === "application/pdf" || extension === ".pdf") {
     return "PDF";
   }

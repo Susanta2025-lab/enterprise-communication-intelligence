@@ -32,6 +32,7 @@ type AttachmentItemProps = {
   canAnalyze: boolean;
   imageAnalysisAvailable: boolean;
   pending: boolean;
+  analysisBusy: boolean;
   result: AttachmentAnalysisResponse | null;
   history: readonly AttachmentAnalysisResponse[];
   error: unknown;
@@ -43,6 +44,7 @@ export function AttachmentItem({
   canAnalyze,
   imageAnalysisAvailable,
   pending,
+  analysisBusy,
   result,
   history,
   error,
@@ -57,7 +59,7 @@ export function AttachmentItem({
   const imageUnavailable = imageType && !imageAnalysisAvailable;
   const oversized = isOversizedReportedSize(item.reported_size);
   const offerAnalyze = canAnalyze && supported && !oversized && !imageUnavailable;
-  const canRequestAnalyze = offerAnalyze && !pending;
+  const canRequestAnalyze = offerAnalyze && !analysisBusy;
   const latest = result ?? history[0] ?? null;
   const previous = latest
     ? history.filter((entry) => entry.attachment_analysis_id !== latest.attachment_analysis_id)
@@ -81,7 +83,8 @@ export function AttachmentItem({
     }
   }, [error]);
 
-  const metaParts = [`${type} · ${formatReportedSize(item.reported_size)}`];
+  const typeLabel = type === "XLSX" ? "Excel workbook (.xlsx)" : type;
+  const metaParts = [`${typeLabel} · ${formatReportedSize(item.reported_size)}`];
   if (item.is_inline) {
     metaParts.push(INLINE_STATUS);
   }
@@ -123,7 +126,7 @@ export function AttachmentItem({
           <ProductErrorState
             ref={errorRef}
             {...errorView}
-            onRetry={errorView.retryLabel ? onAnalyze : undefined}
+            onRetry={errorView.retryLabel && !analysisBusy ? onAnalyze : undefined}
           />
         </div>
       ) : null}

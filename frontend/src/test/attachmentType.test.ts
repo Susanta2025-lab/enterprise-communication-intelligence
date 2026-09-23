@@ -30,3 +30,24 @@ describe("attachment type helpers", () => {
     expect(isOversizedReportedSize(5 * 1024 * 1024 + 1)).toBe(true);
   });
 });
+
+describe("Phase 21E format policy", () => {
+  it.each(["Budget.xlsx", "Budget.XLSX", " Budget.xlsx "])("recognizes %s", (filename) => {
+    expect(friendlyAttachmentType(filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("XLSX");
+    expect(isSupportedAttachmentType(filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe(true);
+  });
+
+  it.each(["xls", "xlsm", "xlsb", "csv", "tsv"])("rejects .%s before MIME fallback", (extension) => {
+    for (const media of ["text/plain", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"]) {
+      expect(isSupportedAttachmentType(`Data.${extension.toUpperCase()}`, media)).toBe(false);
+    }
+  });
+
+  it.each(["application/vnd.ms-excel", "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.ms-excel.sheet.binary.macroenabled.12", "text/csv", "text/tab-separated-values"])(
+    "rejects unsupported spreadsheet MIME %s", (media) => {
+      expect(isSupportedAttachmentType("data", media)).toBe(false);
+      expect(isSupportedAttachmentType("data.txt", media)).toBe(false);
+    },
+  );
+});

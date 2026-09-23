@@ -1,6 +1,6 @@
 # ECI Platform API Documentation
 
-This directory documents the REST API implemented through **Phase 20F – AI-Assisted Context Suggestions** (Phase 20G local hardening PASS; live multi-cloud validation pending), including Phase 20E timeline, Phase 20D Context APIs, Phase 19 Platform Owner Identity & Application RBAC, Phase 18 Secure Attachment Intelligence, Phase 14 connected-mailbox routes, and Phase 13 mailbox OAuth lifecycle.
+This directory documents the REST API implemented through **Phase 21 – XLSX / Tabular Intelligence** (Phase 21G Azure/AWS manual deployment and functional validation PASS), including Phase 20E timeline, Phase 20D Context APIs, Phase 19 Platform Owner Identity & Application RBAC, Phase 18 Secure Attachment Intelligence, Phase 14 connected-mailbox routes, and Phase 13 mailbox OAuth lifecycle.
 
 Phase 10 added no connector message-ingestion HTTP endpoints. Phase 11C adds workflow proposal and approval routes. Phase 12E adds `POST /api/v1/workflow-actions/{action_id}/execute` protected by `communications:send`. Phase 13C/13D add Gmail and Microsoft mailbox authorize (`communications:connect`) and unauthenticated provider callbacks. Phase 13F adds owned disconnect and reauthorize. Phase 14 adds `communications:read`, bounded mailbox listing, and selected-message mailbox-backed analyze. Phase 18 adds metadata-only attachment listing and explicit single-attachment analyze, plus attachment-analysis history reads. Phase 19 adds `GET /api/v1/me` (server-authoritative `application_role` / `is_owner`) and owner-only `GET /api/v1/admin/ping`. Phase 20D adds `/api/v1/contexts` BusinessContext CRUD/lifecycle and provenance association under existing `communications:analyze` / `communications:read`+`analyze` gates. Phase 20E adds ownership-scoped timeline. Phase 20F adds advisory `POST /api/v1/contexts/suggestions` (never creates links). Direct-text analyze remains distinct. There is no retry route. There is no mailbox sync, search, bulk, webhook, or worker route. Attachment analyze cannot create workflow actions or send mail. Context APIs never retrieve attachment bytes. There is no public API that writes `application_role`.
 
@@ -30,3 +30,14 @@ This documentation reflects the REST API plus Phase 6 cloud AI providers, Phase 
 **Note:** Nested endpoint markdown under this folder may still describe pre–Phase 19 surfaces in places; treat [Phase 19](../roadmap/phase-19-platform-owner-identity-and-application-rbac.md), [Phase 18](../roadmap/phase-18-secure-attachment-intelligence.md), and OpenAPI as authoritative for `/me`, admin ping, and attachment routes until those pages are separately refreshed.
 
 External business-user verification (Phase 17D) remains deferred and outside the currently completed release scope.
+
+
+## Phase 21 contract
+
+XLSX-only tabular intelligence now uses the existing explicit attachment Analyze
+and history routes with nullable structured `tabular_result`. The current
+[endpoints](endpoints.md#attachment-xlsx-support-phase-21) and
+[response fields](request-response-models.md#tabularanalysisresult-phase-21)
+describe this additive contract. Azure/AWS manual XLSX validation passed, as
+reported by the operator on 2026-09-23; see the [Phase 21G report](../codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations)
+for the distinction between live observations and source/test guarantees.

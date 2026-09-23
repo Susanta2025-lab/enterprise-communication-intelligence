@@ -8,6 +8,11 @@ from app.domain.schemas.context_suggestion import (
     BusinessContextSuggestionResult,
     CommunicationSuggestionEvidence,
 )
+from app.domain.schemas.tabular_analysis import (
+    TabularAnalysisRequest,
+    TabularAnalysisResult,
+    TabularSheetSummary,
+)
 
 __all__ = [
     "BusinessContextSuggestionCandidate",
@@ -17,4 +22,7 @@ __all__ = [
     "CommunicationAnalysisResult",
     "CommunicationRequest",
     "CommunicationSuggestionEvidence",
+    "TabularAnalysisRequest",
+    "TabularAnalysisResult",
+    "TabularSheetSummary",
 ]

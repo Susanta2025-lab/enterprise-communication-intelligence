@@ -46,6 +46,7 @@ from app.domain.attachment_policy import (
     attachment_size_bucket,
     evaluate_attachment_content,
     evaluate_attachment_metadata,
+    validate_attachment_content_size,
 )
 from app.domain.enums import AttachmentKind, AttachmentScanVerdict
 from app.domain.exceptions import (
@@ -153,8 +154,16 @@ class AttachmentInspectionService:
             size_bucket=attachment_size_bucket(actual_size),
         )
 
+        # XLSX container work is deferred until CLEAN; size/provenance remain
+        # pre-scan gates. Preserve the established non-XLSX policy ordering.
         try:
-            kind = evaluate_attachment_content(content)
+            if evaluate_attachment_metadata(content.metadata) is not declared_kind:
+                raise AttachmentUnsupportedError()
+            if declared_kind is AttachmentKind.XLSX:
+                validate_attachment_content_size(content)
+                kind = declared_kind
+            else:
+                kind = evaluate_attachment_content(content)
         except AttachmentUnsupportedError:
             _log_policy_rejected(connector.provider, "unsupported", actual_size)
             raise AttachmentNotSupportedError() from None
@@ -231,6 +240,18 @@ class AttachmentInspectionService:
             size_bucket=attachment_size_bucket(actual_size),
             kind=kind.value,
         )
+        if kind is AttachmentKind.XLSX:
+            try:
+                kind = evaluate_attachment_content(content)
+            except AttachmentUnsupportedError:
+                _log_policy_rejected(connector.provider, "unsupported", actual_size)
+                raise AttachmentNotSupportedError() from None
+            except AttachmentExceedsLimitError:
+                _log_policy_rejected(connector.provider, "exceeds_limit", actual_size)
+                raise ApplicationAttachmentExceedsLimitError() from None
+            except AttachmentContentInvalidError:
+                _log_policy_rejected(connector.provider, "invalid_content", actual_size)
+                raise ApplicationAttachmentContentInvalidError() from None
         return InspectedAttachment(content=content, kind=kind, scan=scan)
 
 

@@ -635,3 +635,29 @@ Hard delete (`DELETE /api/v1/contexts/{context_id}`) is **not** exposed.
   - AI failure does not prevent subsequent manual association
 
 **Non-goals:** Autonomous assignment; `ai_confirmed` association source; suggestion persistence table; tool calling.
+
+
+## Attachment XLSX support (Phase 21)
+
+Existing routes are reused; there is no XLSX-specific endpoint:
+
+| Method / path (under `/api/v1`) | Behavior |
+|---|---|
+| `GET /connector-accounts/{id}/messages/attachments?provider_message_id=...` | Metadata only; requires `communications:read`; no bytes/parser/AI |
+| `POST /connector-accounts/{id}/messages/attachments/analyze` | Explicit single Analyze; requires read + analyze; body contains `provider_message_id` and `provider_attachment_id` |
+| `GET /attachment-analyses` | Owned history; requires analyze; optional connector/message filters |
+| `GET /attachment-analyses/{id}` | Owned detail; unknown and foreign IDs return 404 |
+
+XLSX requires matching extension/MIME/ZIP/OOXML identity. Legacy `.xls`, `.xlsm`,
+`.xlsb`, `.csv`, `.tsv` are unsupported. Owned ACTIVE/mail.read connector and
+provenance checks precede processing; Platform Owner has no ownership bypass.
+Size/budget gates precede CLEAN scanning, which precedes XLSX container validation
+and bounded parsing. Formula/URL text is inert. Safe existing 401/403/404/409/422,
+analysis-failure 500, and dependency-unavailable 503 responses remain in use.
+
+Successful XLSX returns `kind="xlsx"` and structured `tabular_result` in Analyze,
+list, and detail. PDF/DOCX/TXT behavior remains compatible with `tabular_result=null`.
+Repeated successful explicit Analyze creates distinct history records. No raw
+workbook is stored; no workflow, deadline, obligation, or context association is
+created. Azure/AWS Phase 21 live validation is pending Phase 21G.
+See [structured response fields](request-response-models.md#tabularanalysisresult-phase-21).

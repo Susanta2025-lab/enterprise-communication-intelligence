@@ -2,9 +2,11 @@
 
 Operator runbook for deploying the already verified ECI Docker image to Azure Container Apps.
 
-**Status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 20 Azure live validation PASS** (Alembic head `20c0001`; ACA `eci-api:ed5eebc-p20g` / `eci-api-dev--0000011`; SWA `eci-web-dev`). AWS Phase 20 validation remains pending and out of scope for this runbook. Cost-aware retained posture may stop compute/database when idle after operator instruction (do not auto-stop after Azure PASS). Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
+**Current status (2026-09-23): Phase 21G deployment and functional validation PASS**, based on operator-reported manual evidence. Azure Outlook → `microsoft_foundry`; PostgreSQL `21d0001`; Phase 21 backend and frontend deployed; bundle `index-BQKDgcbq.js` hash matched; health/readiness HTTP 200. See the [Phase 21G closure report](../../docs/codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations) for evidence limits. Earlier posture snapshots and commands below are historical; do not repeat migrations or deployments without separate authorization.
 
-## Current Azure posture (Phase 20 Azure live validation — PASS)
+**Historical Phase 20 status:** Prompt 5 live deployment completed. Phase 7B attached Log Analytics. **Phase 20 Azure live validation PASS** (Alembic head `20c0001`; ACA `eci-api:ed5eebc-p20g` / `eci-api-dev--0000011`; SWA `eci-web-dev`). AWS Phase 20 validation remains pending and out of scope for this runbook. Cost-aware retained posture may stop compute/database when idle after operator instruction (do not auto-stop after Azure PASS). Historical Phase 19 / 18 / 16F banners below remain historical. Historical Phase 6C/7 commands below are not the current mutation procedure. Never delete `rg-eci-dev`.
+
+## Historical Azure posture (Phase 20 Azure live validation — PASS)
 
 Application path (cloud-neutral app; Azure-specific hosting):
 
@@ -690,3 +692,37 @@ Keep clamd off public ingress. Plan ~1–2 GiB memory for ClamAV and allow defin
 - Application Insights, dashboards, alerts
 - Application-user authentication
 - Changing `Dockerfile`, application code, or Foundry resources
+
+
+## Phase 21 XLSX release preparation (historical checklist)
+
+Phase 21G manual deployment and functional validation subsequently passed; see
+[the closure report](../../docs/codex/reports/phase_21g_report.md). This checklist
+is preserved as preparation guidance, not evidence that every listed case was
+exercised live. The migrations and deployments below have already completed.
+
+Earlier Phase 18 XLSX-rejection evidence above is historical. The local Phase 21
+build supports `.xlsx` through explicit Analyze only; `.xls`, `.xlsm`, `.xlsb`,
+`.csv`, and `.tsv` remain unsupported. Listing retrieves metadata only. CLEAN
+scanning precedes container validation and bounded `openpyxl` extraction;
+formulas and URLs remain inert. Validated advisory `tabular_result` is stored in
+existing attachment history, without raw workbook persistence or workflow actions.
+
+Any further cloud work requires separate explicit authorization. First inspect actual runtime,
+image, frontend, database revision, and scanner state; do not repeat a migration
+or deployment that already completed. Rebuild the shared backend with the existing
+`openpyxl>=3.1` declaration; apply migration `21d0001` using the established migration
+runbook before enabling the new backend/frontend. Use the cloud-specific frontend
+build. No new infrastructure or broader IAM is required.
+
+`21d0001` revises `20c0001`, adds nullable JSONB and permits XLSX. Downgrade refuses
+while XLSX rows exist; do not delete real history to force rollback. Retain the
+revision or obtain an explicit data-retention/rollback decision. Locally validated
+round-trips remove synthetic rows only.
+
+Validate owned mailbox metadata listing → explicit XLSX Analyze → real CLEAN
+scanner → provider → complete structured persistence/history → safe UI. Check
+legacy-format rejection, truncation, ownership (including Platform Owner), PDF/DOCX/TXT
+regression, no workflow/BusinessContext mutation, sanitized failures/logs, and
+memory/latency on the existing 1 GiB runtime. Do not Send. Resource stop/resize/delete
+requires explicit authorization. See the [Phase 21 roadmap](../../docs/roadmap/phase-21-xlsx-tabular-intelligence.md).

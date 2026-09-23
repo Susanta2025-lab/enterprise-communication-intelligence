@@ -1,11 +1,15 @@
 """Attachment-analysis repository ownership and cascade tests using SQLite."""
 
+from dataclasses import replace
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import sessionmaker
 
+from app.core.exceptions import PersistenceError
 from app.domain.interfaces.attachment_analysis_repository import NewAttachmentAnalysis
+from app.domain.schemas import TabularAnalysisResult
 from app.infrastructure.storage.models import AttachmentAnalysisRow, User, WorkflowAction
 from app.infrastructure.storage.repositories.attachment_analysis import (
     SqlAlchemyAttachmentAnalysisRepository,
@@ -13,6 +17,67 @@ from app.infrastructure.storage.repositories.attachment_analysis import (
 from app.infrastructure.storage.repositories.identity import SqlAlchemyIdentityRepository
 
 _ISSUER = "https://issuer.example.invalid/"
+
+
+def test_complete_tabular_result_roundtrip(session_factory):
+    user_id, other_id = _create_users(session_factory)
+    result = TabularAnalysisResult(
+        summary="Budget sample",
+        sheet_summaries=[{"sheet_name": "Budget", "summary": "Quoted totals"}],
+        important_fields=["Amount"],
+        notable_values_or_patterns=["Two totals"],
+        data_quality_observations=["Currency not specified"],
+        potential_dates=["2030-01-01"],
+        potential_amounts=["42"],
+        potential_action_mentions=["Review totals"],
+        warnings=["Formula text is inert"],
+        limitations=["Sample only"],
+        source_truncated=True,
+        provider="mock",
+    )
+    with session_factory() as session:
+        repo = SqlAlchemyAttachmentAnalysisRepository(session)
+        saved = repo.save(replace(_new_row(user_id), kind="xlsx", tabular_result=result))
+        session.commit()
+    with session_factory() as session:
+        repo = SqlAlchemyAttachmentAnalysisRepository(session)
+        loaded = repo.get_by_id_for_user(saved.id, user_id)
+        assert isinstance(loaded.tabular_result, TabularAnalysisResult)
+        assert loaded.tabular_result.model_dump() == result.model_dump()
+        assert repo.list_for_user(user_id, 20, 0)[0].tabular_result == result
+        assert repo.get_by_id_for_user(saved.id, other_id) is None
+
+
+def test_corrupt_tabular_json_is_not_trusted_on_read(session_factory):
+    user_id, _ = _create_users(session_factory)
+    secret = "PRIVATE_CORRUPT_WORKBOOK_CONTENT"
+    with session_factory() as session:
+        repo = SqlAlchemyAttachmentAnalysisRepository(session)
+        saved = repo.save(replace(_new_row(user_id), kind="xlsx"))
+        row = session.get(AttachmentAnalysisRow, saved.id)
+        row.tabular_result = {"summary": "Allowed", "raw_workbook": secret}
+        session.commit()
+    with session_factory() as session:
+        repo = SqlAlchemyAttachmentAnalysisRepository(session)
+        for read in (
+            lambda: repo.get_by_id_for_user(saved.id, user_id),
+            lambda: repo.list_for_user(user_id, 20, 0),
+        ):
+            with pytest.raises(PersistenceError) as error:
+                read()
+            assert secret not in str(error.value)
+
+
+def test_unbounded_tabular_result_is_rejected_before_insert(session_factory):
+    user_id, _ = _create_users(session_factory)
+    result = TabularAnalysisResult(summary="Bounded").model_copy(
+        update={"potential_dates": ["x" * 201]}
+    )
+    with session_factory() as session:
+        repo = SqlAlchemyAttachmentAnalysisRepository(session)
+        with pytest.raises(PersistenceError):
+            repo.save(replace(_new_row(user_id), kind="xlsx", tabular_result=result))
+        assert repo.list_for_user(user_id, 20, 0) == []
 
 
 def _new_row(

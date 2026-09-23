@@ -15,7 +15,7 @@ export function attachmentAnalysisPath(attachmentAnalysisId: string): string {
 
 export type AttachmentDisposition = "attachment" | "inline" | "unknown";
 
-export type AttachmentKind = "pdf" | "docx" | "jpeg" | "png" | "txt";
+export type AttachmentKind = "pdf" | "docx" | "jpeg" | "png" | "txt" | "xlsx";
 
 export type AttachmentExtractedContentStatus = "text" | "truncated_text" | "image";
 
@@ -62,6 +62,27 @@ export type AttachmentAnalysisActionItem = {
   priority?: "low" | "medium" | "high" | "critical" | null;
 };
 
+export type TabularSheetSummary = {
+  sheet_name: string;
+  summary: string;
+};
+
+// Advisory observations from the backend; never workflow or deadline entities.
+export type TabularAnalysisResult = {
+  summary: string;
+  sheet_summaries: readonly TabularSheetSummary[];
+  important_fields: readonly string[];
+  notable_values_or_patterns: readonly string[];
+  data_quality_observations: readonly string[];
+  potential_dates: readonly string[];
+  potential_amounts: readonly string[];
+  potential_action_mentions: readonly string[];
+  warnings: readonly string[];
+  limitations: readonly string[];
+  source_truncated: boolean;
+  provider?: string | null;
+};
+
 export type AttachmentAnalysisResponse = {
   attachment_analysis_id: string;
   created_at: string;
@@ -80,6 +101,7 @@ export type AttachmentAnalysisResponse = {
   category?: string;
   action_items?: readonly AttachmentAnalysisActionItem[];
   provider?: string | null;
+  tabular_result?: TabularAnalysisResult | null;
 };
 
 export type AttachmentAnalysisListResponse = {

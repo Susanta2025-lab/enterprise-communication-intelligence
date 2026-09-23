@@ -129,6 +129,132 @@ def docx_with_external_relationship() -> bytes:
     return buffer.getvalue()
 
 
+def minimal_xlsx_bytes(
+    *,
+    extra: dict[str, bytes] | None = None,
+    include_vba: bool = False,
+    include_workbook_rels: bool = True,
+) -> bytes:
+    """Synthetic OOXML spreadsheet container. No real business data."""
+    buffer = io.BytesIO()
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Types "
+        'xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" '
+        'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.'
+        'spreadsheetml.sheet.main+xml"/>'
+        "</Types>"
+    )
+    workbook = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<workbook "
+        'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/'
+        'relationships"/>'
+        "</sheets></workbook>"
+    )
+    workbook_rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Relationships "
+        'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+        'relationships/officeDocument" '
+        'Target="worksheets/sheet1.xml"/>'
+        "</Relationships>"
+    )
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("xl/workbook.xml", workbook)
+        if include_workbook_rels:
+            archive.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+        if include_vba:
+            archive.writestr("xl/vbaProject.bin", b"macro")
+        for name, data in (extra or {}).items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
+def xlsx_with_external_relationship() -> bytes:
+    external_rels = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b"<Relationships "
+        b'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        b'<Relationship Id="rId1" '
+        b'Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+        b'relationships/officeDocument" '
+        b'Target="worksheets/sheet1.xml"/>'
+        b'<Relationship Id="rEvil" '
+        b'Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+        b'relationships/hyperlink" '
+        b'Target="https://evil.example/ignore" '
+        b'TargetMode="External"/>'
+        b"</Relationships>"
+    )
+    return minimal_xlsx_bytes(
+        extra={"xl/_rels/workbook.xml.rels": external_rels},
+        include_workbook_rels=False,
+    )
+
+
+def xlsx_with_formula_cells() -> bytes:
+    """Minimal workbook containing a formula cell via openpyxl (never executed)."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet["A1"] = 1
+    sheet["A2"] = 2
+    sheet["A3"] = "=A1+A2"
+    sheet["B1"] = '=HYPERLINK("https://evil.example","x")'
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def xlsx_workbook(
+    sheets: list[dict] | None = None,
+) -> bytes:
+    """Build a synthetic XLSX workbook with optional multi-sheet layout.
+
+    Each sheet dict may include:
+    - name: str
+    - state: visible|hidden|veryHidden
+    - rows: list[list[object]] (cell values; formulas as strings starting with =)
+    """
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    # Remove the default sheet after creating the first requested sheet.
+    default = workbook.active
+    sheet_specs = sheets or [{"name": "Sheet1", "rows": [["A", "B"], [1, 2]]}]
+    first = True
+    for spec in sheet_specs:
+        name = spec.get("name", "Sheet1")
+        if first:
+            worksheet = default
+            worksheet.title = name
+            first = False
+        else:
+            worksheet = workbook.create_sheet(name)
+        state = spec.get("state", "visible")
+        worksheet.sheet_state = state
+        for row_index, row in enumerate(spec.get("rows", []), start=1):
+            for col_index, value in enumerate(row, start=1):
+                worksheet.cell(row=row_index, column=col_index, value=value)
+        merges = spec.get("merges", [])
+        for merge in merges:
+            worksheet.merge_cells(merge)
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def tiny_jpeg() -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (16, 16), color=(12, 34, 56)).save(buffer, format="JPEG")

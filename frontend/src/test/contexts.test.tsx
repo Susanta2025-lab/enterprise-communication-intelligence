@@ -716,6 +716,32 @@ describe("context timeline", () => {
     expect(entries[1]).toHaveTextContent("Context created");
   });
 
+  it("renders an XLSX analysis as a generic attachment timeline event without content requests", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = defaultFetch((url) => {
+      if (url.includes(`/api/v1/contexts/${CONTEXT_ID}/timeline`)) {
+        return jsonResponse(200, {
+          items: [timelineEntry({
+            id: "attachment_analysis:xlsx-1",
+            type: "attachment_analysis_completed",
+            title: "Budget.xlsx",
+            summary: "Advisory workbook observations",
+          })], limit: 50, offset: 0,
+        });
+      }
+      if (url.includes(`/api/v1/contexts/${CONTEXT_ID}`)) return jsonResponse(200, context());
+      return null;
+    });
+    renderContexts({ fetchImpl, path: contextWorkspacePath(CONTEXT_ID) });
+    await screen.findByRole("heading", { name: "Acme Project" });
+    await user.click(screen.getByRole("tab", { name: "Timeline" }));
+    const entry = await screen.findByTestId("timeline-entry-attachment_analysis_completed");
+    expect(entry).toHaveTextContent("Budget.xlsx");
+    expect(entry).toHaveTextContent("Advisory workbook observations");
+    expect(fetchImpl.mock.calls.some(([url]) => /attachments|attachment-analyses/.test(String(url)))).toBe(false);
+    expect(fetchImpl.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
   it("shows empty and error timeline states", async () => {
     const user = userEvent.setup();
     const fetchImpl = defaultFetch((url) => {

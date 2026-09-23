@@ -14,7 +14,9 @@ env
 
 # Python bytecode and packaging artifacts
 __pycache__
+**/__pycache__
 *.py[cod]
+**/*.py[cod]
 *$py.class
 *.so
 *.egg-info

@@ -117,13 +117,18 @@ class AttachmentDisposition(StrEnum):
 
 
 class AttachmentKind(StrEnum):
-    """Phase 18 allowlisted attachment kinds. Extension alone is never sufficient."""
+    """Recognized attachment kinds. Extension alone is never sufficient.
+
+    ``XLSX`` supports explicit Analyze through CLEAN scanning, container
+    validation, bounded extraction, advisory AI, and structured history.
+    """
 
     PDF = "pdf"
     DOCX = "docx"
     JPEG = "jpeg"
     PNG = "png"
     TXT = "txt"
+    XLSX = "xlsx"
 
 
 class AttachmentScanVerdict(StrEnum):

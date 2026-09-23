@@ -16,6 +16,10 @@ from app.domain.schemas.context_suggestion import (
     BusinessContextSuggestionRequest,
     BusinessContextSuggestionResult,
 )
+from app.domain.schemas.tabular_analysis import (
+    TabularAnalysisRequest,
+    TabularAnalysisResult,
+)
 from app.providers.common.output import (
     AnalysisOutputError,
     parse_analysis_output,
@@ -30,9 +34,18 @@ from app.providers.common.suggestion_prompts import (
     CONTEXT_SUGGESTION_SYSTEM_PROMPT,
     build_context_suggestion_user_prompt,
 )
+from app.providers.common.tabular_output import (
+    parse_tabular_analysis_output,
+    to_tabular_analysis_result,
+)
+from app.providers.common.tabular_prompts import (
+    TABULAR_ANALYSIS_SYSTEM_PROMPT,
+    build_tabular_analysis_user_prompt,
+)
 from app.providers.microsoft_foundry.output import (
     FOUNDRY_ANALYSIS_JSON_SCHEMA,
     FOUNDRY_CONTEXT_SUGGESTION_JSON_SCHEMA,
+    FOUNDRY_TABULAR_ANALYSIS_JSON_SCHEMA,
 )
 
 logger = get_logger(__name__)
@@ -190,6 +203,69 @@ class MicrosoftFoundryProvider(AIProvider):
             operation="suggest_business_context",
             duration_ms=elapsed_ms(started_at),
             suggestion_count=len(result.suggestions),
+        )
+        return result
+
+    def analyze_tabular(
+        self,
+        request: TabularAnalysisRequest,
+    ) -> TabularAnalysisResult:
+        """Analyze a bounded workbook sample through Microsoft Foundry."""
+        logger.info(
+            "microsoft_foundry_tabular_analysis_requested",
+            provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            operation="analyze_tabular",
+            input_character_count=request.input_character_count,
+            source_truncated=request.source_truncated,
+        )
+        started_at = time.perf_counter()
+
+        try:
+            response = self._get_openai_client().responses.create(
+                model=self._model_deployment,
+                instructions=TABULAR_ANALYSIS_SYSTEM_PROMPT,
+                input=build_tabular_analysis_user_prompt(request),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "tabular_analysis",
+                        "strict": True,
+                        "schema": FOUNDRY_TABULAR_ANALYSIS_JSON_SCHEMA,
+                    }
+                },
+            )
+            output_text = getattr(response, "output_text", None)
+            if not isinstance(output_text, str):
+                raise AnalysisOutputError(
+                    "Microsoft Foundry returned a response without JSON text output."
+                )
+
+            output = parse_tabular_analysis_output(output_text)
+            result = to_tabular_analysis_result(
+                output,
+                request,
+                provider=self.PROVIDER_NAME,
+            )
+        except Exception as exc:
+            logger.error(
+                "microsoft_foundry_tabular_analysis_failed",
+                provider=self.PROVIDER_NAME,
+                deployment=self._model_deployment,
+                operation="analyze_tabular",
+                duration_ms=elapsed_ms(started_at),
+                error_class=error_class(exc),
+            )
+            raise
+
+        logger.info(
+            "microsoft_foundry_tabular_analysis_completed",
+            provider=self.PROVIDER_NAME,
+            deployment=self._model_deployment,
+            operation="analyze_tabular",
+            duration_ms=elapsed_ms(started_at),
+            source_truncated=result.source_truncated,
+            sheet_summary_count=len(result.sheet_summaries),
         )
         return result
 

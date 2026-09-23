@@ -8,6 +8,7 @@ from app.domain.enums import (
     AttachmentKind,
 )
 from app.domain.models.analysis import CommunicationAnalysis
+from app.domain.models.tabular_analysis import TabularAnalysisResult
 from app.domain.models.validation import require_non_empty_text
 
 _ALLOWED_IMAGE_MEDIA_TYPES = frozenset({"image/jpeg", "image/png"})
@@ -167,6 +168,7 @@ class AttachmentAnalysis(BaseModel):
     character_count: int | None = Field(default=None, ge=0)
     analysis: CommunicationAnalysis
     provider: str | None = None
+    tabular_result: TabularAnalysisResult | None = None
 
     @field_validator("source_message_id")
     @classmethod
