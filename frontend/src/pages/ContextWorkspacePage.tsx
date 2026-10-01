@@ -1,3 +1,4 @@
+import { WorkItemsListPage } from "./WorkItemsListPage";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -33,7 +34,7 @@ type ContextWorkspacePageProps = {
   contextId: string;
 };
 
-type WorkspaceTab = "overview" | "communications" | "timeline";
+type WorkspaceTab = "overview" | "communications" | "timeline" | "tracking";
 
 export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspacePageProps) {
   const { permissions } = useAuth();
@@ -43,6 +44,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
     "communications:analyze",
   ]);
   const [tab, setTab] = useState<WorkspaceTab>("overview");
+  const [timelineOffset, setTimelineOffset] = useState(0);
   const [editing, setEditing] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
   const [removeError, setRemoveError] = useState<unknown>(null);
@@ -62,6 +64,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
     apiClient,
     contextId,
     canAnalyze && tab === "timeline",
+    timelineOffset,
   );
 
   const context = detailQuery.data;
@@ -233,6 +236,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
                 ["overview", "Overview"],
                 ["communications", "Communications"],
                 ["timeline", "Timeline"],
+                ["tracking", "Tracking"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -372,6 +376,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
             </div>
           ) : null}
 
+          {tab === "tracking" && <WorkItemsListPage apiClient={apiClient} contextId={contextId} />}
           {tab === "timeline" ? (
             <div className="space-y-4">
               {timelineQuery.isPending ? <LoadingSkeleton /> : null}
@@ -408,6 +413,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
                       <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
                         {timelineEventLabel(entry.type)}
                       </p>
+                      {entry.source_type === "work_item" && entry.source_id && <Link className="underline" to={`/tracking/${entry.source_id}`}>Open current work item</Link>}
                       {entry.summary ? (
                         <p className="mt-2 text-sm text-slate-600">{entry.summary}</p>
                       ) : null}
@@ -418,6 +424,7 @@ export function ContextWorkspacePage({ apiClient, contextId }: ContextWorkspaceP
                   ))}
                 </ol>
               ) : null}
+              <div className="flex gap-3"><Button disabled={!timelineOffset || timelineQuery.isFetching} onClick={() => setTimelineOffset(n => n - 50)}>Previous events</Button><Button disabled={timelineQuery.isFetching || timelineQuery.data?.items.length !== 50} onClick={() => setTimelineOffset(n => n + 50)}>Next events</Button></div>
               <p className="text-xs text-slate-500">
                 Timeline is a read model. Archive/restore history is limited to the current archived
                 state when present.

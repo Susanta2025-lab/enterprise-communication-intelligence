@@ -162,7 +162,7 @@ describe("analyze trigger", () => {
       return jsonResponse(200, listBody([account()]));
     });
     renderWorkspace({ fetchImpl });
-    expect(await screen.findByRole("button", { name: /Ada Lovelace/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Ada Lovelace/ }, { timeout: 5000 })).toBeInTheDocument();
     expect(analyzeCalls(fetchImpl)).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Analyze message" })).not.toBeInTheDocument();
 

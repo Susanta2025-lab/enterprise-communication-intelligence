@@ -42,6 +42,7 @@ from app.application.services.context_timeline import ContextTimelineService
 from app.application.services.gmail_mailbox_oauth import GmailMailboxOAuthService
 from app.application.services.identity import IdentityResolver
 from app.application.services.microsoft_mailbox_oauth import MicrosoftMailboxOAuthService
+from app.application.services.work_items import WorkItemService
 from app.application.services.workflow_action_execution import WorkflowActionExecutionService
 from app.application.services.workflow_actions import WorkflowActionService
 from app.core.config import get_settings
@@ -1085,3 +1086,11 @@ def _build_connector_account_service() -> ConnectorAccountService:
         credential_store=store,
         token_revokers=revokers,
     )
+
+
+def get_work_item_service(
+    identity_resolver: Annotated[IdentityResolver, Depends(get_identity_resolver)],
+    uow_factory: Annotated[UnitOfWorkFactory, Depends(require_unit_of_work_factory)],
+) -> WorkItemService:
+    """Build tracking without mailbox, AI or executor dependencies."""
+    return WorkItemService(identity_resolver, uow_factory)

@@ -1,5 +1,6 @@
+import { CreationDraftContext, type CreationDrafts } from "./components/workItems/creationDrafts";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes, useParams } from "react-router-dom";
 
 import type { EciApiClient } from "./api/client";
@@ -9,21 +10,40 @@ import { AppShell } from "./components/AppShell";
 import { AppErrorBoundary } from "./components/feedback/AppErrorBoundary";
 import { SignInPanel } from "./components/SignInPanel";
 import type { FrontendConfig } from "./config/env";
-import { ContextWorkspacePage } from "./pages/ContextWorkspacePage";
 import { ContextsListPage } from "./pages/ContextsListPage";
 import { HomePage } from "./pages/HomePage";
-import { MailboxWorkspacePage } from "./pages/MailboxWorkspacePage";
 import { createQueryClient } from "./query/queryClient";
+
+const WorkItemsListPage = lazy(() => import("./pages/WorkItemsListPage").then(module => ({ default: module.WorkItemsListPage })));
+
+const WorkItemDetailPage = lazy(() => import("./pages/WorkItemDetailPage").then(module => ({ default: module.WorkItemDetailPage })));
+
+const ContextWorkspacePage = lazy(() => import("./pages/ContextWorkspacePage").then(module => ({ default: module.ContextWorkspacePage })));
+
+const MailboxWorkspacePage = lazy(() => import("./pages/MailboxWorkspacePage").then(module => ({ default: module.MailboxWorkspacePage })));
 
 type AppProps = {
   apiClient: EciApiClient;
   config: FrontendConfig;
 };
 
-export function App({ apiClient, config }: AppProps) {
+export function App(props: AppProps) {
+  const { accountKey, isAuthenticated } = useAuth();
+  return <IdentityApp key={`${isAuthenticated}:${accountKey ?? ""}`} {...props} />;
+}
+
+function IdentityApp({ apiClient, config }: AppProps) {
   const [queryClient] = useState(() => createQueryClient());
+  const [creationDrafts] = useState<CreationDrafts>(() => new Map());
+
+  useEffect(() => () => {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    creationDrafts.clear();
+  }, [queryClient, creationDrafts]);
 
   return (
+    <CreationDraftContext.Provider value={creationDrafts}>
     <QueryClientProvider client={queryClient}>
       <AppErrorBoundary>
         <BrowserRouter>
@@ -31,6 +51,7 @@ export function App({ apiClient, config }: AppProps) {
         </BrowserRouter>
       </AppErrorBoundary>
     </QueryClientProvider>
+    </CreationDraftContext.Provider>
   );
 }
 
@@ -43,8 +64,17 @@ function ContextWorkspaceRoute({ apiClient }: { apiClient: EciApiClient }) {
 }
 
 function AppRoutes({ apiClient, config }: AppProps) {
-  const { isAuthenticated, interactionInProgress } = useAuth();
+  const { isAuthenticated, interactionInProgress, accountKey } = useAuth();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    return () => {
+      for (const key of ["work-items", "contexts", "attachment-analyses", "mailbox-attachments"]) {
+        void queryClient.cancelQueries({ queryKey: [key] });
+        queryClient.removeQueries({ queryKey: [key] });
+      }
+    };
+  }, [accountKey, queryClient]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -69,7 +99,7 @@ function AppRoutes({ apiClient, config }: AppProps) {
   }
 
   return (
-    <CurrentUserProvider apiClient={apiClient}>
+    <CurrentUserProvider key={accountKey} apiClient={apiClient}>
       <AppShell
         deployment={{
           cloudProvider: config.cloudProvider,
@@ -77,7 +107,10 @@ function AppRoutes({ apiClient, config }: AppProps) {
           cloudRegion: config.cloudRegion,
         }}
       >
+        <Suspense fallback={<p role="status">Loading workspace…</p>}>
         <Routes>
+          <Route path="/tracking" element={<WorkItemsListPage apiClient={apiClient} />} />
+          <Route path="/tracking/:itemId" element={<WorkItemDetailPage apiClient={apiClient} />} />
           <Route path="/" element={<HomePage apiClient={apiClient} />} />
           <Route path="/contexts" element={<ContextsListPage apiClient={apiClient} />} />
           <Route
@@ -89,6 +122,7 @@ function AppRoutes({ apiClient, config }: AppProps) {
             element={<MailboxWorkspacePage apiClient={apiClient} />}
           />
         </Routes>
+        </Suspense>
       </AppShell>
     </CurrentUserProvider>
   );

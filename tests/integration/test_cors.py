@@ -161,3 +161,26 @@ def test_existing_health_and_protected_route_behavior_unchanged(
     analyses = cors_client.get(f"{_ANALYSES_URL}?limit=1")
     assert analyses.status_code == 401
     assert "access_token" not in analyses.text
+
+
+def test_tracking_duplicate_location_is_readable_by_allowed_browser(cors_client: TestClient):
+    from uuid import UUID
+
+    from app.domain.exceptions import WorkItemConflictError
+
+    item_id = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+
+    @cors_client.app.get("/test-tracking-conflict")
+    def duplicate():
+        raise WorkItemConflictError(
+            "work_item_candidate_already_tracked", existing_item_id=item_id,
+        )
+
+    response = cors_client.get(
+        "/test-tracking-conflict", headers={"Origin": _FRONTEND_ORIGIN},
+    )
+    assert response.status_code == 409
+    assert response.headers["location"] == f"/api/v1/work-items/{item_id}"
+    assert response.headers["access-control-expose-headers"] == "Location"
+    assert response.headers["access-control-allow-origin"] == _FRONTEND_ORIGIN
+    assert "access-control-allow-credentials" not in response.headers

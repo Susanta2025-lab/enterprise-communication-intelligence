@@ -46,7 +46,13 @@ from app.core.exceptions import (
 )
 from app.core.logging import configure_logging, get_logger
 from app.core.telemetry import error_class
-from app.domain.exceptions import InvalidWorkflowTransitionError
+from app.domain.exceptions import (
+    InvalidWorkflowTransitionError,
+    WorkItemConflictError,
+    WorkItemInputError,
+    WorkItemNotFoundError,
+    WorkItemPermissionError,
+)
 from app.infrastructure.storage.runtime import dispose_persistence_runtime
 from app.schemas.errors import error_payload
 
@@ -161,6 +167,35 @@ def create_app() -> FastAPI:
         logger = get_logger(__name__)
         logger.info("attachment_analysis_not_found", error_class=error_class(exc))
         return JSONResponse(status_code=404, content={"detail": exc.message})
+
+    @application.exception_handler(WorkItemNotFoundError)
+    async def work_item_not_found_handler(_request: Request, exc: WorkItemNotFoundError):
+        return JSONResponse(
+            status_code=404, content={"detail": "Work item or reference not found."}
+        )
+
+    @application.exception_handler(WorkItemInputError)
+    async def work_item_input_handler(_request: Request, exc: WorkItemInputError):
+        return JSONResponse(status_code=422, content={"detail": "Invalid candidate selection."})
+
+    @application.exception_handler(WorkItemPermissionError)
+    async def work_item_permission_handler(_request: Request, exc: WorkItemPermissionError):
+        return JSONResponse(status_code=403, content={"detail": "Insufficient permissions."})
+
+    @application.exception_handler(WorkItemConflictError)
+    async def work_item_conflict_handler(_request: Request, exc: WorkItemConflictError):
+        return JSONResponse(
+            status_code=409,
+            headers=(
+                {"Location": f"/api/v1/work-items/{exc.existing_item_id}"}
+                if exc.existing_item_id
+                else None
+            ),
+            content={
+                "detail": "Work item request conflicts with its current state.",
+                "code": exc.code,
+            },
+        )
 
     @application.exception_handler(BusinessContextNotFoundError)
     async def business_context_not_found_handler(
@@ -390,6 +425,7 @@ def _configure_cors(application: FastAPI, settings: Settings) -> None:
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["Location"],
     )
 
 

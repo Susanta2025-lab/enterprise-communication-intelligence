@@ -1,3 +1,4 @@
+import type { EciApiClient } from "../../api/client";
 import type { AttachmentAnalysisResponse, AttachmentMetadataItem } from "../../api/attachments";
 import { presentProductError } from "../../errors/presentProductError";
 import { ProductErrorState } from "../feedback/ProductErrorState";
@@ -12,6 +13,7 @@ import {
 } from "./attachmentCopy";
 
 type AttachmentsSectionProps = {
+  apiClient?: EciApiClient;
   canAnalyze: boolean;
   imageAnalysisAvailable: boolean;
   loading: boolean;
@@ -27,6 +29,7 @@ type AttachmentsSectionProps = {
 };
 
 export function AttachmentsSection({
+  apiClient,
   canAnalyze,
   imageAnalysisAvailable,
   loading,
@@ -73,6 +76,7 @@ export function AttachmentsSection({
         <ul className="space-y-3" aria-label={ATTACHMENTS_HEADING}>
           {items.map((item) => (
             <AttachmentItem
+                apiClient={apiClient}
               key={item.provider_attachment_id}
               item={item}
               canAnalyze={canAnalyze}

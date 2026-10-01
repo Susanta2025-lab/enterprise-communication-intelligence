@@ -12,7 +12,7 @@
 
 
 
-It turns business communications into structured, actionable intelligence—summaries, priority, action items, draft replies, and (with explicit user action) secure attachment analysis—while keeping humans in control of every external side effect.
+It turns business communications into structured intelligence—summaries, priority, action suggestions, draft replies, and secure attachment analysis—and lets users explicitly track business actions and obligations while keeping humans in control of consequential changes and external side effects.
 
 The same application image runs with a deterministic mock AI provider locally, **Microsoft Foundry** on Azure, and **Amazon Bedrock** on AWS. Mailbox integrations today cover **Gmail** and **Microsoft Graph / Outlook**. Application login uses **Microsoft Entra External ID** (OIDC / MSAL), separate from mailbox OAuth and from cloud workload identities.
 
@@ -40,6 +40,7 @@ ECI addresses that with:
 | --- | --- |
 | Communication analysis | Summary, priority, category, action items, AI draft suggestion |
 | Business context | Flat user-owned matter/case/project/client/transaction/account organization; manual communication association; context timeline; AI-assisted suggestions with human confirmation (never autonomous assignment) |
+| Tracking / Work Items | Durable user-confirmed actions and obligations; optional Business Context and due value; lifecycle, archive/restore, verified provenance and auditable event history; Tracking list/detail UI and Context workspace integration |
 | Mailboxes | Gmail and Microsoft Graph/Outlook: connect, list, selected-message analyze |
 | Secure attachments | Metadata listing; explicit single-attachment Analyze for PDF / DOCX / TXT / XLSX; JPEG/PNG gated when image AI is unavailable; legacy spreadsheet formats unsupported |
 | Workflow | Explicit Propose / Approve / Reject / Execute (Send)—never automatic from analyze, attachment analysis, or context suggestion |
@@ -47,7 +48,7 @@ ECI addresses that with:
 | Application RBAC | Persisted `application_role` (`user` \| `owner`); server-side `require_owner`; `/api/v1/me` and owner-only `/api/v1/admin/ping` |
 | AI providers | `MockAIProvider`, `MicrosoftFoundryProvider`, `AmazonBedrockProvider` |
 | Hosting | Azure Container Apps + Static Web Apps; AWS ECS Fargate + CloudFront/S3/ALB |
-| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses, business contexts); separate DB per cloud |
+| Persistence | PostgreSQL (user-owned analyses, workflow actions, attachment analyses, business contexts, work items with sources and events); separate DB per cloud |
 | Credential stores | Azure Key Vault / AWS Secrets Manager (opaque `credential_ref`; no tokens in PostgreSQL) |
 | Malware scanning | ClamAV client → external clamd (not embedded in the API image); production fails closed without a real scanner |
 
@@ -55,7 +56,17 @@ ECI addresses that with:
 
 **Phase 21 XLSX support:** `.xlsx` only; `.xls`, `.xlsm`, `.xlsb`, `.csv`, and `.tsv` remain unsupported. Explicit Analyze checks ownership/provenance, retrieves one attachment, and requires a CLEAN scanner verdict before container validation and bounded `openpyxl` extraction. Formulas remain inert; external relationships, workbook links, macros, and connections are rejected. No raw workbook is persisted. Complete validated advisory `tabular_result` is stored in existing attachment history; potential dates, amounts, and actions do not create business state. Azure/Outlook/Foundry and AWS/Gmail/Bedrock deployment and functional validation passed, as manually reported by the operator on 2026-09-23; Phase 21 is CLOSED for the delivered XLSX scope. Live evidence limits are recorded in the [Phase 21G report](docs/codex/reports/phase_21g_report.md#66-evidence-boundaries-and-remaining-limitations). See the [Phase 21 roadmap](docs/roadmap/phase-21-xlsx-tabular-intelligence.md).
 
-**Not yet productized:** durable deadlines/work items; DMS/CRM/case-system sync; autonomous context assignment.
+**Phase 22 Tracking:** A Work Item records a business action to carry out or an obligation the user has chosen to track. It is distinct from an advisory AI action suggestion and from a reply workflow. Completion records a human declaration, not independent proof of fulfillment.
+
+- Create manually without a connected mailbox, or explicitly review and confirm a candidate from a persisted communication or attachment analysis, including XLSX observations. AI never silently creates work items or confirms deadlines.
+- Track `open`, `in_progress`, `completed` and `cancelled` status, explicitly reopen terminal items, and archive/restore independently of status. Versioned optimistic concurrency rejects stale edits; creation keys support safe replay.
+- Choose no due value, a calendar date, or a precise time with a confirmed IANA timezone. Overdue is computed for active, unarchived items; no reminders, scheduler or automatic lifecycle changes are included.
+- Retain bounded, verified source references and append-only event history through normal application operations. Tracking reads do not retrieve mailbox or attachment content, invoke AI, or send communications.
+- Filter and page the Tracking list, review detail/history, and optionally associate one owned Business Context. Contexts provide a Tracking tab and genuine historical events; current association and historical context membership remain distinct.
+
+See [ADR-030](docs/decisions/ADR-030-action-deadline-and-obligation-tracking.md) for the architecture contract and the [Phase 22E report](docs/codex/reports/phase_22e_report.md) for UI and Context integration evidence.
+
+**Not yet productized:** reminders/escalations; shared assignment; DMS/CRM/case-system sync; autonomous context assignment.
 
 ---
 
@@ -76,6 +87,7 @@ flowchart TB
     Mailbox[Mailbox list / analyze]
     Attach[Attachment analyze]
     Context[Business context / timeline / suggest]
+    Tracking[Work items / due values / event history]
     Workflow[Workflow propose / approve / execute]
     RBAC[Identity mapping / application RBAC]
   end
@@ -103,6 +115,7 @@ flowchart TB
   FastAPI --> Mailbox
   FastAPI --> Attach
   FastAPI --> Context
+  FastAPI --> Tracking
   FastAPI --> Workflow
   FastAPI --> RBAC
   Analysis --> Ports
@@ -119,6 +132,7 @@ flowchart TB
   Analysis --> PG
   Attach --> PG
   Context --> PG
+  Tracking --> PG
   Workflow --> PG
   RBAC --> PG
   Gmail --> KV
@@ -268,6 +282,8 @@ Never place secrets, tokens, or client secrets in frontend env files. Presentati
 - Fail-closed production auth (`APP_ENV=production` requires `AUTH_MODE=oidc`).
 - Distinct permissions: `communications:read`, `analyze`, `connect`, `workflow`, `send`.
 - Application RBAC (`user` / `owner`) is separate from mailbox OAuth and from `communications:*` scopes.
+- Business Context and Work Item ownership is server-authoritative, keyed to internal `users.id`; Platform Owner does not bypass object ownership.
+- AI suggestions remain advisory. Tracking creation/confirmation and lifecycle changes require explicit user action and never bypass Analyze → Propose → Approve/Reject → Execute for replies.
 - Raw message bodies and raw attachment bytes are not durable product storage for analysis history.
 - Attachment path: explicit user action → retrieve one → ClamAV → parse → AI; unsupported / dangerous cases fail closed.
 - Privacy-safe operational logs (no tokens, secrets, or sensitive message/attachment bodies).
@@ -283,6 +299,8 @@ Technical deployments have been validated on both clouds. This is **technical de
 | --- | --- |
 | **AWS** | Frontend and backend operational; persistence during validation; application identity; first Platform Owner activation; `/api/v1/me`; owner-only `/api/v1/admin/ping`; owner deployment indicator shows AWS |
 | **Azure** | Frontend operational; `/health` and `/api/v1/readiness`; PostgreSQL persistence during runtime check; application sign-in; `/api/v1/me`-backed owner state in UI; owner deployment indicator shows Azure; existing connected-mailbox state loads |
+
+**Phase 22:** AWS backend, controlled synthetic lifecycle, frontend and scoped browser validation completed ([AWS evidence and limits](docs/codex/reports/phase_22g_report.md)). Azure backend/migration, controlled synthetic lifecycle, frontend and scoped browser validation also completed, as reported by the operator for this cleanup. Azure checks covered health/readiness, real Entra/MSAL `/me`, Tracking detail/history and reload, Contexts loading, and successful authenticated API/CORS requests. AWS and Azure evidence remain separate; neither establishes exhaustive live acceptance coverage.
 
 Phase 18 also live-validated secure attachment intelligence on crossed paths (Outlook → Azure / Foundry; Gmail → AWS / Bedrock) without Send. Image analysis is not live-supported today (adapters report image input unavailable; JPEG/PNG gated before retrieval).
 
@@ -300,7 +318,7 @@ Phase closures record live validation separately from offline regression. Live p
 
 ## Current project status
 
-### Completed through Phase 19
+### Implemented through Phase 22
 
 Phases **1–16** are completed (foundation through cloud-hosted browser and multi-cloud mailbox→AI validation).
 
@@ -312,6 +330,12 @@ Phases **1–16** are completed (foundation through cloud-hosted browser and mul
 **Phase 18 — Secure Attachment Intelligence:** **Completed / PASS**.
 
 **Phase 19 — Platform Owner Identity & Application RBAC:** **Completed / PASS** (schema `19b0001`, server-side owner authorization, bootstrap CLI, `/me`, owner-aware UI). Follow-up technical deployment validation exercised first Platform Owner activation and the owner deployment indicator on AWS and Azure.
+
+**Phase 20 — Business Context & Matter Intelligence:** **CLOSED / PASS**.
+
+**Phase 21 — XLSX / Tabular Intelligence:** **CLOSED / PASS** for the delivered XLSX scope.
+
+**Phase 22 — Action, Deadline & Obligation Tracking:** **Implemented and validated** through local regression and scoped AWS/Azure deployment, lifecycle and frontend acceptance. PostgreSQL migration `22b0001` adds work items, sources and events. See [local hardening evidence](docs/codex/reports/phase_22f_report.md) and the cloud validation summary above. The architecture-era roadmap and Azure readiness report preserve their earlier pre-implementation/pre-rollout status; later implementation reports and operator-reported Azure completion supersede those historical status statements. Remaining live coverage limits in the AWS report are not claimed as passed.
 
 External business-user verification remains deferred and outside the currently completed release scope.
 
@@ -399,6 +423,10 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Topic | Link |
 | --- | --- |
 | Roadmap index | [docs/roadmap/README.md](docs/roadmap/README.md) |
+| Phase 22 (Tracking architecture and original plan) | [docs/roadmap/phase-22-action-deadline-obligation-tracking.md](docs/roadmap/phase-22-action-deadline-obligation-tracking.md) |
+| Phase 22 local validation | [docs/codex/reports/phase_22f_report.md](docs/codex/reports/phase_22f_report.md) |
+| Phase 22 AWS validation | [docs/codex/reports/phase_22g_report.md](docs/codex/reports/phase_22g_report.md) |
+| Phase 22 Azure readiness / rollback baseline (historical) | [docs/codex/reports/phase_22h_azure_readiness_report.md](docs/codex/reports/phase_22h_azure_readiness_report.md) |
 | Phase 19 (RBAC / owner) | [docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md](docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md) |
 | Phase 18 (attachments) | [docs/roadmap/phase-18-secure-attachment-intelligence.md](docs/roadmap/phase-18-secure-attachment-intelligence.md) |
 | Phase 17 (External ID) | [docs/roadmap/phase-17-external-id-external-user-onboarding.md](docs/roadmap/phase-17-external-id-external-user-onboarding.md) |
@@ -425,6 +453,7 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Phase 19 – Platform Owner Identity & Application RBAC | **Completed / PASS** |
 | Phase 20 – Business Context & Matter Intelligence | **CLOSED / PASS** — see roadmap for recorded live validation |
 | Phase 21 – XLSX / Tabular Intelligence | **CLOSED — 21A–21G PASS**; Azure/AWS manual live validation complete; evidence limits in the Phase 21G report |
+| Phase 22 – Action, Deadline & Obligation Tracking | **Implemented and validated**; local regression and separate scoped AWS/Azure cloud validation complete; live evidence limits retained |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 

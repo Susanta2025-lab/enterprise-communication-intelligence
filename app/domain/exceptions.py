@@ -124,3 +124,24 @@ class TabularAnalysisUnsupportedError(Exception):
     ) -> None:
         self.message = message
         super().__init__(self.message)
+
+
+class WorkItemNotFoundError(Exception):
+    """Unknown or foreign work item/reference; no existence disclosure."""
+
+
+class WorkItemConflictError(Exception):
+    """A safe machine-readable tracking conflict, without business payloads."""
+
+    def __init__(self, code: str, *, existing_item_id=None) -> None:
+        super().__init__(code)
+        self.code = code
+        self.existing_item_id = existing_item_id
+
+
+class WorkItemInputError(Exception):
+    """Malformed candidate selection; never contains source values."""
+
+
+class WorkItemPermissionError(Exception):
+    """Mailbox-backed tracking creation requires read capability."""

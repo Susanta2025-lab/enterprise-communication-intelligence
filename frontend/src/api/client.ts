@@ -1,3 +1,4 @@
+import { workParams, type WorkQuery, type CandidateQuery, type Candidate, type Page, type WorkItem, type WorkDetail, type WorkEvent, type WorkCreate, type WorkConfirm, type WorkFields, type WorkStatus } from "./workItems";
 import type { AccessTokenProvider } from "../auth/tokenProvider";
 import { InteractionRequiredError } from "../auth/tokenProvider";
 import {
@@ -357,7 +358,29 @@ export class EciApiClient {
     );
   }
 
-  private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  listWorkItems(query: WorkQuery = {}, signal?: AbortSignal) {
+    return this.requestJson<Page<WorkItem>>("GET", `/api/v1/work-items?${workParams({ limit: 20, offset: 0, ...query })}`, undefined, signal);
+  }
+  getWorkItem(id: string, signal?: AbortSignal) {
+    return this.requestJson<WorkDetail>("GET", `/api/v1/work-items/${encodeURIComponent(id)}`, undefined, signal);
+  }
+  workItemEvents(id: string, offset = 0, signal?: AbortSignal) {
+    return this.requestJson<Page<WorkEvent>>("GET", `/api/v1/work-items/${encodeURIComponent(id)}/events?limit=20&offset=${offset}`, undefined, signal);
+  }
+  workCandidates(query: CandidateQuery, signal?: AbortSignal) {
+    return this.requestJson<Page<Candidate>>("GET", `/api/v1/work-items/candidates?${workParams(query)}`, undefined, signal);
+  }
+  createWorkItem(body: WorkCreate | WorkConfirm, signal?: AbortSignal) {
+    return this.requestJson<WorkItem>("POST", "candidate" in body ? "/api/v1/work-items/from-analysis" : "/api/v1/work-items", body, signal);
+  }
+  editWorkItem(id: string, body: WorkFields & { expected_version: number }, signal?: AbortSignal) {
+    return this.requestJson<WorkItem>("PATCH", `/api/v1/work-items/${encodeURIComponent(id)}`, body, signal);
+  }
+  transitionWorkItem(id: string, operation: "status" | "archive" | "restore", body: { expected_version: number; status?: WorkStatus; reopen?: boolean }, signal?: AbortSignal) {
+    return this.requestJson<WorkItem>("POST", `/api/v1/work-items/${encodeURIComponent(id)}/${operation}`, body, signal);
+  }
+
+  private async requestJson<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     let token: string;
     try {
       token = await this.tokenProvider.acquireAccessToken();
@@ -368,6 +391,7 @@ export class EciApiClient {
       throw error;
     }
 
+    signal?.throwIfAborted();
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -379,10 +403,12 @@ export class EciApiClient {
 
     const response = await this.fetchImpl(new URL(path, `${this.baseUrl}/`).toString(), {
       method,
+      signal,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
 
+    signal?.throwIfAborted();
     if (!response.ok) {
       const kind = kindForStatus(response.status);
       throw new EciApiError(
@@ -390,6 +416,8 @@ export class EciApiClient {
         kind,
         messageForKind(kind),
         await readAttachmentDetailClass(response),
+        await readErrorCode(response),
+        response.headers.get("Location"),
       );
     }
 
@@ -415,4 +443,10 @@ async function readAttachmentDetailClass(response: Response) {
   } catch {
     return null;
   }
+}
+
+async function readErrorCode(response: Response): Promise<string | null> {
+  try { const body: unknown = await response.clone().json();
+    return typeof body === "object" && body !== null && "code" in body && typeof body.code === "string" ? body.code : null;
+  } catch { return null; }
 }

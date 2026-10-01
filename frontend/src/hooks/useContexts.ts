@@ -62,10 +62,10 @@ export function useContextCommunications(
   });
 }
 
-export function useContextTimeline(apiClient: EciApiClient, contextId: string, enabled: boolean) {
+export function useContextTimeline(apiClient: EciApiClient, contextId: string, enabled: boolean, offset = 0) {
   return useQuery({
-    queryKey: contextTimelineQueryKey(contextId),
-    queryFn: () => apiClient.getContextTimeline(contextId, { limit: 50, offset: 0 }),
+    queryKey: [...contextTimelineQueryKey(contextId), offset],
+    queryFn: () => apiClient.getContextTimeline(contextId, { limit: 50, offset }),
     enabled: enabled && Boolean(contextId),
   });
 }

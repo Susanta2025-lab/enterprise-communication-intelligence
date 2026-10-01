@@ -15,6 +15,7 @@ from app.api.routes import (
     mailbox_messages,
     me,
     microsoft_oauth,
+    work_items,
     workflow_actions,
 )
 from app.core.config import get_settings
@@ -37,4 +38,5 @@ def create_api_router() -> APIRouter:
     api_router.include_router(mailbox_messages.router, prefix=settings.api_v1_prefix)
     api_router.include_router(mailbox_attachments.router, prefix=settings.api_v1_prefix)
     api_router.include_router(attachment_analyses.router, prefix=settings.api_v1_prefix)
+    api_router.include_router(work_items.router, prefix=settings.api_v1_prefix)
     return api_router

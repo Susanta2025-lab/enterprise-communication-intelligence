@@ -35,6 +35,18 @@ class RequestTelemetryMiddleware:
         request_id = str(uuid.uuid4())
         method = scope["method"]
         path = scope["path"]
+        if path.startswith("/api/v1/work-items/"):
+            # Path parameters are untrusted too, including failed UUID validation.
+            suffix = path.removeprefix("/api/v1/work-items/")
+            if suffix not in ("candidates", "from-analysis"):
+                operation = suffix.split("/")
+                action = (
+                    "/" + operation[1]
+                    if len(operation) == 2
+                    and operation[1] in ("events", "status", "archive", "restore")
+                    else ""
+                )
+                path = "/api/v1/work-items/{item_id}" + action
         started_at = time.perf_counter()
         status_code = 500
 

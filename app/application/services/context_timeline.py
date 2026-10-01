@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from app.application.exceptions import BusinessContextNotFoundError
@@ -27,6 +25,7 @@ from app.domain.models.business_context import BusinessContext
 from app.domain.models.business_context_communication_link import (
     BusinessContextCommunicationLink,
 )
+from app.domain.models.context_timeline import ContextTimelineEntry
 from app.domain.models.workflow import WorkflowAction
 
 logger = get_logger(__name__)
@@ -35,21 +34,6 @@ _UNAVAILABLE = "Persistence is currently unavailable."
 _DEFAULT_LIST_LIMIT = 20
 _MAX_LIST_LIMIT = 100
 _SOURCE_PAGE_SIZE = 100
-
-
-@dataclass(frozen=True, slots=True)
-class ContextTimelineEntry:
-    """One projected timeline item with a deterministic identity."""
-
-    id: str
-    type: ContextTimelineEventType
-    occurred_at: datetime
-    title: str
-    summary: str | None = None
-    source_type: str | None = None
-    source_id: str | None = None
-    connector_account_id: UUID | None = None
-    provider_message_id: str | None = None
 
 
 class ContextTimelineService:
@@ -84,7 +68,35 @@ class ContextTimelineService:
                 context = uow.business_contexts.get_owned(context_id, user_id)
                 if context is None:
                     raise BusinessContextNotFoundError()
+                stored_page = uow.business_contexts.timeline_owned(
+                    context, user_id, limit=page_limit, offset=safe_offset
+                )
+                if stored_page is not None:
+                    return stored_page
                 entries = self._assemble(uow, context, user_id)
+                # Portable in-memory adapters: read only the prefix that can
+                # contribute to the merged page, in bounded repository pages.
+                needed = safe_offset + page_limit
+                for event_offset in range(0, needed, _SOURCE_PAGE_SIZE):
+                    events = uow.business_work_items.context_events_owned(
+                        context.id,
+                        user_id,
+                        limit=min(_SOURCE_PAGE_SIZE, needed - event_offset),
+                        offset=event_offset,
+                    )
+                    entries.extend(
+                        ContextTimelineEntry(
+                            id=f"work_item_event:{event.id}",
+                            type=ContextTimelineEventType.WORK_ITEM_EVENT,
+                            occurred_at=event.occurred_at,
+                            title=f"Work item {event.event_type.value.replace('_', ' ')}",
+                            source_type="work_item",
+                            source_id=str(event.work_item_id),
+                        )
+                        for event in events
+                    )
+                    if len(events) < min(_SOURCE_PAGE_SIZE, needed - event_offset):
+                        break
         except BusinessContextNotFoundError:
             raise
         except PersistenceError as exc:
@@ -125,10 +137,7 @@ class ContextTimelineService:
                 source_id=str(context.id),
             )
         ]
-        if (
-            context.status is BusinessContextStatus.ARCHIVED
-            and context.archived_at is not None
-        ):
+        if context.status is BusinessContextStatus.ARCHIVED and context.archived_at is not None:
             archived_iso = context.archived_at.isoformat()
             entries.append(
                 ContextTimelineEntry(
@@ -154,9 +163,7 @@ class ContextTimelineService:
         if provenance:
             for analysis in self._matching_analyses(uow, user_id, provenance):
                 entries.append(_analysis_entry(analysis))
-            for attachment in self._matching_attachment_analyses(
-                uow, user_id, provenance
-            ):
+            for attachment in self._matching_attachment_analyses(uow, user_id, provenance):
                 entries.append(_attachment_analysis_entry(attachment))
             for workflow in self._matching_workflows(uow, user_id, provenance):
                 entries.extend(_workflow_entries(workflow))
@@ -192,14 +199,9 @@ class ContextTimelineService:
         matched: list[AnalysisRecord] = []
         offset = 0
         while True:
-            page = uow.analysis_repository.list_for_user(
-                user_id, _SOURCE_PAGE_SIZE, offset
-            )
+            page = uow.analysis_repository.list_for_user(user_id, _SOURCE_PAGE_SIZE, offset)
             for record in page:
-                if (
-                    record.connector_account_id is None
-                    or record.message_id is None
-                ):
+                if record.connector_account_id is None or record.message_id is None:
                     continue
                 key = (record.connector_account_id, record.message_id)
                 if key in provenance:
@@ -243,10 +245,7 @@ class ContextTimelineService:
         while True:
             page = uow.workflow_actions.list_owned(user_id, _SOURCE_PAGE_SIZE, offset)
             for action in page:
-                if (
-                    action.connector_account_id is None
-                    or action.provider_message_id is None
-                ):
+                if action.connector_account_id is None or action.provider_message_id is None:
                     continue
                 key = (action.connector_account_id, action.provider_message_id)
                 if key in provenance:

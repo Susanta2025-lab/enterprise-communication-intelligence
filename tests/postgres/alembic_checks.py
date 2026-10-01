@@ -23,6 +23,9 @@ APPLICATION_TABLES = frozenset(
         "attachment_analyses",
         "business_contexts",
         "business_context_communication_links",
+        "business_work_items",
+        "business_work_item_sources",
+        "business_work_item_events",
     }
 )
 ALLOWED_TABLES = APPLICATION_TABLES | {"alembic_version"}

@@ -18,6 +18,7 @@ export type AssociationSource = "manual";
 export type ContextMatchStrength = "high" | "medium" | "low";
 
 export type ContextTimelineEventType =
+  | "work_item_event"
   | "context_created"
   | "context_archived"
   | "communication_associated"

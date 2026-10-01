@@ -316,6 +316,8 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
                     analysisId={analysis.result?.analysis_id ?? null}
                   />
                   <AttachmentsSection
+                    key={connectorAccountId}
+                    apiClient={apiClient}
                     canAnalyze={canAnalyze}
                     imageAnalysisAvailable={imageAnalysisAvailable}
                     loading={attachmentsQuery.isPending}
@@ -337,6 +339,8 @@ export function MailboxWorkspacePage({ apiClient }: MailboxWorkspacePageProps) {
                     }}
                   />
                   <MessageAnalysisSection
+                    key={connectorAccountId}
+                    apiClient={apiClient}
                     canAnalyze={canAnalyze}
                     pending={analysis.isPending}
                     result={analysis.result}

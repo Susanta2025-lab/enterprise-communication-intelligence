@@ -62,6 +62,8 @@ export class EciApiError extends Error {
   readonly name = "EciApiError";
   readonly status: number;
   readonly kind: ApiErrorKind;
+  readonly code: string | null;
+  readonly location: string | null;
   readonly detailClass: AttachmentDetailClass | null;
 
   constructor(
@@ -69,11 +71,15 @@ export class EciApiError extends Error {
     kind: ApiErrorKind,
     message: string,
     detailClass: AttachmentDetailClass | null = null,
+    code: string | null = null,
+    location: string | null = null,
   ) {
     super(message);
     this.status = status;
     this.kind = kind;
     this.detailClass = detailClass;
+    this.code = code;
+    this.location = location;
   }
 }
 

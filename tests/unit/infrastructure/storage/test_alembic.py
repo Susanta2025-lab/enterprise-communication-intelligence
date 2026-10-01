@@ -21,6 +21,9 @@ _REQUIRED_TABLES = {
     "attachment_analyses",
     "business_contexts",
     "business_context_communication_links",
+    "business_work_items",
+    "business_work_item_sources",
+    "business_work_item_events",
 }
 _FORBIDDEN_TABLES = {
     "messages",
@@ -55,6 +58,7 @@ def test_alembic_revision_graph_is_valid() -> None:
         "20b0001",
         "20c0001",
         "21d0001",
+        "22b0001",
     }
     assert revisions["9a0001"].down_revision is None
     assert revisions["10b0001"].down_revision == "9a0001"
@@ -67,8 +71,9 @@ def test_alembic_revision_graph_is_valid() -> None:
     assert revisions["20b0001"].down_revision == "19b0001"
     assert revisions["20c0001"].down_revision == "20b0001"
     assert revisions["21d0001"].down_revision == "20c0001"
-    assert script.get_heads() == ["21d0001"]
-    assert script.get_current_head() == "21d0001"
+    assert revisions["22b0001"].down_revision == "21d0001"
+    assert script.get_heads() == ["22b0001"]
+    assert script.get_current_head() == "22b0001"
 
 
 def test_alembic_env_uses_base_metadata() -> None:
@@ -454,6 +459,9 @@ def test_assert_at_head_passes_when_current_matches_script_head(
             "attachment_analyses",
             "business_contexts",
             "business_context_communication_links",
+            "business_work_items",
+            "business_work_item_sources",
+            "business_work_item_events",
             "alembic_version",
         },
     )

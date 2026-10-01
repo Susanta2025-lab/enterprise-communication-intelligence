@@ -55,6 +55,9 @@ def test_expected_tables_exist(sqlite_engine: Engine) -> None:
         "attachment_analyses",
         "business_contexts",
         "business_context_communication_links",
+        "business_work_items",
+        "business_work_item_sources",
+        "business_work_item_events",
     } <= tables
     assert "messages" not in tables
     assert "communications" not in tables
@@ -200,6 +203,9 @@ def test_orm_metadata_matches_mapped_classes() -> None:
         "attachment_analyses",
         "business_contexts",
         "business_context_communication_links",
+        "business_work_items",
+        "business_work_item_sources",
+        "business_work_item_events",
     }
     assert User.__tablename__ == "users"
     assert ExternalIdentity.__tablename__ == "external_identities"

@@ -223,6 +223,7 @@ class ContextTimelineEventType(StrEnum):
     Not persisted. Values are projected from durable owned records.
     """
 
+    WORK_ITEM_EVENT = "work_item_event"
     CONTEXT_CREATED = "context_created"
     CONTEXT_ARCHIVED = "context_archived"
     COMMUNICATION_ASSOCIATED = "communication_associated"
@@ -233,3 +234,36 @@ class ContextTimelineEventType(StrEnum):
     WORKFLOW_REJECTED = "workflow_rejected"
     WORKFLOW_EXECUTED = "workflow_executed"
     WORKFLOW_FAILED = "workflow_failed"
+
+
+class WorkItemKind(StrEnum):
+    ACTION = "action"
+    OBLIGATION = "obligation"
+
+
+class WorkItemStatus(StrEnum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class WorkItemOrigin(StrEnum):
+    MANUAL = "manual"
+    AI_CONFIRMED = "ai_confirmed"
+
+
+class WorkItemSourceKind(StrEnum):
+    COMMUNICATION = "communication"
+    COMMUNICATION_ANALYSIS = "communication_analysis"
+    ATTACHMENT_ANALYSIS = "attachment_analysis"
+
+
+class WorkItemEventType(StrEnum):
+    CREATED = "created"
+    EDITED = "edited"
+    STATUS_CHANGED = "status_changed"
+    ARCHIVED = "archived"
+    RESTORED = "restored"
+    CONTEXT_ASSOCIATED = "context_associated"
+    CONTEXT_DISASSOCIATED = "context_disassociated"

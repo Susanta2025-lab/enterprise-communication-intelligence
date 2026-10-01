@@ -35,6 +35,8 @@ export function contextStatusLabel(status: "active" | "archived"): string {
 
 export function timelineEventLabel(type: ContextTimelineEventType): string {
   switch (type) {
+    case "work_item_event":
+      return "Work item event";
     case "context_created":
       return "Context created";
     case "context_archived":

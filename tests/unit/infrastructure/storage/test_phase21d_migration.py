@@ -32,7 +32,7 @@ def exercise_kind_migration(engine, url, monkeypatch):
         lambda: url,
     )
     config = Config(str(ROOT / "alembic.ini"))
-    assert ScriptDirectory.from_config(config).get_heads() == ["21d0001"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["22b0001"]
     command.downgrade(config, "20c0001")
     sessions = sessionmaker(bind=engine)
     user_id, other_id = uuid4(), uuid4()

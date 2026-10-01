@@ -29,7 +29,7 @@ type AppShellProps = {
 };
 
 export function AppShell({ children, deployment }: AppShellProps) {
-  const { displayName, logout, error, interactionInProgress } = useAuth();
+  const { displayName, logout, error, interactionInProgress, permissions } = useAuth();
   const { isOwner } = useCurrentUser();
 
   return (
@@ -70,6 +70,7 @@ export function AppShell({ children, deployment }: AppShellProps) {
               >
                 Contexts
               </Link>
+              {permissions.includes("communications:analyze") && <Link className="inline-flex min-h-11 items-center font-medium" to="/tracking">Tracking</Link>}
             </nav>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               {displayName ? (

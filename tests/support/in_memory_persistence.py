@@ -825,6 +825,12 @@ class InMemoryUnitOfWork(PersistenceUnitOfWork):
     ) -> InMemoryBusinessContextCommunicationLinkRepository:
         return self._business_context_communication_links
 
+    @property
+    def business_work_items(self):
+        """Tracking contract is tested against real SQL transactions, not this legacy fake."""
+        from types import SimpleNamespace
+        return SimpleNamespace(context_events_owned=lambda *args, **kwargs: ())
+
     def commit(self) -> None:
         self.commit_calls += 1
         if self.fail_commit:

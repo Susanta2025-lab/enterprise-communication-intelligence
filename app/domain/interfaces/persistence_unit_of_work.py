@@ -11,6 +11,7 @@ from app.domain.interfaces.business_context_communication_link_repository import
     BusinessContextCommunicationLinkRepository,
 )
 from app.domain.interfaces.business_context_repository import BusinessContextRepository
+from app.domain.interfaces.business_work_item_repository import BusinessWorkItemRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.mailbox_authorization_session_repository import (
@@ -66,6 +67,11 @@ class PersistenceUnitOfWork(ABC):
         self,
     ) -> BusinessContextCommunicationLinkRepository:
         """BusinessContext communication-link repository bound to this unit of work."""
+
+    @property
+    @abstractmethod
+    def business_work_items(self) -> BusinessWorkItemRepository:
+        """Atomic tracking aggregate repository bound to this unit of work."""
 
     @abstractmethod
     def commit(self) -> None:

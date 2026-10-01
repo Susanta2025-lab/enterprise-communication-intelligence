@@ -47,7 +47,8 @@ def _truncate(engine: Engine) -> None:
     with engine.begin() as connection:
                 connection.execute(
                     text(
-                        "TRUNCATE TABLE mailbox_authorization_sessions, "
+                        "TRUNCATE TABLE business_work_item_events, business_work_item_sources, "
+                        "business_work_items, mailbox_authorization_sessions, "
                         "workflow_actions, attachment_analyses, analyses, "
                         "business_context_communication_links, business_contexts, "
                         "external_identities, "

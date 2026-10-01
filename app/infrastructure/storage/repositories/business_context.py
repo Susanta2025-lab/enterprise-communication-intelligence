@@ -24,6 +24,16 @@ class SqlAlchemyBusinessContextRepository(BusinessContextRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def timeline_owned(self, context, user_id, *, limit, offset):
+        from app.infrastructure.storage.repositories.context_timeline import read_timeline
+
+        if context.owner_user_id != user_id:
+            return []
+        try:
+            return read_timeline(self._session, context, user_id, limit=limit, offset=offset)
+        except SQLAlchemyError as exc:
+            raise PersistenceError("Could not read context timeline.") from exc
+
     def add(self, context: BusinessContext) -> BusinessContext:
         """Persist ``context`` and return the stored domain object."""
         row = BusinessContextRow(

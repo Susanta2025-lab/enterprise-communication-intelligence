@@ -18,6 +18,7 @@ from app.domain.interfaces.business_context_communication_link_repository import
     BusinessContextCommunicationLinkRepository,
 )
 from app.domain.interfaces.business_context_repository import BusinessContextRepository
+from app.domain.interfaces.business_work_item_repository import BusinessWorkItemRepository
 from app.domain.interfaces.connector_account_repository import ConnectorAccountRepository
 from app.domain.interfaces.identity_repository import IdentityRepository
 from app.domain.interfaces.mailbox_authorization_session_repository import (
@@ -34,6 +35,9 @@ from app.infrastructure.storage.repositories.business_context import (
 )
 from app.infrastructure.storage.repositories.business_context_communication_link import (
     SqlAlchemyBusinessContextCommunicationLinkRepository,
+)
+from app.infrastructure.storage.repositories.business_work_item import (
+    SqlAlchemyBusinessWorkItemRepository,
 )
 from app.infrastructure.storage.repositories.connector_account import (
     SqlAlchemyConnectorAccountRepository,
@@ -57,13 +61,12 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
         self._session: Session | None = None
+        self._business_work_items: BusinessWorkItemRepository | None = None
         self._identity_repository: IdentityRepository | None = None
         self._analysis_repository: AnalysisRepository | None = None
         self._connector_accounts: ConnectorAccountRepository | None = None
         self._workflow_actions: WorkflowActionRepository | None = None
-        self._mailbox_authorization_sessions: (
-            MailboxAuthorizationSessionRepository | None
-        ) = None
+        self._mailbox_authorization_sessions: MailboxAuthorizationSessionRepository | None = None
         self._attachment_analyses: AttachmentAnalysisRepository | None = None
         self._business_contexts: BusinessContextRepository | None = None
         self._business_context_communication_links: (
@@ -128,6 +131,12 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             raise PersistenceError(_INACTIVE)
         return self._business_context_communication_links
 
+    @property
+    def business_work_items(self) -> BusinessWorkItemRepository:
+        if self._business_work_items is None:
+            raise PersistenceError(_INACTIVE)
+        return self._business_work_items
+
     def commit(self) -> None:
         """Commit the current unit of work."""
         session = self._require_session()
@@ -155,12 +164,13 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
             if not session.in_transaction():
                 session.begin()
             self._session = session
+            self._business_work_items = SqlAlchemyBusinessWorkItemRepository(session)
             self._identity_repository = SqlAlchemyIdentityRepository(session)
             self._analysis_repository = SqlAlchemyAnalysisRepository(session)
             self._connector_accounts = SqlAlchemyConnectorAccountRepository(session)
             self._workflow_actions = SqlAlchemyWorkflowActionRepository(session)
-            self._mailbox_authorization_sessions = (
-                SqlAlchemyMailboxAuthorizationSessionRepository(session)
+            self._mailbox_authorization_sessions = SqlAlchemyMailboxAuthorizationSessionRepository(
+                session
             )
             self._attachment_analyses = SqlAlchemyAttachmentAnalysisRepository(session)
             self._business_contexts = SqlAlchemyBusinessContextRepository(session)
@@ -175,6 +185,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
                 except SQLAlchemyError:
                     pass
             self._session = None
+            self._business_work_items = None
             self._identity_repository = None
             self._analysis_repository = None
             self._connector_accounts = None
@@ -207,6 +218,7 @@ class SqlAlchemyPersistenceUnitOfWork(PersistenceUnitOfWork):
         """Close the Session if one is open."""
         session = self._session
         self._session = None
+        self._business_work_items = None
         self._identity_repository = None
         self._analysis_repository = None
         self._connector_accounts = None

@@ -121,3 +121,7 @@ Thumbs.db
 # Phase 21 local validation and generated deployment artifacts
 /.phase21*.xml
 /.phase21g-artifacts/
+
+# Phase 22 local readiness evidence, deployment builds and rollback artifacts
+/.phase22g-frontend-readiness-20260929/
+/.phase22h-readiness-20260929/

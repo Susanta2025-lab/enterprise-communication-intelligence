@@ -1,3 +1,5 @@
+import type { EciApiClient } from "../../api/client";
+import { CandidatePanel } from "../workItems/CandidatePanel";
 import { formatMailboxTimestamp } from "../../lib/formatTimestamp";
 import type { AttachmentAnalysisResponse } from "../../api/attachments";
 import { ActionItemsList } from "./ActionItemsList";
@@ -8,11 +10,13 @@ import { TabularAnalysisPanel } from "./TabularAnalysisPanel";
 import { ATTACHMENT_RESULT_BOUNDARY, ATTACHMENT_RESULT_HEADING, TRUNCATION_INDICATOR } from "./attachmentCopy";
 
 type AttachmentAnalysisPanelProps = {
+  apiClient?: EciApiClient;
   result: AttachmentAnalysisResponse;
   headingId?: string;
 };
 
 export function AttachmentAnalysisPanel({
+  apiClient,
   result,
   headingId = "attachment-analysis-heading",
 }: AttachmentAnalysisPanelProps) {
@@ -78,6 +82,7 @@ export function AttachmentAnalysisPanel({
           ) : null}
         </>
       )}
+      {result.attachment_analysis_id && apiClient && <CandidatePanel api={apiClient} source={{ source_kind: "attachment_analysis", source_id: result.attachment_analysis_id }} />}
       <dl className="grid gap-2 break-words text-sm text-slate-600 sm:grid-cols-2">
         {provider ? (
           <div>

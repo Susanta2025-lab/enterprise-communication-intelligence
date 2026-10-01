@@ -15,6 +15,10 @@ class BusinessContextRepository(ABC):
     widen these lookups.
     """
 
+    def timeline_owned(self, context, user_id, *, limit, offset):
+        """Return a SQL-merged page, or None for portable in-memory adapters."""
+        return None
+
     @abstractmethod
     def add(self, context: BusinessContext) -> BusinessContext:
         """Persist ``context`` and return the stored domain object."""

@@ -1,3 +1,4 @@
+import type { EciApiClient } from "../../api/client";
 import { useEffect, useId, useRef } from "react";
 
 import type { AttachmentAnalysisResponse, AttachmentMetadataItem } from "../../api/attachments";
@@ -28,6 +29,7 @@ import {
 import { formatMailboxTimestamp } from "../../lib/formatTimestamp";
 
 type AttachmentItemProps = {
+  apiClient?: EciApiClient;
   item: AttachmentMetadataItem;
   canAnalyze: boolean;
   imageAnalysisAvailable: boolean;
@@ -40,6 +42,7 @@ type AttachmentItemProps = {
 };
 
 export function AttachmentItem({
+  apiClient,
   item,
   canAnalyze,
   imageAnalysisAvailable,
@@ -133,6 +136,7 @@ export function AttachmentItem({
       {latest ? (
         <div className="mt-4">
           <AttachmentAnalysisPanel
+                apiClient={apiClient}
             result={latest}
             headingId={`attachment-analysis-${item.provider_attachment_id}`}
           />
@@ -150,6 +154,7 @@ export function AttachmentItem({
                   {formatMailboxTimestamp(entry.created_at) ?? "Previous analysis"}
                 </p>
                 <AttachmentAnalysisPanel
+                apiClient={apiClient}
                   result={entry}
                   headingId={`previous-attachment-analysis-${entry.attachment_analysis_id}`}
                 />

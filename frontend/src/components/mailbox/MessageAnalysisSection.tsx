@@ -1,3 +1,5 @@
+import type { EciApiClient } from "../../api/client";
+import { CandidatePanel } from "../workItems/CandidatePanel";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import type { CommunicationAnalysisResponse } from "../../api/mailbox";
@@ -8,6 +10,7 @@ import { AnalysisPanel } from "./AnalysisPanel";
 import { AnalyzeButton } from "./AnalyzeButton";
 
 type MessageAnalysisSectionProps = {
+  apiClient?: EciApiClient;
   canAnalyze: boolean;
   pending: boolean;
   result: CommunicationAnalysisResponse | null;
@@ -18,6 +21,7 @@ type MessageAnalysisSectionProps = {
 };
 
 export function MessageAnalysisSection({
+  apiClient,
   canAnalyze,
   pending,
   result,
@@ -65,6 +69,7 @@ export function MessageAnalysisSection({
         />
       ) : null}
       {result ? <AnalysisPanel ref={resultRef} result={result} /> : null}
+      {result?.analysis_id && apiClient && <CandidatePanel api={apiClient} source={{ source_kind: "communication_analysis", source_id: result.analysis_id }} />}
       {result ? workflow : null}
     </div>
   );

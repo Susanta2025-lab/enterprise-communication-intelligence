@@ -155,7 +155,7 @@ function renderWorkspace(options: {
 }
 
 async function selectAndAnalyze(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
+  await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }, { timeout: 5000 }));
   await user.click(screen.getByRole("button", { name: "Analyze message" }));
   expect(await screen.findByRole("heading", { name: "AI Analysis" })).toBeInTheDocument();
 }

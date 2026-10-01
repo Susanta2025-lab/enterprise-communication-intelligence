@@ -8,7 +8,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 
 | Status | Meaning |
 |---|---|
-| `Accepted` | The decision is implemented and in effect in the current codebase |
+| `Accepted` | The decision is approved and in effect; each ADR states its implementation status |
 | `Proposed` | The decision is documented but not yet implemented |
 | `Superseded` | The decision has been replaced by a later ADR |
 
@@ -45,6 +45,7 @@ ADRs capture significant architectural decisions for ECI Platform, along with th
 | [ADR-027](ADR-027-microsoft-entra-external-id-customer-authentication.md) | Microsoft Entra External ID for Customer Authentication | Accepted |
 | [ADR-028](ADR-028-platform-owner-identity-and-application-rbac.md) | Platform Owner Identity and Application RBAC | Accepted |
 | [ADR-029](ADR-029-business-context-foundation-and-provenance-association.md) | Business Context Foundation and Provenance Association | Accepted |
+| [ADR-030](ADR-030-action-deadline-and-obligation-tracking.md) | Action, Deadline and Obligation Tracking | Accepted — architecture lock; implementation pending |
 
 ADR-007 records the Amazon Bedrock adapter decision. The decision is implemented, covered by offline tests, and live-verified through ECI.
 
@@ -91,6 +92,8 @@ ADR-027 records Phase 17 product-login cutover to Microsoft Entra External ID. T
 ADR-028 records Phase 19 application RBAC: Approach A designates an existing External ID application user as platform owner; owner status is bound to verified `(iss, sub)` and persisted as `users.application_role` (`user` \| `owner`, default `user`); Entra JWT `roles`, mailbox identities, email, Foundry/Bedrock, Azure RBAC, and AWS IAM are not application RBAC sources; normal signup never creates an owner; server-side `require_owner`, operator bootstrap (`python -m app.cli.promote_owner --user-id <internal-user-uuid>`), and `/me` are implemented under this ADR; workforce → External ID federation and an admin dashboard remain out of initial Phase 19 scope. Owner activation is an environment-specific operator action (not performed by documentation or CI). Follow-up technical deployment validation exercised first-owner activation on AWS and Azure; that is not Phase 17D external business-user verification.
 
 ADR-029 records Phase 20 Business Context architecture: flat single-user-owned `BusinessContext`; mailbox association via provenance links on `(connector_account_id, provider_message_id)` because no durable communications table exists; many-to-many manual associations; analyses/attachment analyses/workflows derived into a timeline read model; archive-only lifecycle with cascade isolation; Platform Owner does not bypass object ownership; existing `communications:*` permissions are reused (no new `communications:context` in Phase 20); context APIs must not retrieve attachment bytes. Schema/API/frontend implementation begins in Phase 20B+. Pre-implementation assessment: [phase_20_readiness_assessment.md](../codex/reports/phase_20_readiness_assessment.md).
+
+ADR-030 records the operator-approved Phase 22 B1–B6 architecture lock: separate owned `BusinessWorkItem`, typed due values, explicit human confirmation, lifetime creation/candidate keys, atomic minimal events, optional direct context and archive-only public retention. Phase 22A is documentation-only; implementation begins only with separate 22B authorization. See the [Phase 22 roadmap](../roadmap/phase-22-action-deadline-obligation-tracking.md).
 
 ## Template
 

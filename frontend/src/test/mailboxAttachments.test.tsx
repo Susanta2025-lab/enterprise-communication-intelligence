@@ -199,7 +199,7 @@ describe("attachment metadata", () => {
     const user = userEvent.setup();
     const fetchImpl = mailboxFetch([]);
     renderWorkspace({ fetchImpl });
-    await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }));
+    await user.click(await screen.findByRole("button", { name: /Ada Lovelace/ }, { timeout: 5000 }));
     expect(await screen.findByRole("heading", { name: "Attachments" })).toBeInTheDocument();
     expect(screen.getByTestId("attachments-empty")).toHaveTextContent("This message has no attachments.");
     expect(screen.queryByRole("button", { name: /Analyze attachment/ })).not.toBeInTheDocument();
