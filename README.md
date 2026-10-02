@@ -300,7 +300,7 @@ Technical deployments have been validated on both clouds. This is **technical de
 | **AWS** | Frontend and backend operational; persistence during validation; application identity; first Platform Owner activation; `/api/v1/me`; owner-only `/api/v1/admin/ping`; owner deployment indicator shows AWS |
 | **Azure** | Frontend operational; `/health` and `/api/v1/readiness`; PostgreSQL persistence during runtime check; application sign-in; `/api/v1/me`-backed owner state in UI; owner deployment indicator shows Azure; existing connected-mailbox state loads |
 
-**Phase 22:** AWS backend, controlled synthetic lifecycle, frontend and scoped browser validation completed ([AWS evidence and limits](docs/codex/reports/phase_22g_report.md)). Azure backend/migration, controlled synthetic lifecycle, frontend and scoped browser validation also completed, as reported by the operator for this cleanup. Azure checks covered health/readiness, real Entra/MSAL `/me`, Tracking detail/history and reload, Contexts loading, and successful authenticated API/CORS requests. AWS and Azure evidence remain separate; neither establishes exhaustive live acceptance coverage.
+**Phase 22:** AWS backend, controlled synthetic lifecycle, frontend and scoped browser validation completed ([AWS evidence and limits](docs/codex/reports/phase_22g_report.md)). Azure backend/migration, controlled synthetic lifecycle, frontend and scoped browser validation also completed ([operator-observed Azure evidence](docs/codex/reports/phase_22h_azure_readiness_report.md#closure-addendum--2026-10-02)). Azure checks covered health/readiness, real Entra/MSAL `/me`, Tracking detail/history and reload, Contexts loading, and successful authenticated API/CORS requests. AWS and Azure evidence remain separate; neither establishes exhaustive live acceptance coverage.
 
 Phase 18 also live-validated secure attachment intelligence on crossed paths (Outlook → Azure / Foundry; Gmail → AWS / Bedrock) without Send. Image analysis is not live-supported today (adapters report image input unavailable; JPEG/PNG gated before retrieval).
 
@@ -335,7 +335,7 @@ Phases **1–16** are completed (foundation through cloud-hosted browser and mul
 
 **Phase 21 — XLSX / Tabular Intelligence:** **CLOSED / PASS** for the delivered XLSX scope.
 
-**Phase 22 — Action, Deadline & Obligation Tracking:** **Implemented and validated** through local regression and scoped AWS/Azure deployment, lifecycle and frontend acceptance. PostgreSQL migration `22b0001` adds work items, sources and events. See [local hardening evidence](docs/codex/reports/phase_22f_report.md) and the cloud validation summary above. The architecture-era roadmap and Azure readiness report preserve their earlier pre-implementation/pre-rollout status; later implementation reports and operator-reported Azure completion supersede those historical status statements. Remaining live coverage limits in the AWS report are not claimed as passed.
+**Phase 22 — Action, Deadline & Obligation Tracking:** **Implemented and validated** through local regression and scoped AWS/Azure deployment, lifecycle and frontend acceptance. PostgreSQL migration `22b0001` adds work items, sources and events. See [local hardening evidence](docs/codex/reports/phase_22f_report.md) and the cloud validation summary above. Source committed and pushed to `master` as `46128f2`; push CI passed (run `36846483687`). The [dated closure status](docs/roadmap/phase-22-action-deadline-obligation-tracking.md#closure-status-addendum--2026-10-02) records the full commit SHA and separate evidence categories while preserving historical readiness statements. Remaining live coverage limits in the AWS report are not claimed as passed.
 
 External business-user verification remains deferred and outside the currently completed release scope.
 
@@ -423,10 +423,10 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Topic | Link |
 | --- | --- |
 | Roadmap index | [docs/roadmap/README.md](docs/roadmap/README.md) |
-| Phase 22 (Tracking architecture and original plan) | [docs/roadmap/phase-22-action-deadline-obligation-tracking.md](docs/roadmap/phase-22-action-deadline-obligation-tracking.md) |
+| Phase 22 (closure status and original plan) | [docs/roadmap/phase-22-action-deadline-obligation-tracking.md](docs/roadmap/phase-22-action-deadline-obligation-tracking.md) |
 | Phase 22 local validation | [docs/codex/reports/phase_22f_report.md](docs/codex/reports/phase_22f_report.md) |
 | Phase 22 AWS validation | [docs/codex/reports/phase_22g_report.md](docs/codex/reports/phase_22g_report.md) |
-| Phase 22 Azure readiness / rollback baseline (historical) | [docs/codex/reports/phase_22h_azure_readiness_report.md](docs/codex/reports/phase_22h_azure_readiness_report.md) |
+| Phase 22 Azure completion and historical readiness / rollback baseline | [docs/codex/reports/phase_22h_azure_readiness_report.md](docs/codex/reports/phase_22h_azure_readiness_report.md) |
 | Phase 19 (RBAC / owner) | [docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md](docs/roadmap/phase-19-platform-owner-identity-and-application-rbac.md) |
 | Phase 18 (attachments) | [docs/roadmap/phase-18-secure-attachment-intelligence.md](docs/roadmap/phase-18-secure-attachment-intelligence.md) |
 | Phase 17 (External ID) | [docs/roadmap/phase-17-external-id-external-user-onboarding.md](docs/roadmap/phase-17-external-id-external-user-onboarding.md) |
@@ -453,7 +453,7 @@ cd frontend && npm run typecheck && npm run lint && npm run test -- --run && npm
 | Phase 19 – Platform Owner Identity & Application RBAC | **Completed / PASS** |
 | Phase 20 – Business Context & Matter Intelligence | **CLOSED / PASS** — see roadmap for recorded live validation |
 | Phase 21 – XLSX / Tabular Intelligence | **CLOSED — 21A–21G PASS**; Azure/AWS manual live validation complete; evidence limits in the Phase 21G report |
-| Phase 22 – Action, Deadline & Obligation Tracking | **Implemented and validated**; local regression and separate scoped AWS/Azure cloud validation complete; live evidence limits retained |
+| Phase 22 – Action, Deadline & Obligation Tracking | **Implemented and validated**; local regression and separate scoped AWS/Azure cloud validation complete; committed/pushed to `master` (`46128f2`), CI PASS; live evidence limits retained |
 
 Full phase table and narratives: [docs/roadmap/README.md](docs/roadmap/README.md).
 

@@ -1,5 +1,7 @@
 # Phase 22G — Controlled AWS Work Item Lifecycle Validation
 
+> **2026-10-02 status update:** See the [dated closure addendum](#closure-addendum--2026-10-02). Earlier assessments and limitations below retain their original chronology.
+
 Original assessment date: 2026-09-28. Updated: **2026-09-29**, following operator-executed frontend deployment and browser acceptance. Overall status: **AWS PHASE 22 DEPLOYMENT AND SCOPED FRONTEND/BROWSER ACCEPTANCE PASS; OVERALL PHASE 22G INCOMPLETE, not CLOSED.** Remaining acceptance evidence and Azure rollout are identified in the dated addendum below.
 
 | Execution / deployment scope | Current status |
@@ -461,3 +463,18 @@ The following were **not independently exercised during frontend acceptance**: l
 Modified only `docs/codex/reports/phase_22g_report.md` and appended a dated post-assessment addendum to `docs/codex/reports/phase_22g_frontend_readiness_report.md`. No files were created. Earlier readiness conclusions, blocked Codex execution, successful manual operator lifecycle evidence and prior test counts remain historical and distinguishable.
 
 No cloud resources were touched by this documentation task. No AWS CLI, Azure operation, deployment, public or authenticated HTTP request, backend/database operation, lifecycle write, mailbox access, attachment retrieval, AI inference, Send, dependency installation, application rebuild or Git operation occurred. Application source, tests, configuration, infrastructure and migrations are unchanged; the AWS backend, PostgreSQL database and synthetic fixture remain unchanged by this task. No application tests were run (0); prior passing counts were not rerun or added together. Validation is limited to local documentation consistency, preservation, links and whitespace checks. No later phase was started.
+
+## Closure addendum — 2026-10-02
+
+Phase 22 implementation is committed and pushed to `master`: **`46128f261857cfe041c1caadcc679452d03b0967`** (short **`46128f2`**), subject **`feat: add Phase 22 action and obligation tracking`**. Local inspection on 2026-10-02 found a clean working tree and `HEAD`, `master` and the local `origin/master` reference at that commit. Push completion and **CI PASS** are operator-supplied evidence: GitHub Actions workflow **CI**, branch **master**, event **push**, run **`36846483687`**, observed title “feat: add Phase 22 action and obligation ...”. No remote, CI or cloud checks were repeated for this documentation update.
+
+### Separate evidence and completed scope
+
+- **Local validation complete:** historical [Phase 22F evidence](phase_22f_report.md); no application suites rerun for this closure.
+- **AWS scoped deployment/browser validation complete:** the preceding operator-observed migration/backend, W1–W8, frontend publication and browser results remain the AWS evidence. The AWS fixture, rollback limitations and outstanding acceptance checks are unchanged.
+- **Azure backend/lifecycle/frontend/browser validation complete:** separately supplied operator observations are recorded in the [Azure closure addendum](phase_22h_azure_readiness_report.md#closure-addendum--2026-10-02), including schema `22b0001` and the retained Azure cancelled/restored version-7 fixture. Azure success does not fill gaps in AWS acceptance.
+- **Source committed and pushed; CI passed:** as recorded above, separately from local and cloud validation.
+
+The earlier “Azure NOT STARTED” and “INCOMPLETE, not CLOSED” statements describe their dated assessments. Deployment and scoped validation are now complete on both clouds; this addendum does not claim every original Phase 22G criterion passed or unconditional production readiness. AWS context-to-Tracking, loading/read-error, network/security, distribution-state, hosting-posture and low-level assertion/artifact-equivalence gaps remain as documented above.
+
+Mailbox attachment regression was not revalidated in this closure. Production-scale load/recovery was not tested; PITR was not rehearsed; full disaster recovery was not tested. The ignored `.phase22g-frontend-readiness-20260929/` and `.phase22h-readiness-20260929/` directories remain local deployment/rollback evidence, not source-controlled runtime content. No readiness or rollback artifacts were changed. This task performs documentation edits only: no application/migration changes, cloud operations, fixture writes, commit or push.

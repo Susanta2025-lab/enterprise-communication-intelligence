@@ -1,5 +1,7 @@
 # Phase 22H — Azure Deployment Readiness and Architecture Assessment
 
+> **2026-10-02 status update:** See the [dated closure addendum](#closure-addendum--2026-10-02). Earlier assessments and limitations below retain their original chronology.
+
 Assessment date: **2026-09-29**. **READY WITH CONDITIONS.** This is a completed readiness-only assessment, not deployment authorization. **Azure Phase 22 deployment remains NOT STARTED; live Phase 22 acceptance remains NOT RUN.**
 
 ## 1. Executive assessment
@@ -380,3 +382,55 @@ Final non-Git verification: **953 pre-existing files unchanged, zero missing; 13
 Performed the read-only Azure metadata/role/registry/database operations enumerated above, public SWA GETs, local inspection/validation and Microsoft documentation reads. The one database credential retrieval used the established approved mechanism solely for read-only schema/privilege verification. No SWA deployment token, mailbox credential, browser bearer or unrelated business records were retrieved. No cloud resource mutation, start/stop/restart/scale, backup creation, migration, SQL write, image build/push, deployment/publication, IAM/Entra change, AWS operation, mailbox/attachment access, AI inference, Send or Git operation occurred.
 
 **Readiness-only task: PASS.** Phase 22H is complete; next-phase execution is not started.
+
+## Closure addendum — 2026-10-02
+
+Phase 22 implementation is committed and pushed to `master`: **`46128f261857cfe041c1caadcc679452d03b0967`** (short **`46128f2`**), subject **`feat: add Phase 22 action and obligation tracking`**. Local inspection on 2026-10-02 found a clean working tree and `HEAD`, `master` and the local `origin/master` reference at that commit. Push completion and **CI PASS** are operator-supplied evidence: GitHub Actions workflow **CI**, branch **master**, event **push**, run **`36846483687`**, observed title “feat: add Phase 22 action and obligation ...”. No remote, CI or cloud checks were repeated for this documentation update.
+
+The 2026-09-29 readiness assessment above remains historical. The following subsequent Azure completion results were supplied by the operator for this closure; they were not independently reproduced here. They supersede the earlier rollout status, without rewriting the original readiness conditions or treating AWS observations as Azure evidence.
+
+### Azure backend and schema — operator-observed PASS
+
+| Checkpoint | Recorded result |
+|---|---|
+| PostgreSQL migration | `21d0001 → 22b0001` completed; live Alembic revision verified `22b0001` |
+| Phase 22 tables | `business_work_items`, `business_work_item_sources`, `business_work_item_events` verified |
+| Backend source fingerprint used for Azure build | `d354a4f354da13f3de34649c8cc55fb701c059768b6d68afab7bdf41400a02ba` |
+| Backend release tag | `p22-azure-20261001T062423Z-d354a4f354da` |
+| ACR/backend immutable digest | `sha256:bf1e17c6b5570527bc86d767c0aa9e176ed4ea97bd147b3104120fbbd9d62157` |
+| Container Apps revision | `eci-api-dev--p22-bf1e17c6`; LatestRevision and LatestReadyRevision both matched |
+| Runtime state | ProvisioningState `Succeeded`; RunningStatus `Running` |
+| Health/readiness | `/health`, `/api/v1/health`, `/api/v1/readiness`: HTTP 200 |
+| Application identity | Authenticated GET `/api/v1/me` through real Entra/MSAL flow: HTTP 200 |
+| Existing UI | Contexts remained available |
+
+The backend build fingerprint and immutable image digest identify the recorded deployment artifact; the Git SHA above identifies the final source commit. They are distinct identifiers.
+
+### Azure Phase 22K W1–W8 — operator-observed PASS
+
+The controlled synthetic lifecycle covered create, idempotent replay, open → in_progress, in_progress → completed, completed → open with explicit reopen, open → cancelled, archive and restore. No duplicate creation event was observed.
+
+Retained Azure Work Item: **`7acbfa6a-6480-46d3-93b5-a83b661ef184`**. Final state: **cancelled**, **version 7**, **archived = false (restored)**, **exactly seven events**, **zero sources**. This fixture remains retained; no further cleanup or disposition was supplied or performed in this closure. This Azure fixture is separate from the AWS fixture recorded in the [AWS report](phase_22g_report.md).
+
+### Azure frontend and browser — operator-observed PASS
+
+| Checkpoint | Recorded result |
+|---|---|
+| Existing Static Web App | [Azure frontend](https://witty-island-03f5de51e.7.azurestaticapps.net) published successfully |
+| SWA production/default environment | `Ready` |
+| Approved candidate | `.phase22h-readiness-20260929/dist/` |
+| Candidate manifest SHA-256 | `7bf7e64315af98fc2a24bdf017876326d0ed83687847446ec6083d29f68e750e` |
+| Verified live index.html SHA-256 | `43bcfc3f1e827356a442addb198a45458a9448b09a08bdcdbc969d0080a0fd55` |
+| Verified live main JS bundle | `index-v2r-gI2A.js` |
+
+Browser acceptance passed: Tracking navigation, synthetic Work Item detail, cancelled/version-7/unarchived state, exactly seven lifecycle events, direct detail reload, Tracking filtering and continued Contexts loading. Authenticated Tracking/detail/events/Contexts requests and CORS preflights returned HTTP 200. No blocking CORS, mixed-content, authentication or redirect errors were observed.
+
+### Evidence boundaries and retained artifacts
+
+Local validation remains the historical [Phase 22F results](phase_22f_report.md) and this report's readiness checks. [AWS operator-observed validation](phase_22g_report.md) remains separate from the Azure observations above and from the operator-supplied CI result. No test counts are added together or presented as newly executed.
+
+The ignored `.phase22g-frontend-readiness-20260929/` and `.phase22h-readiness-20260929/` directories remain local deployment/rollback evidence, not source-controlled runtime content. Their contents and rollback artifacts are unchanged by this task.
+
+Mailbox attachment regression was not revalidated in this closure. Production-scale load/recovery was not tested; PITR was not rehearsed; full disaster recovery was not tested. Earlier readiness, backup/restore, capacity and scoped acceptance limitations remain historical evidence; successful rollout does not establish untested recovery or broader acceptance. No unconditional production-readiness or exhaustive Phase 22G closure claim is made.
+
+This closure update changes documentation only. No cloud commands, resources, application source, migrations, fixture state or ignored artifacts were changed; no application suites, deployment, commit or push were run. No later phase was started.

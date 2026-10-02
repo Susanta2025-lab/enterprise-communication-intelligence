@@ -1,5 +1,24 @@
 # Phase 22 — Action, Deadline & Obligation Tracking
 
+## Closure status addendum — 2026-10-02
+
+**Implementation complete; local validation complete; AWS scoped deployment/browser validation complete; Azure backend/lifecycle/frontend/browser validation complete; source committed and pushed to master; CI passed.**
+
+Final implementation commit: **`46128f261857cfe041c1caadcc679452d03b0967`** (`46128f2`), `feat: add Phase 22 action and obligation tracking`. Local `HEAD`, `master` and `origin/master` match. The operator reported successful push and CI workflow **PASS**, run **`36846483687`** (`master`, `push`); no remote checks were repeated for this documentation update.
+
+| Evidence category | Completed scope and source |
+|---|---|
+| Local | Implementation and regression complete; [Phase 22F](../codex/reports/phase_22f_report.md), historical results not rerun |
+| AWS operator-observed | Migration/backend, controlled lifecycle, frontend and scoped browser validation complete; [AWS report](../codex/reports/phase_22g_report.md#closure-addendum--2026-10-02) preserves outstanding acceptance limits |
+| Azure operator-observed | Backend deployed; schema `22b0001` verified; W1–W8, frontend deployment and scoped browser acceptance passed; [Azure evidence](../codex/reports/phase_22h_azure_readiness_report.md#closure-addendum--2026-10-02) |
+| CI | Operator-reported passing push workflow for the implementation commit above; separate from local/cloud evidence |
+
+Azure fixture `7acbfa6a-6480-46d3-93b5-a83b661ef184` remains cancelled/restored (unarchived), version 7, with exactly seven events and zero sources. Both ignored readiness directories remain local deployment/rollback evidence, outside source-controlled runtime content.
+
+Mailbox attachment regression was not revalidated in this closure; production-scale load/recovery, PITR rehearsal and full disaster recovery were not tested. Historical reports retain their original limitations. These scoped results do not establish unconditional production readiness or completion of every original live acceptance criterion.
+
+The original authority/status table, planned slices and recommended next action below are retained as the architecture-lock record; they are not current pending implementation instructions. No next phase is started by this update.
+
 ## Authority and status
 
 [ADR-030](../decisions/ADR-030-action-deadline-and-obligation-tracking.md) is the accepted architecture contract. All six B1–B6 recommendations from the [readiness assessment](../codex/reports/phase_22_readiness_assessment.md) were explicitly approved by the operator. The [22A report](../codex/reports/phase_22a_report.md) records documentation verification. The readiness report remains unchanged historical evidence.
